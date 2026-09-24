@@ -1,0 +1,6 @@
+{
+  "name": "SIGC - Sistema Integrado de Gestão de Conselhos",
+  "description": "Sistema Integrado de Gestão de Conselhos de Classe (SIGC). Cadastro de Profissionais e Empresas, Financeiro, Jurídico, Fiscalização em Campo Offline, Relatórios, Protocolos e Configurações Gerais.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
