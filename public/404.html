@@ -7,8 +7,17 @@
     <script>
       // Single Page Apps for GitHub Pages
       // https://github.com/rafgraph/spa-github-pages
-      var pathSegmentsToKeep = 0;
       var l = window.location;
+      var pathSegments = l.pathname.split('/').filter(Boolean);
+      var pathSegmentsToKeep = 0;
+      
+      if (l.hostname.endsWith('.github.io') && pathSegments.length > 0) {
+        var username = l.hostname.split('.')[0];
+        if (pathSegments[0].toLowerCase() !== username.toLowerCase()) {
+          pathSegmentsToKeep = 1;
+        }
+      }
+      
       l.replace(
         l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
         l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?p=/' +
@@ -21,7 +30,7 @@
   <body style="background-color: #f8fafc; font-family: system-ui, -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
     <div style="text-align: center;">
       <h2 style="color: #1e293b; margin-bottom: 8px;">Redirecionando para o SIGC...</h2>
-      <p style="color: #64748b; font-size: 14px;">Aguarde um momento enquanto carregamos o sistema.</p>
+      <p style="color: #64748b; font-size: 14px;">Aguarde um momento enquanto carregamos oസമയം.</p>
     </div>
   </body>
 </html>
