@@ -109,6 +109,22 @@ CREATE TABLE IF NOT EXISTS public.profissionais (
     carteira_profissional VARCHAR(50),
     foto_url TEXT,
     observacoes TEXT,
+    motivo_situacao VARCHAR(150),
+    dt_inicio_insc_provisoria VARCHAR(20),
+    dt_venc_insc_provisoria VARCHAR(20),
+    data_solicitacao_baixa VARCHAR(20),
+    data_reabilitacao VARCHAR(20),
+    anuidade_reduzida BOOLEAN DEFAULT FALSE,
+    isento_anuidade BOOLEAN DEFAULT FALSE,
+    e_votante BOOLEAN DEFAULT TRUE,
+    e_militar BOOLEAN DEFAULT FALSE,
+    estado_civil VARCHAR(50),
+    bloqueado BOOLEAN DEFAULT FALSE,
+    motivo_bloqueio VARCHAR(150),
+    data_bloqueio VARCHAR(20),
+    data_desbloqueio_prevista VARCHAR(20),
+    usuario_bloqueio VARCHAR(150),
+    observacoes_bloqueio TEXT,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -129,13 +145,22 @@ CREATE TABLE IF NOT EXISTS public.empresas (
     inscricao VARCHAR(50) NOT NULL UNIQUE,
     inscricao_estadual VARCHAR(50),
     categoria VARCHAR(100),
+    categoria_empresa VARCHAR(100),
     tipo_estabelecimento VARCHAR(100) NOT NULL,
     natureza_atividade TEXT,
-    tipo_empresa VARCHAR(50) DEFAULT 'Matriz',
+    tipo_empresa VARCHAR(50) DEFAULT 'PRIVADO',
     condicao VARCHAR(50) DEFAULT 'Regular',
     situacao VARCHAR(50) DEFAULT 'Definitiva',
+    motivo_situacao VARCHAR(150),
     capital_social NUMERIC(15,2) DEFAULT 0.00,
     assistencia_plena BOOLEAN DEFAULT TRUE,
+    isento_anuidade BOOLEAN DEFAULT FALSE,
+    anuidade_reduzida BOOLEAN DEFAULT FALSE,
+    recadastrado BOOLEAN DEFAULT FALSE,
+    data_recadastramento VARCHAR(20),
+    isento_taxa_certificado BOOLEAN DEFAULT FALSE,
+    horario_plantao VARCHAR(50),
+    horas_tolerancia VARCHAR(20),
     data_inscricao VARCHAR(20),
     validade_crt VARCHAR(20),
     numero_crt VARCHAR(50),
@@ -157,6 +182,12 @@ CREATE TABLE IF NOT EXISTS public.empresas (
     resultado_ultima_fiscalizacao VARCHAR(50),
     socios JSONB DEFAULT '[]'::jsonb,
     responsaveis_tecnicos JSONB DEFAULT '[]'::jsonb,
+    bloqueado BOOLEAN DEFAULT FALSE,
+    motivo_bloqueio VARCHAR(150),
+    data_bloqueio VARCHAR(20),
+    data_desbloqueio_prevista VARCHAR(20),
+    usuario_bloqueio VARCHAR(150),
+    observacoes_bloqueio TEXT,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -407,3 +438,42 @@ CREATE POLICY "Public access formularios_dinamicos" ON public.formularios_dinami
 
 DROP POLICY IF EXISTS "Public access respostas_formularios" ON public.respostas_formularios;
 CREATE POLICY "Public access respostas_formularios" ON public.respostas_formularios FOR ALL USING (true) WITH CHECK (true);
+
+-- ==============================================================================
+-- 12. SCRIPTS DE MIGRAÇÃO / ATUALIZAÇÃO SEGURA (IDEMPOTENTE)
+-- Execute este bloco se você já tiver as tabelas criadas no Supabase e precisar apenas atualizar os campos
+-- ==============================================================================
+
+-- Colunas adicionais de Profissionais (PF):
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS dt_inicio_insc_provisoria VARCHAR(20);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS dt_venc_insc_provisoria VARCHAR(20);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS data_solicitacao_baixa VARCHAR(20);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS data_reabilitacao VARCHAR(20);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS anuidade_reduzida BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS isento_anuidade BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS e_votante BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS e_militar BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS estado_civil VARCHAR(50);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS bloqueado BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS motivo_bloqueio VARCHAR(150);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS data_bloqueio VARCHAR(20);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS data_desbloqueio_prevista VARCHAR(20);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS usuario_bloqueio VARCHAR(150);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS observacoes_bloqueio TEXT;
+
+-- Colunas adicionais de Empresas (PJ):
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS bloqueado BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS motivo_bloqueio VARCHAR(150);
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS data_bloqueio VARCHAR(20);
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS data_desbloqueio_prevista VARCHAR(20);
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS usuario_bloqueio VARCHAR(150);
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS observacoes_bloqueio TEXT;
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS categoria_empresa VARCHAR(100);
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS isento_anuidade BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS anuidade_reduzida BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS recadastrado BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS data_recadastramento VARCHAR(20);
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS isento_taxa_certificado BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS horario_plantao VARCHAR(50);
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS horas_tolerancia VARCHAR(20);
+

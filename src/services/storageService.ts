@@ -30,7 +30,7 @@ import {
   INITIAL_MICROSERVICES,
   generateSingleProfissional 
 } from './mockDataGenerator';
-import { sanitizeToUpper, formatInscricaoCompleta } from '../utils/documentUtils';
+import { sanitizeToUpper, formatInscricaoCompleta, dateToInput, inputToDate } from '../utils/documentUtils';
 import { supabase, checkSupabaseConnection, SupabaseHealthCheck } from './supabaseClient';
 
 const STORAGE_KEYS = {
@@ -78,7 +78,7 @@ export interface CouncilConfig {
   totalProfissionaisRegistrados: number;
   totalEmpresasRegistradas: number;
   
-  // Numeração Cronológica Automática de Inscrições
+  // Numeração Cronológica Automática de Inscrições Definitivas
   proximoNumeroInscricaoProfissional: number;
   prefixoInscricaoProfissional: string;
   sufixoInscricaoProfissional: string;
@@ -88,6 +88,19 @@ export interface CouncilConfig {
   prefixoInscricaoEmpresa: string;
   sufixoInscricaoEmpresa: string;
   digitosMinimosInscricaoEmpresa: number;
+
+  // Numeração Cronológica de Inscrições Provisórias
+  proximoNumeroInscricaoProvisoriaProfissional: number;
+  prefixoInscricaoProvisoriaProfissional: string;
+  sufixoInscricaoProvisoriaProfissional: string;
+  digitosMinimosInscricaoProvisoriaProfissional: number;
+  validadeProvisoriaMesesProfissional?: number;
+
+  proximoNumeroInscricaoProvisoriaEmpresa: number;
+  prefixoInscricaoProvisoriaEmpresa: string;
+  sufixoInscricaoProvisoriaEmpresa: string;
+  digitosMinimosInscricaoProvisoriaEmpresa: number;
+  validadeProvisoriaMesesEmpresa?: number;
 
   // Configurações de Validação de Documentos e CEP
   validarCPF: boolean;
@@ -131,6 +144,18 @@ export const DEFAULT_COUNCIL_CONFIG: CouncilConfig = {
   prefixoInscricaoEmpresa: 'CRF-AM',
   sufixoInscricaoEmpresa: '-PJ',
   digitosMinimosInscricaoEmpresa: 4,
+
+  proximoNumeroInscricaoProvisoriaProfissional: 100,
+  prefixoInscricaoProvisoriaProfissional: 'CRF-AM/PROV',
+  sufixoInscricaoProvisoriaProfissional: '',
+  digitosMinimosInscricaoProvisoriaProfissional: 4,
+  validadeProvisoriaMesesProfissional: 12,
+
+  proximoNumeroInscricaoProvisoriaEmpresa: 100,
+  prefixoInscricaoProvisoriaEmpresa: 'CRF-AM/PROV',
+  sufixoInscricaoProvisoriaEmpresa: '-PJ',
+  digitosMinimosInscricaoProvisoriaEmpresa: 4,
+  validadeProvisoriaMesesEmpresa: 12,
 
   validarCPF: true,
   validarCNPJ: true,
@@ -628,6 +653,7 @@ class StorageService {
           nomeMae: p.nome_mae,
           nomePai: p.nome_pai,
           situacao: p.situacao,
+          motivoSituacao: p.motivo_situacao,
           tipoAssociado: p.tipo_associado,
           habilitacoes: p.habilitacoes || [],
           dataInscricao: p.data_inscricao,
@@ -647,7 +673,24 @@ class StorageService {
           statusFinanceiro: p.status_financeiro,
           carteiraProfissional: p.carteira_profissional,
           fotoUrl: p.foto_url,
-          observacoes: p.observacoes
+          observacoes: p.observacoes,
+          inscricaoAnterior: p.inscricao_anterior || undefined,
+          dtInicioInscProvisoria: p.dt_inicio_insc_provisoria || undefined,
+          dtVencInscProvisoria: p.dt_venc_insc_provisoria || undefined,
+          dataSolicitacaoBaixa: p.data_solicitacao_baixa || undefined,
+          dataReabilitacao: p.data_reabilitacao || undefined,
+          dataConversaoDefinitiva: p.data_conversao_definitiva || undefined,
+          anuidadeReduzida: Boolean(p.anuidade_reduzida),
+          isentoAnuidade: Boolean(p.isento_anuidade),
+          eVotante: p.e_votante !== undefined ? Boolean(p.e_votante) : true,
+          eMilitar: Boolean(p.e_militar),
+          estadoCivil: p.estado_civil || undefined,
+          bloqueado: Boolean(p.bloqueado),
+          motivoBloqueio: p.motivo_bloqueio,
+          dataBloqueio: p.data_bloqueio,
+          dataDesbloqueioPrevista: p.data_desbloqueio_prevista,
+          usuarioBloqueio: p.usuario_bloqueio,
+          observacoesBloqueio: p.observacoes_bloqueio
         }));
         localStorage.setItem(STORAGE_KEYS.PROFISSIONAIS, JSON.stringify(this.customProfissionais));
       }
@@ -661,15 +704,28 @@ class StorageService {
           razaoSocial: e.razao_social,
           nomeFantasia: e.nome_fantasia || '',
           inscricao: e.inscricao,
+          inscricaoAnterior: e.inscricao_anterior || undefined,
           inscricaoEstadual: e.inscricao_estadual,
           categoria: e.categoria || '',
+          categoriaEmpresa: e.categoria_empresa || e.categoria || '',
           tipoEstabelecimento: e.tipo_estabelecimento,
           naturezaAtividade: e.natureza_atividade,
           tipoEmpresa: e.tipo_empresa,
           condicao: e.condicao,
           situacao: e.situacao,
+          motivoSituacao: e.motivo_situacao,
+          dtInicioInscProvisoria: e.dt_inicio_insc_provisoria || undefined,
+          dtVencInscProvisoria: e.dt_venc_insc_provisoria || undefined,
+          dataConversaoDefinitiva: e.data_conversao_definitiva || undefined,
           capitalSocial: Number(e.capital_social) || 0,
           assistenciaPlena: Boolean(e.assistencia_plena),
+          isentoAnuidade: Boolean(e.isento_anuidade),
+          anuidadeReduzida: Boolean(e.anuidade_reduzida),
+          recadastrado: Boolean(e.recadastrado),
+          dataRecadastramento: e.data_recadastramento || undefined,
+          isentoTaxaCertificado: Boolean(e.isento_taxa_certificado),
+          horarioPlantao: e.horario_plantao || undefined,
+          horasTolerancia: e.horas_tolerancia || undefined,
           dataInscricao: e.data_inscricao,
           validadeCRT: e.validade_crt,
           numeroCRT: e.numero_crt,
@@ -690,7 +746,13 @@ class StorageService {
           ultimaFiscalizacao: e.ultima_fiscalizacao,
           resultadoUltimaFiscalizacao: e.resultado_ultima_fiscalizacao,
           socios: e.socios || [],
-          responsaveisTecnicos: e.responsaveis_tecnicos || []
+          responsaveisTecnicos: e.responsaveis_tecnicos || [],
+          bloqueado: Boolean(e.bloqueado),
+          motivoBloqueio: e.motivo_bloqueio,
+          dataBloqueio: e.data_bloqueio,
+          dataDesbloqueioPrevista: e.data_desbloqueio_prevista,
+          usuarioBloqueio: e.usuario_bloqueio,
+          observacoesBloqueio: e.observacoes_bloqueio
         }));
         localStorage.setItem(STORAGE_KEYS.EMPRESAS, JSON.stringify(this.empresas));
       }
@@ -758,6 +820,16 @@ class StorageService {
           prefixoInscricaoEmpresa: cfgData.prefixo_inscricao_empresa ?? this.councilConfig.prefixoInscricaoEmpresa,
           sufixoInscricaoEmpresa: cfgData.sufixo_inscricao_empresa ?? this.councilConfig.sufixoInscricaoEmpresa,
           digitosMinimosInscricaoEmpresa: cfgData.digitos_minimos_inscricao_empresa ?? this.councilConfig.digitosMinimosInscricaoEmpresa,
+          proximoNumeroInscricaoProvisoriaProfissional: cfgData.proximo_numero_inscricao_provisoria_profissional ?? this.councilConfig.proximoNumeroInscricaoProvisoriaProfissional,
+          prefixoInscricaoProvisoriaProfissional: cfgData.prefixo_inscricao_provisoria_profissional ?? this.councilConfig.prefixoInscricaoProvisoriaProfissional,
+          sufixoInscricaoProvisoriaProfissional: cfgData.sufixo_inscricao_provisoria_profissional ?? this.councilConfig.sufixoInscricaoProvisoriaProfissional,
+          digitosMinimosInscricaoProvisoriaProfissional: cfgData.digitos_minimos_inscricao_provisoria_profissional ?? this.councilConfig.digitosMinimosInscricaoProvisoriaProfissional,
+          proximoNumeroInscricaoProvisoriaEmpresa: cfgData.proximo_numero_inscricao_provisoria_empresa ?? this.councilConfig.proximoNumeroInscricaoProvisoriaEmpresa,
+          prefixoInscricaoProvisoriaEmpresa: cfgData.prefixo_inscricao_provisoria_empresa ?? this.councilConfig.prefixoInscricaoProvisoriaEmpresa,
+          sufixoInscricaoProvisoriaEmpresa: cfgData.sufixo_inscricao_provisoria_empresa ?? this.councilConfig.sufixoInscricaoProvisoriaEmpresa,
+          digitosMinimosInscricaoProvisoriaEmpresa: cfgData.digitos_minimos_inscricao_provisoria_empresa ?? this.councilConfig.digitosMinimosInscricaoProvisoriaEmpresa,
+          validadeProvisoriaMesesProfissional: cfgData.validade_provisoria_meses_profissional ?? this.councilConfig.validadeProvisoriaMesesProfissional ?? 12,
+          validadeProvisoriaMesesEmpresa: cfgData.validade_provisoria_meses_empresa ?? this.councilConfig.validadeProvisoriaMesesEmpresa ?? 12,
           validarCPF: cfgData.validar_cpf ?? this.councilConfig.validarCPF,
           validarCNPJ: cfgData.validar_cnpj ?? this.councilConfig.validarCNPJ,
           validarCEP: cfgData.validar_cep ?? this.councilConfig.validarCEP,
@@ -811,6 +883,14 @@ class StorageService {
         prefixo_inscricao_empresa: cfg.prefixoInscricaoEmpresa,
         sufixo_inscricao_empresa: cfg.sufixoInscricaoEmpresa,
         digitos_minimos_inscricao_empresa: cfg.digitosMinimosInscricaoEmpresa,
+        proximo_numero_inscricao_provisoria_profissional: cfg.proximoNumeroInscricaoProvisoriaProfissional,
+        prefixo_inscricao_provisoria_profissional: cfg.prefixoInscricaoProvisoriaProfissional,
+        sufixo_inscricao_provisoria_profissional: cfg.sufixoInscricaoProvisoriaProfissional,
+        digitos_minimos_inscricao_provisoria_profissional: cfg.digitosMinimosInscricaoProvisoriaProfissional,
+        proximo_numero_inscricao_provisoria_empresa: cfg.proximoNumeroInscricaoProvisoriaEmpresa,
+        prefixo_inscricao_provisoria_empresa: cfg.prefixoInscricaoProvisoriaEmpresa,
+        sufixo_inscricao_provisoria_empresa: cfg.sufixoInscricaoProvisoriaEmpresa,
+        digitos_minimos_inscricao_provisoria_empresa: cfg.digitosMinimosInscricaoProvisoriaEmpresa,
         validar_cpf: cfg.validarCPF,
         validar_cnpj: cfg.validarCNPJ,
         validar_cep: cfg.validarCEP,
@@ -851,6 +931,7 @@ class StorageService {
         nome_mae: p.nomeMae || '',
         nome_pai: p.nomePai || null,
         situacao: p.situacao,
+        motivo_situacao: p.motivoSituacao || null,
         tipo_associado: p.tipoAssociado,
         habilitacoes: p.habilitacoes || [],
         data_inscricao: p.dataInscricao || '',
@@ -870,7 +951,13 @@ class StorageService {
         status_financeiro: p.statusFinanceiro || 'Adimplente',
         carteira_profissional: p.carteiraProfissional || null,
         foto_url: p.fotoUrl || null,
-        observacoes: p.observacoes || null
+        observacoes: p.observacoes || null,
+        bloqueado: p.bloqueado ?? false,
+        motivo_bloqueio: p.motivoBloqueio || null,
+        data_bloqueio: p.dataBloqueio || null,
+        data_desbloqueio_prevista: p.dataDesbloqueioPrevista || null,
+        usuario_bloqueio: p.usuarioBloqueio || null,
+        observacoes_bloqueio: p.observacoesBloqueio || null
       }));
 
       if (profRows.length > 0) {
@@ -889,9 +976,10 @@ class StorageService {
         categoria: e.categoria || '',
         tipo_estabelecimento: e.tipoEstabelecimento,
         natureza_atividade: e.naturezaAtividade || null,
-        tipo_empresa: e.tipoEmpresa || 'Matriz',
+        tipo_empresa: e.tipoEmpresa || 'PRIVADO',
         condicao: e.condicao || 'Regular',
         situacao: e.situacao || 'Definitiva',
+        motivo_situacao: e.motivoSituacao || null,
         capital_social: e.capitalSocial || 0,
         assistencia_plena: e.assistenciaPlena ?? true,
         data_inscricao: e.dataInscricao || '',
@@ -914,7 +1002,13 @@ class StorageService {
         ultima_fiscalizacao: e.ultimaFiscalizacao || null,
         resultado_ultima_fiscalizacao: e.resultadoUltimaFiscalizacao || null,
         socios: e.socios || [],
-        responsaveis_tecnicos: e.responsaveisTecnicos || []
+        responsaveis_tecnicos: e.responsaveisTecnicos || [],
+        bloqueado: e.bloqueado ?? false,
+        motivo_bloqueio: e.motivoBloqueio || null,
+        data_bloqueio: e.dataBloqueio || null,
+        data_desbloqueio_prevista: e.dataDesbloqueioPrevista || null,
+        usuario_bloqueio: e.usuarioBloqueio || null,
+        observacoes_bloqueio: e.observacoesBloqueio || null
       }));
 
       if (empRows.length > 0) {
@@ -1101,6 +1195,16 @@ class StorageService {
             prefixo_inscricao_empresa: this.councilConfig.prefixoInscricaoEmpresa,
             sufixo_inscricao_empresa: this.councilConfig.sufixoInscricaoEmpresa,
             digitos_minimos_inscricao_empresa: this.councilConfig.digitosMinimosInscricaoEmpresa,
+            proximo_numero_inscricao_provisoria_profissional: this.councilConfig.proximoNumeroInscricaoProvisoriaProfissional,
+            prefixo_inscricao_provisoria_profissional: this.councilConfig.prefixoInscricaoProvisoriaProfissional,
+            sufixo_inscricao_provisoria_profissional: this.councilConfig.sufixoInscricaoProvisoriaProfissional,
+            digitos_minimos_inscricao_provisoria_profissional: this.councilConfig.digitosMinimosInscricaoProvisoriaProfissional,
+            proximo_numero_inscricao_provisoria_empresa: this.councilConfig.proximoNumeroInscricaoProvisoriaEmpresa,
+            prefixo_inscricao_provisoria_empresa: this.councilConfig.prefixoInscricaoProvisoriaEmpresa,
+            sufixo_inscricao_provisoria_empresa: this.councilConfig.sufixoInscricaoProvisoriaEmpresa,
+            digitos_minimos_inscricao_provisoria_empresa: this.councilConfig.digitosMinimosInscricaoProvisoriaEmpresa,
+            validade_provisoria_meses_profissional: this.councilConfig.validadeProvisoriaMesesProfissional ?? 12,
+            validade_provisoria_meses_empresa: this.councilConfig.validadeProvisoriaMesesEmpresa ?? 12,
             validar_cpf: this.councilConfig.validarCPF,
             validar_cnpj: this.councilConfig.validarCNPJ,
             validar_cep: this.councilConfig.validarCEP,
@@ -1456,12 +1560,17 @@ class StorageService {
 
     // 2. Horários de Assistência Farmacêutica por RTs vinculados
     let horasAssistSemanais = 0;
+    const profsMap = new Map<string, Profissional>(this.getProfissionais().map((p: Profissional) => [p.id, p]));
     if (empresa.responsaveisTecnicos && empresa.responsaveisTecnicos.length > 0) {
       empresa.responsaveisTecnicos.forEach(rt => {
-        if (rt.horarios && rt.horarios.length > 0) {
-          horasAssistSemanais += calculateRtWeeklyHours(rt.horarios);
-        } else {
-          horasAssistSemanais += (rt.cargaHorariaSemanal || 0);
+        const prof = profsMap.get(rt.profissionalId) || this.getProfissionais().find(p => p.inscricao === rt.profissionalInscricao);
+        const isBlockedOrImpeded = prof ? (prof.bloqueado || this.isProfissionalImpedidoRT(prof).impedido) : false;
+        if (!isBlockedOrImpeded) {
+          if (rt.horarios && rt.horarios.length > 0) {
+            horasAssistSemanais += calculateRtWeeklyHours(rt.horarios);
+          } else {
+            horasAssistSemanais += (rt.cargaHorariaSemanal || 0);
+          }
         }
       });
     } else if (empresa.horariosAssistencia && empresa.horariosAssistencia.length > 0) {
@@ -1487,10 +1596,9 @@ class StorageService {
     }
 
     // Verificação de impedimento dos RTs vinculados
-    const profsMap = new Map<string, Profissional>(this.getProfissionais().map((p: Profissional) => [p.id, p]));
     const impededRts = empresa.responsaveisTecnicos.filter(rt => {
       const prof = profsMap.get(rt.profissionalId);
-      return prof ? this.isProfissionalImpedidoRT(prof).impedido : false;
+      return prof ? (prof.bloqueado || this.isProfissionalImpedidoRT(prof).impedido) : false;
     });
 
     if (impededRts.length > 0 && impededRts.length === empresa.responsaveisTecnicos.length) {
@@ -1523,10 +1631,14 @@ class StorageService {
       const targetNorm = normalizeDay(diaNome);
       if (empresa.responsaveisTecnicos && empresa.responsaveisTecnicos.length > 0) {
         empresa.responsaveisTecnicos.forEach(rt => {
-          if (rt.horarios && rt.horarios.length > 0) {
-            const h = rt.horarios.find(item => normalizeDay(item.dia) === targetNorm);
-            if (h && h.ativo !== false) {
-              total += calculateIntervalHours(h.inicio1, h.fim1) + calculateIntervalHours(h.inicio2, h.fim2);
+          const prof = profsMap.get(rt.profissionalId) || this.getProfissionais().find(p => p.inscricao === rt.profissionalInscricao);
+          const isBlockedOrImpeded = prof ? (prof.bloqueado || this.isProfissionalImpedidoRT(prof).impedido) : false;
+          if (!isBlockedOrImpeded) {
+            if (rt.horarios && rt.horarios.length > 0) {
+              const h = rt.horarios.find(item => normalizeDay(item.dia) === targetNorm);
+              if (h && h.ativo !== false) {
+                total += calculateIntervalHours(h.inicio1, h.fim1) + calculateIntervalHours(h.inicio2, h.fim2);
+              }
             }
           }
         });
@@ -1622,20 +1734,24 @@ class StorageService {
           const targetNorm = normalizeDay(hf.dia);
           const rtIntervals: [number, number][] = [];
           (empresa.responsaveisTecnicos || []).forEach(rt => {
-            (rt.horarios || []).forEach(rth => {
-              if (normalizeDay(rth.dia) === targetNorm) {
-                if (rth.inicio1 && rth.fim1) {
-                  const [h1, m1] = rth.inicio1.split(':').map(Number);
-                  const [h2, m2] = rth.fim1.split(':').map(Number);
-                  rtIntervals.push([h1 * 60 + m1, h2 * 60 + m2]);
+            const prof = profsMap.get(rt.profissionalId) || this.getProfissionais().find(p => p.inscricao === rt.profissionalInscricao);
+            const isBlockedOrImpeded = prof ? (prof.bloqueado || this.isProfissionalImpedidoRT(prof).impedido) : false;
+            if (!isBlockedOrImpeded) {
+              (rt.horarios || []).forEach(rth => {
+                if (normalizeDay(rth.dia) === targetNorm && rth.ativo !== false) {
+                  if (rth.inicio1 && rth.fim1) {
+                    const [h1, m1] = rth.inicio1.split(':').map(Number);
+                    const [h2, m2] = rth.fim1.split(':').map(Number);
+                    rtIntervals.push([h1 * 60 + m1, h2 * 60 + m2]);
+                  }
+                  if (rth.inicio2 && rth.fim2) {
+                    const [h1, m1] = rth.inicio2.split(':').map(Number);
+                    const [h2, m2] = rth.fim2.split(':').map(Number);
+                    rtIntervals.push([h1 * 60 + m1, h2 * 60 + m2]);
+                  }
                 }
-                if (rth.inicio2 && rth.fim2) {
-                  const [h1, m1] = rth.inicio2.split(':').map(Number);
-                  const [h2, m2] = rth.fim2.split(':').map(Number);
-                  rtIntervals.push([h1 * 60 + m1, h2 * 60 + m2]);
-                }
-              }
-            });
+              });
+            }
           });
 
           // Merge overlapping RT intervals
@@ -1768,6 +1884,7 @@ class StorageService {
   // Profissionais API
   public getProfissionaisPaginated(page = 1, pageSize = 20, filters?: {
     search?: string;
+    inscricao?: string;
     situacao?: string;
     tipoAssociado?: string;
     statusFinanceiro?: string;
@@ -1776,24 +1893,144 @@ class StorageService {
     endereco?: string;
     complemento?: string;
     habilitacao?: string;
+    dataNascimento?: string;
+    naturalidade?: string;
+    dtInicioInscProvisoria?: string;
+    dtVencInscProvisoria?: string;
+    dataSolicitacaoBaixa?: string;
+    dataReabilitacao?: string;
+    anuidadeReduzida?: string;
+    isentoAnuidade?: string;
+    eVotante?: string;
+    eMilitar?: string;
+    estadoCivil?: string;
+    nomeMae?: string;
+    bloqueado?: string;
+    motivoBloqueio?: string;
+    dataBloqueio?: string;
   }) {
     const profMap = new Map<string, Profissional>();
-    INITIAL_PROFISSIONAIS.forEach(p => profMap.set(p.id, p));
-    this.customProfissionais.forEach(p => profMap.set(p.id, p));
+    const seenCpf = new Set<string>();
+    const seenInsc = new Set<string>();
+
+    // 1. Prioridade máxima: profissionais do banco / customizados
+    this.customProfissionais.forEach(p => {
+      profMap.set(p.id, p);
+      if (p.cpf) seenCpf.add(p.cpf.replace(/\D/g, ''));
+      if (p.inscricao) seenInsc.add(p.inscricao.trim().toUpperCase());
+    });
+
+    // 2. Mock inicial apenas para preencher o que não conflitar
+    INITIAL_PROFISSIONAIS.forEach(p => {
+      const cleanCpf = p.cpf ? p.cpf.replace(/\D/g, '') : '';
+      const cleanInsc = p.inscricao ? p.inscricao.trim().toUpperCase() : '';
+      if (!profMap.has(p.id) && (!cleanCpf || !seenCpf.has(cleanCpf)) && (!cleanInsc || !seenInsc.has(cleanInsc))) {
+        profMap.set(p.id, p);
+      }
+    });
+
     const allProfissionais = Array.from(profMap.values());
     let filtered = allProfissionais;
 
+    const matchDateStr = (recordDate?: string, filterDate?: string): boolean => {
+      if (!filterDate || filterDate === 'Todos' || !filterDate.trim()) return true;
+      if (!recordDate) return false;
+      const recClean = recordDate.trim();
+      const filClean = filterDate.trim();
+      const filIso = dateToInput(filClean) || filClean;
+      const recIso = dateToInput(recClean) || recClean;
+      return recClean.includes(filClean) || recIso === filIso || inputToDate(filClean) === recClean;
+    };
+
+    const normalizeText = (val?: string) => 
+      (val || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
     if (filters?.search) {
-      const q = filters.search.toLowerCase().trim();
-      filtered = filtered.filter(p => 
-        p.nome.toLowerCase().includes(q) ||
-        p.cpf.includes(q) ||
-        p.inscricao.toLowerCase().includes(q) ||
-        (p.carteiraProfissional && p.carteiraProfissional.toLowerCase().includes(q)) ||
-        (p.cep && p.cep.toLowerCase().includes(q)) ||
-        (p.endereco && p.endereco.toLowerCase().includes(q)) ||
-        (p.complemento && p.complemento.toLowerCase().includes(q))
-      );
+      const rawQ = filters.search.trim();
+      if (rawQ) {
+        const qNorm = normalizeText(rawQ);
+        const qDigits = rawQ.replace(/\D/g, '');
+        const qWords = qNorm.split(/\s+/).filter(Boolean);
+        const isPureDigits = /^\d+$/.test(rawQ);
+        const numQ = isPureDigits ? parseInt(rawQ, 10) : NaN;
+
+        filtered = filtered.filter(p => {
+          // 1. Busca por Nome (tempo real enquanto digita, sem acentos, todas as palavras ou parcial)
+          const nomeNorm = normalizeText(p.nome);
+          if (nomeNorm.includes(qNorm) || (qWords.length > 1 && qWords.every(w => nomeNorm.includes(w)))) {
+            return true;
+          }
+
+          // 2. Busca por CEP (tempo real enquanto digita, com traço ou somente dígitos)
+          if (p.cep) {
+            const cepDigits = p.cep.replace(/\D/g, '');
+            const cepNorm = normalizeText(p.cep);
+            if (cepNorm.includes(qNorm)) return true;
+            if (qDigits && (cepDigits.includes(qDigits) || qDigits.includes(cepDigits))) return true;
+          }
+
+          // 3. Busca por Inscrição (permite busca parcial em tempo real por dígitos ou prefixo/sufixo)
+          const inscNorm = normalizeText(p.inscricao);
+          const inscDigits = p.inscricao.replace(/\D/g, '');
+          if (inscNorm.includes(qNorm) || (qDigits && inscDigits.includes(qDigits))) {
+            return true;
+          }
+          if (p.inscricaoAnterior) {
+            const antNorm = normalizeText(p.inscricaoAnterior);
+            const antDigits = p.inscricaoAnterior.replace(/\D/g, '');
+            if (antNorm.includes(qNorm) || (qDigits && antDigits.includes(qDigits))) {
+              return true;
+            }
+          }
+
+          // 4. Busca por CPF (com ou sem pontuação)
+          if (p.cpf) {
+            const cpfDigits = p.cpf.replace(/\D/g, '');
+            const cpfNorm = normalizeText(p.cpf);
+            if (cpfNorm.includes(qNorm)) return true;
+            if (qDigits && qDigits.length >= 2 && cpfDigits.includes(qDigits)) return true;
+          }
+
+          // 5. Busca por Carteira Profissional
+          if (p.carteiraProfissional && normalizeText(p.carteiraProfissional).includes(qNorm)) {
+            return true;
+          }
+
+          // 6. Busca por Cidade / UF
+          if (p.cidade && normalizeText(p.cidade).includes(qNorm)) return true;
+          if (p.uf && normalizeText(p.uf).includes(qNorm)) return true;
+
+          // 7. Busca por Endereço / Bairro
+          if (p.endereco && normalizeText(p.endereco).includes(qNorm)) return true;
+          if (p.bairro && normalizeText(p.bairro).includes(qNorm)) return true;
+
+          // 8. Busca por Email
+          if (p.emailPessoal && normalizeText(p.emailPessoal).includes(qNorm)) return true;
+          if (p.emailComercial && normalizeText(p.emailComercial).includes(qNorm)) return true;
+
+          return false;
+        });
+      }
+    }
+
+    if (filters?.inscricao && filters.inscricao.trim()) {
+      const targetClean = filters.inscricao.trim();
+      const targetDigits = targetClean.replace(/\D/g, '');
+      const targetLower = targetClean.toLowerCase();
+      filtered = filtered.filter(p => {
+        const profDigits = p.inscricao.replace(/\D/g, '');
+        const profMainNum = p.inscricao.match(/\d+/)?.[0] || profDigits;
+        if (targetDigits) {
+          const numP = parseInt(profDigits, 10);
+          const numT = parseInt(targetDigits, 10);
+          if (!isNaN(numP) && !isNaN(numT) && numP === numT) return true;
+          return profDigits === targetDigits || 
+                 profMainNum === targetDigits || 
+                 new RegExp(`(^|[^0-9])${targetDigits}([^0-9]|$)`).test(p.inscricao) ||
+                 p.inscricao.toLowerCase().trim() === targetLower;
+        }
+        return p.inscricao.toLowerCase().trim() === targetLower;
+      });
     }
 
     if (filters?.situacao && filters.situacao !== 'Todos') {
@@ -1812,9 +2049,14 @@ class StorageService {
       filtered = filtered.filter(p => p.bairro === filters.bairro);
     }
 
-    if (filters?.cep && filters.cep !== 'Todos') {
-      const q = filters.cep.toLowerCase();
-      filtered = filtered.filter(p => p.cep && p.cep.toLowerCase().includes(q));
+    if (filters?.cep && filters.cep !== 'Todos' && filters.cep.trim()) {
+      const q = filters.cep.toLowerCase().trim();
+      const qDigits = filters.cep.replace(/\D/g, '');
+      filtered = filtered.filter(p => {
+        if (!p.cep) return false;
+        const pDigits = p.cep.replace(/\D/g, '');
+        return p.cep.toLowerCase().includes(q) || (qDigits.length > 0 && pDigits.includes(qDigits));
+      });
     }
 
     if (filters?.endereco && filters.endereco !== 'Todos') {
@@ -1830,6 +2072,75 @@ class StorageService {
     if (filters?.habilitacao && filters.habilitacao !== 'Todos') {
       const q = filters.habilitacao.toLowerCase();
       filtered = filtered.filter(p => p.habilitacoes && p.habilitacoes.some(h => h.toLowerCase().includes(q)));
+    }
+
+    if (filters?.dataNascimento && filters.dataNascimento.trim()) {
+      filtered = filtered.filter(p => matchDateStr(p.dataNascimento, filters.dataNascimento));
+    }
+
+    if (filters?.naturalidade && filters.naturalidade.trim()) {
+      const q = filters.naturalidade.toLowerCase().trim();
+      filtered = filtered.filter(p => p.naturalidade && p.naturalidade.toLowerCase().includes(q));
+    }
+
+    if (filters?.dtInicioInscProvisoria && filters.dtInicioInscProvisoria.trim()) {
+      filtered = filtered.filter(p => matchDateStr(p.dtInicioInscProvisoria, filters.dtInicioInscProvisoria));
+    }
+
+    if (filters?.dtVencInscProvisoria && filters.dtVencInscProvisoria.trim()) {
+      filtered = filtered.filter(p => matchDateStr(p.dtVencInscProvisoria, filters.dtVencInscProvisoria));
+    }
+
+    if (filters?.dataSolicitacaoBaixa && filters.dataSolicitacaoBaixa.trim()) {
+      filtered = filtered.filter(p => matchDateStr(p.dataSolicitacaoBaixa, filters.dataSolicitacaoBaixa));
+    }
+
+    if (filters?.dataReabilitacao && filters.dataReabilitacao.trim()) {
+      filtered = filtered.filter(p => matchDateStr(p.dataReabilitacao, filters.dataReabilitacao));
+    }
+
+    if (filters?.anuidadeReduzida && filters.anuidadeReduzida !== 'Todos') {
+      const isSim = filters.anuidadeReduzida === 'Sim';
+      filtered = filtered.filter(p => Boolean(p.anuidadeReduzida) === isSim);
+    }
+
+    if (filters?.isentoAnuidade && filters.isentoAnuidade !== 'Todos') {
+      const isSim = filters.isentoAnuidade === 'Sim';
+      filtered = filtered.filter(p => Boolean(p.isentoAnuidade) === isSim);
+    }
+
+    if (filters?.eVotante && filters.eVotante !== 'Todos') {
+      const isSim = filters.eVotante === 'Sim';
+      filtered = filtered.filter(p => Boolean(p.eVotante) === isSim);
+    }
+
+    if (filters?.eMilitar && filters.eMilitar !== 'Todos') {
+      const isSim = filters.eMilitar === 'Sim';
+      filtered = filtered.filter(p => Boolean(p.eMilitar) === isSim);
+    }
+
+    if (filters?.estadoCivil && filters.estadoCivil !== 'Todos') {
+      const q = filters.estadoCivil.toLowerCase();
+      filtered = filtered.filter(p => p.estadoCivil && p.estadoCivil.toLowerCase() === q);
+    }
+
+    if (filters?.nomeMae && filters.nomeMae.trim()) {
+      const q = filters.nomeMae.toLowerCase().trim();
+      filtered = filtered.filter(p => p.nomeMae && p.nomeMae.toLowerCase().includes(q));
+    }
+
+    if (filters?.bloqueado && filters.bloqueado !== 'Todos') {
+      const isBloqueado = filters.bloqueado === 'Sim' || filters.bloqueado === 'Bloqueado';
+      filtered = filtered.filter(p => Boolean(p.bloqueado) === isBloqueado);
+    }
+
+    if (filters?.motivoBloqueio && filters.motivoBloqueio.trim()) {
+      const q = filters.motivoBloqueio.toLowerCase().trim();
+      filtered = filtered.filter(p => p.motivoBloqueio && p.motivoBloqueio.toLowerCase().includes(q));
+    }
+
+    if (filters?.dataBloqueio && filters.dataBloqueio.trim()) {
+      filtered = filtered.filter(p => matchDateStr(p.dataBloqueio, filters.dataBloqueio));
     }
 
     const startIndex = (page - 1) * pageSize;
@@ -1891,6 +2202,23 @@ class StorageService {
     return formatted;
   }
 
+  public peekNextInscricaoProvisoriaProfissional(): string {
+    const prefix = this.councilConfig.prefixoInscricaoProvisoriaProfissional || 'CRF-AM/PROV';
+    const num = this.councilConfig.proximoNumeroInscricaoProvisoriaProfissional || 100;
+    const suffix = this.councilConfig.sufixoInscricaoProvisoriaProfissional ?? '';
+    const minDigits = this.councilConfig.digitosMinimosInscricaoProvisoriaProfissional ?? 4;
+    return formatInscricaoCompleta(prefix, num, suffix, minDigits);
+  }
+
+  public getNextInscricaoProvisoriaProfissional(autoIncrement: boolean = true): string {
+    const formatted = this.peekNextInscricaoProvisoriaProfissional();
+    if (autoIncrement) {
+      this.councilConfig.proximoNumeroInscricaoProvisoriaProfissional = (this.councilConfig.proximoNumeroInscricaoProvisoriaProfissional || 100) + 1;
+      this.updateCouncilConfig(this.councilConfig);
+    }
+    return formatted;
+  }
+
   public peekNextInscricaoEmpresa(): string {
     const prefix = this.councilConfig.prefixoInscricaoEmpresa || this.councilConfig.sigla || 'CRF-AM';
     const num = this.councilConfig.proximoNumeroInscricaoEmpresa || 1250;
@@ -1909,6 +2237,159 @@ class StorageService {
     return formatted;
   }
 
+  public peekNextInscricaoProvisoriaEmpresa(): string {
+    const prefix = this.councilConfig.prefixoInscricaoProvisoriaEmpresa || 'CRF-AM/PROV';
+    const num = this.councilConfig.proximoNumeroInscricaoProvisoriaEmpresa || 100;
+    const suffix = this.councilConfig.sufixoInscricaoProvisoriaEmpresa ?? '-PJ';
+    const minDigits = this.councilConfig.digitosMinimosInscricaoProvisoriaEmpresa ?? 4;
+    return formatInscricaoCompleta(prefix, num, suffix, minDigits);
+  }
+
+  public getNextInscricaoProvisoriaEmpresa(autoIncrement: boolean = true): string {
+    const formatted = this.peekNextInscricaoProvisoriaEmpresa();
+    if (autoIncrement) {
+      this.councilConfig.proximoNumeroInscricaoProvisoriaEmpresa = (this.councilConfig.proximoNumeroInscricaoProvisoriaEmpresa || 100) + 1;
+      this.updateCouncilConfig(this.councilConfig);
+    }
+    return formatted;
+  }
+
+  public extrairNumeroInscricao(inscricao: string): string {
+    if (!inscricao) return '';
+    const match = inscricao.match(/\d+/);
+    return match ? match[0] : '';
+  }
+
+  public alternarInscricaoParaProvisorio(inscricaoAtual: string, tipo: 'PF' | 'PJ'): string {
+    const rawNum = this.extrairNumeroInscricao(inscricaoAtual);
+    const num = rawNum ? parseInt(rawNum, 10) : (
+      tipo === 'PF' 
+        ? (this.councilConfig.proximoNumeroInscricaoProvisoriaProfissional || 100)
+        : (this.councilConfig.proximoNumeroInscricaoProvisoriaEmpresa || 100)
+    );
+
+    if (tipo === 'PF') {
+      const prefix = this.councilConfig.prefixoInscricaoProvisoriaProfissional || 'CRF-AM/PROV';
+      const suffix = this.councilConfig.sufixoInscricaoProvisoriaProfissional ?? '';
+      const minDigits = this.councilConfig.digitosMinimosInscricaoProvisoriaProfissional ?? 4;
+      return formatInscricaoCompleta(prefix, num, suffix, minDigits);
+    } else {
+      const prefix = this.councilConfig.prefixoInscricaoProvisoriaEmpresa || 'CRF-AM/PROV';
+      const suffix = this.councilConfig.sufixoInscricaoProvisoriaEmpresa ?? '-PJ';
+      const minDigits = this.councilConfig.digitosMinimosInscricaoProvisoriaEmpresa ?? 4;
+      return formatInscricaoCompleta(prefix, num, suffix, minDigits);
+    }
+  }
+
+  public alternarInscricaoParaDefinitivo(inscricaoAtual: string, tipo: 'PF' | 'PJ'): string {
+    const rawNum = this.extrairNumeroInscricao(inscricaoAtual);
+    const num = rawNum ? parseInt(rawNum, 10) : (
+      tipo === 'PF' 
+        ? (this.councilConfig.proximoNumeroInscricaoProfissional || 4150)
+        : (this.councilConfig.proximoNumeroInscricaoEmpresa || 1250)
+    );
+
+    if (tipo === 'PF') {
+      const prefix = this.councilConfig.prefixoInscricaoProfissional || this.councilConfig.sigla || 'CRF-AM';
+      const suffix = this.councilConfig.sufixoInscricaoProfissional ?? '';
+      const minDigits = this.councilConfig.digitosMinimosInscricaoProfissional ?? 0;
+      return formatInscricaoCompleta(prefix, num, suffix, minDigits);
+    } else {
+      const prefix = this.councilConfig.prefixoInscricaoEmpresa || this.councilConfig.sigla || 'CRF-AM';
+      const suffix = this.councilConfig.sufixoInscricaoEmpresa ?? '';
+      const minDigits = this.councilConfig.digitosMinimosInscricaoEmpresa ?? 0;
+      return formatInscricaoCompleta(prefix, num, suffix, minDigits);
+    }
+  }
+
+  public isSituacaoProvisoria(situacao?: string): boolean {
+    if (!situacao) return false;
+    const clean = situacao.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    return clean === 'provisorio' || clean === 'provisoria' || clean.startsWith('provis');
+  }
+
+  public converterProfissionalParaDefinitivo(profissionalId: string): Profissional | null {
+    const prof = this.getProfissionalById(profissionalId);
+    if (!prof) return null;
+
+    const inscricaoAnterior = prof.inscricao;
+    let novaInscricaoDefinitiva = '';
+
+    if (prof.inscricaoDefinitivaAnterior) {
+      novaInscricaoDefinitiva = prof.inscricaoDefinitivaAnterior;
+    } else if (prof.inscricaoAnterior && !this.isSituacaoProvisoria(prof.inscricaoAnterior) && !prof.inscricaoAnterior.toUpperCase().includes('PROV')) {
+      novaInscricaoDefinitiva = prof.inscricaoAnterior;
+    } else if (prof.inscricao && !prof.inscricao.toUpperCase().includes('PROV')) {
+      novaInscricaoDefinitiva = prof.inscricao;
+    } else {
+      novaInscricaoDefinitiva = this.getNextInscricaoProfissional(true);
+    }
+
+    const updated: Profissional = {
+      ...prof,
+      inscricao: novaInscricaoDefinitiva,
+      inscricaoAnterior: inscricaoAnterior,
+      situacao: 'Definitivo',
+      dataConversaoDefinitiva: new Date().toLocaleDateString('pt-BR'),
+      dataReabilitacao: prof.dataReabilitacao || new Date().toLocaleDateString('pt-BR'),
+      observacoes: `${prof.observacoes || ''}\n[CONVERSÃO DEFINITIVA]: Inscrição convertida de Provisória (${inscricaoAnterior}) para Definitiva (${novaInscricaoDefinitiva}) em ${new Date().toLocaleDateString('pt-BR')}.`.trim()
+    };
+
+    this.saveProfissional(updated);
+
+    // Atualiza vínculos de RT nas empresas associadas
+    this.empresas.forEach(emp => {
+      if (emp.responsaveisTecnicos) {
+        let changed = false;
+        const newRts = emp.responsaveisTecnicos.map(rt => {
+          if (rt.profissionalId === prof.id || rt.profissionalInscricao === inscricaoAnterior) {
+            changed = true;
+            return {
+              ...rt,
+              profissionalInscricao: novaInscricaoDefinitiva
+            };
+          }
+          return rt;
+        });
+        if (changed) {
+          emp.responsaveisTecnicos = newRts;
+          this.saveEmpresa(emp);
+        }
+      }
+    });
+
+    return updated;
+  }
+
+  public converterEmpresaParaDefinitiva(empresaId: string): Empresa | null {
+    const emp = this.getEmpresaById(empresaId);
+    if (!emp) return null;
+
+    const inscricaoAnterior = emp.inscricao;
+    let novaInscricaoDefinitiva = '';
+
+    if (emp.inscricaoDefinitivaAnterior) {
+      novaInscricaoDefinitiva = emp.inscricaoDefinitivaAnterior;
+    } else if (emp.inscricaoAnterior && !this.isSituacaoProvisoria(emp.inscricaoAnterior) && !emp.inscricaoAnterior.toUpperCase().includes('PROV')) {
+      novaInscricaoDefinitiva = emp.inscricaoAnterior;
+    } else if (emp.inscricao && !emp.inscricao.toUpperCase().includes('PROV')) {
+      novaInscricaoDefinitiva = emp.inscricao;
+    } else {
+      novaInscricaoDefinitiva = this.getNextInscricaoEmpresa(true);
+    }
+
+    const updated: Empresa = {
+      ...emp,
+      inscricao: novaInscricaoDefinitiva,
+      inscricaoAnterior: inscricaoAnterior,
+      situacao: 'Definitiva',
+      dataConversaoDefinitiva: new Date().toLocaleDateString('pt-BR')
+    };
+
+    this.saveEmpresa(updated);
+    return updated;
+  }
+
   public saveProfissional(prof: Profissional) {
     const sanitized = sanitizeToUpper(prof, ['id', 'fotoUrl', 'emailComercial', 'emailPessoal']);
     const idx = this.customProfissionais.findIndex(p => p.id === sanitized.id || p.cpf === sanitized.cpf);
@@ -1924,6 +2405,7 @@ class StorageService {
           supabase.from('profissionais').upsert({
             id: sanitized.id,
             inscricao: sanitized.inscricao,
+            inscricao_anterior: sanitized.inscricaoAnterior || null,
             nome: sanitized.nome,
             cpf: sanitized.cpf,
             rg: sanitized.rg || '',
@@ -1935,6 +2417,17 @@ class StorageService {
             nome_mae: sanitized.nomeMae || '',
             nome_pai: sanitized.nomePai || null,
             situacao: sanitized.situacao,
+            motivo_situacao: sanitized.motivoSituacao || null,
+            dt_inicio_insc_provisoria: sanitized.dtInicioInscProvisoria || null,
+            dt_venc_insc_provisoria: sanitized.dtVencInscProvisoria || null,
+            data_solicitacao_baixa: sanitized.dataSolicitacaoBaixa || null,
+            data_reabilitacao: sanitized.dataReabilitacao || null,
+            data_conversao_definitiva: sanitized.dataConversaoDefinitiva || null,
+            anuidade_reduzida: sanitized.anuidadeReduzida ?? false,
+            isento_anuidade: sanitized.isentoAnuidade ?? false,
+            e_votante: sanitized.eVotante ?? true,
+            e_militar: sanitized.eMilitar ?? false,
+            estado_civil: sanitized.estadoCivil || null,
             tipo_associado: sanitized.tipoAssociado,
             habilitacoes: sanitized.habilitacoes || [],
             data_inscricao: sanitized.dataInscricao || '',
@@ -1954,11 +2447,25 @@ class StorageService {
             status_financeiro: sanitized.statusFinanceiro || 'Adimplente',
             carteira_profissional: sanitized.carteiraProfissional || null,
             foto_url: sanitized.fotoUrl || null,
-            observacoes: sanitized.observacoes || null
+            observacoes: sanitized.observacoes || null,
+            bloqueado: sanitized.bloqueado ?? false,
+            motivo_bloqueio: sanitized.motivoBloqueio || null,
+            data_bloqueio: sanitized.dataBloqueio || null,
+            data_desbloqueio_prevista: sanitized.dataDesbloqueioPrevista || null,
+            usuario_bloqueio: sanitized.usuarioBloqueio || null,
+            observacoes_bloqueio: sanitized.observacoesBloqueio || null
           }, { onConflict: 'cpf' })
         );
       }
     } catch (e) {}
+
+    // Re-evaluate and update any company where this professional is an RT
+    this.empresas.forEach(emp => {
+      if (emp.responsaveisTecnicos && emp.responsaveisTecnicos.some(rt => rt.profissionalId === sanitized.id || rt.profissionalInscricao === sanitized.inscricao)) {
+        this.saveEmpresa(emp);
+      }
+    });
+
     this.notify();
   }
 
@@ -1984,17 +2491,41 @@ class StorageService {
     condicao?: string;
     situacao?: string;
     tipoEstabelecimento?: string;
+    tipoEmpresa?: string;
+    categoriaEmpresa?: string;
+    naturezaAtividade?: string;
     bairro?: string;
+    cidade?: string;
     cep?: string;
     endereco?: string;
+    email?: string;
+    telefone?: string;
     socio?: string;
     profissional?: string;
-    naturezaAtividade?: string;
+    isentoAnuidade?: string;
+    anuidadeReduzida?: string;
+    recadastrado?: string;
+    isentoTaxaCertificado?: string;
+    assistenciaPlena?: string;
+    bloqueado?: string;
+    motivoBloqueio?: string;
+    dataBloqueio?: string;
   }): Empresa[] {
     let list = this.empresas.map(e => ({
       ...e,
       horariosFuncionamento: e.horariosFuncionamento && e.horariosFuncionamento.length > 0 ? e.horariosFuncionamento : [...DEFAULT_HORARIOS_FUNCIONAMENTO]
     }));
+
+    const matchDateStr = (recordDate?: string, filterDate?: string): boolean => {
+      if (!filterDate || filterDate === 'Todos' || !filterDate.trim()) return true;
+      if (!recordDate) return false;
+      const recClean = recordDate.trim();
+      const filClean = filterDate.trim();
+      const filIso = dateToInput(filClean) || filClean;
+      const recIso = dateToInput(recClean) || recClean;
+      return recClean.includes(filClean) || recIso === filIso || inputToDate(filClean) === recClean;
+    };
+
     if (filters?.search) {
       const q = filters.search.toLowerCase().trim();
       list = list.filter(e => 
@@ -2013,8 +2544,27 @@ class StorageService {
     if (filters?.tipoEstabelecimento && filters.tipoEstabelecimento !== 'Todos') {
       list = list.filter(e => e.tipoEstabelecimento === filters.tipoEstabelecimento);
     }
-    if (filters?.bairro && filters.bairro !== 'Todos') {
-      list = list.filter(e => e.bairro?.toLowerCase().includes(filters.bairro!.toLowerCase()));
+    if (filters?.tipoEmpresa && filters.tipoEmpresa !== 'Todos') {
+      const q = filters.tipoEmpresa.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      list = list.filter(e => {
+        if (!e.tipoEmpresa) return false;
+        const norm = e.tipoEmpresa.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        return norm === q;
+      });
+    }
+    if (filters?.categoriaEmpresa && filters.categoriaEmpresa !== 'Todos') {
+      const q = filters.categoriaEmpresa.toLowerCase().trim();
+      list = list.filter(e => 
+        (e.categoriaEmpresa && e.categoriaEmpresa.toLowerCase().includes(q)) || 
+        (e.categoria && e.categoria.toLowerCase().includes(q))
+      );
+    }
+    if (filters?.bairro && filters.bairro !== 'Todos' && filters.bairro.trim()) {
+      list = list.filter(e => e.bairro?.toLowerCase().includes(filters.bairro!.toLowerCase().trim()));
+    }
+    if (filters?.cidade && filters.cidade !== 'Todos' && filters.cidade.trim()) {
+      const q = filters.cidade.toLowerCase().trim();
+      list = list.filter(e => e.cidade && e.cidade.toLowerCase().includes(q));
     }
     if (filters?.cep && filters.cep.trim()) {
       const q = filters.cep.replace(/\D/g, '');
@@ -2028,23 +2578,65 @@ class StorageService {
         (e.complemento && e.complemento.toLowerCase().includes(q))
       );
     }
+    if (filters?.email && filters.email.trim()) {
+      const q = filters.email.toLowerCase().trim();
+      list = list.filter(e => e.email && e.email.toLowerCase().includes(q));
+    }
+    if (filters?.telefone && filters.telefone.trim()) {
+      const q = filters.telefone.replace(/\D/g, '');
+      list = list.filter(e => e.telefone && e.telefone.replace(/\D/g, '').includes(q));
+    }
     if (filters?.socio && filters.socio.trim()) {
       const q = filters.socio.toLowerCase().trim();
+      const qDigits = filters.socio.replace(/\D/g, '');
       list = list.filter(e => e.socios && e.socios.some(s => 
         s.nome.toLowerCase().includes(q) || 
-        s.cpf.replace(/\D/g, '').includes(q.replace(/\D/g, ''))
+        (qDigits.length >= 4 && s.cpf.replace(/\D/g, '').includes(qDigits))
       ));
     }
     if (filters?.profissional && filters.profissional.trim()) {
       const q = filters.profissional.toLowerCase().trim();
+      const qDigits = filters.profissional.replace(/\D/g, '');
       list = list.filter(e => e.responsaveisTecnicos && e.responsaveisTecnicos.some(rt => 
         rt.profissionalNome.toLowerCase().includes(q) || 
-        rt.profissionalInscricao.toLowerCase().includes(q)
+        rt.profissionalInscricao.toLowerCase().includes(q) ||
+        (qDigits && rt.profissionalInscricao.replace(/\D/g, '').includes(qDigits))
       ));
     }
     if (filters?.naturezaAtividade && filters.naturezaAtividade !== 'Todos' && filters.naturezaAtividade.trim()) {
       const q = filters.naturezaAtividade.toLowerCase().trim();
       list = list.filter(e => e.naturezaAtividade && e.naturezaAtividade.toLowerCase().includes(q));
+    }
+    if (filters?.isentoAnuidade && filters.isentoAnuidade !== 'Todos') {
+      const isSim = filters.isentoAnuidade === 'Sim';
+      list = list.filter(e => Boolean(e.isentoAnuidade) === isSim);
+    }
+    if (filters?.anuidadeReduzida && filters.anuidadeReduzida !== 'Todos') {
+      const isSim = filters.anuidadeReduzida === 'Sim';
+      list = list.filter(e => Boolean(e.anuidadeReduzida) === isSim);
+    }
+    if (filters?.recadastrado && filters.recadastrado !== 'Todos') {
+      const isSim = filters.recadastrado === 'Sim';
+      list = list.filter(e => Boolean(e.recadastrado) === isSim);
+    }
+    if (filters?.isentoTaxaCertificado && filters.isentoTaxaCertificado !== 'Todos') {
+      const isSim = filters.isentoTaxaCertificado === 'Sim';
+      list = list.filter(e => Boolean(e.isentoTaxaCertificado) === isSim);
+    }
+    if (filters?.assistenciaPlena && filters.assistenciaPlena !== 'Todos') {
+      const isSim = filters.assistenciaPlena === 'Sim';
+      list = list.filter(e => Boolean(e.assistenciaPlena) === isSim);
+    }
+    if (filters?.bloqueado && filters.bloqueado !== 'Todos') {
+      const isBloqueado = filters.bloqueado === 'Sim' || filters.bloqueado === 'Bloqueada' || filters.bloqueado === 'Bloqueado';
+      list = list.filter(e => Boolean(e.bloqueado) === isBloqueado);
+    }
+    if (filters?.motivoBloqueio && filters.motivoBloqueio.trim()) {
+      const q = filters.motivoBloqueio.toLowerCase().trim();
+      list = list.filter(e => e.motivoBloqueio && e.motivoBloqueio.toLowerCase().includes(q));
+    }
+    if (filters?.dataBloqueio && filters.dataBloqueio.trim()) {
+      list = list.filter(e => matchDateStr(e.dataBloqueio, filters.dataBloqueio));
     }
     return list;
   }
@@ -2081,15 +2673,28 @@ class StorageService {
             razao_social: sanitized.razaoSocial,
             nome_fantasia: sanitized.nomeFantasia || '',
             inscricao: sanitized.inscricao,
+            inscricao_anterior: sanitized.inscricaoAnterior || null,
             inscricao_estadual: sanitized.inscricaoEstadual || null,
             categoria: sanitized.categoria || '',
+            categoria_empresa: sanitized.categoriaEmpresa || sanitized.categoria || '',
             tipo_estabelecimento: sanitized.tipoEstabelecimento,
             natureza_atividade: sanitized.naturezaAtividade || null,
-            tipo_empresa: sanitized.tipoEmpresa || 'Matriz',
+            tipo_empresa: sanitized.tipoEmpresa || 'PRIVADO',
             condicao: sanitized.condicao || 'Regular',
             situacao: sanitized.situacao || 'Definitiva',
+            motivo_situacao: sanitized.motivoSituacao || null,
+            dt_inicio_insc_provisoria: sanitized.dtInicioInscProvisoria || null,
+            dt_venc_insc_provisoria: sanitized.dtVencInscProvisoria || null,
+            data_conversao_definitiva: sanitized.dataConversaoDefinitiva || null,
             capital_social: sanitized.capitalSocial || 0,
             assistencia_plena: sanitized.assistenciaPlena ?? true,
+            isento_anuidade: sanitized.isentoAnuidade ?? false,
+            anuidade_reduzida: sanitized.anuidadeReduzida ?? false,
+            recadastrado: sanitized.recadastrado ?? false,
+            data_recadastramento: sanitized.dataRecadastramento || null,
+            isento_taxa_certificado: sanitized.isentoTaxaCertificado ?? false,
+            horario_plantao: sanitized.horarioPlantao || null,
+            horas_tolerancia: sanitized.horasTolerancia ? String(sanitized.horasTolerancia) : null,
             data_inscricao: sanitized.dataInscricao || '',
             validade_crt: sanitized.validadeCRT || null,
             numero_crt: sanitized.numeroCRT || null,
@@ -2110,7 +2715,13 @@ class StorageService {
             ultima_fiscalizacao: sanitized.ultimaFiscalizacao || null,
             resultado_ultima_fiscalizacao: sanitized.resultadoUltimaFiscalizacao || null,
             socios: sanitized.socios || [],
-            responsaveis_tecnicos: sanitized.responsaveisTecnicos || []
+            responsaveis_tecnicos: sanitized.responsaveisTecnicos || [],
+            bloqueado: sanitized.bloqueado ?? false,
+            motivo_bloqueio: sanitized.motivoBloqueio || null,
+            data_bloqueio: sanitized.dataBloqueio || null,
+            data_desbloqueio_prevista: sanitized.dataDesbloqueioPrevista || null,
+            usuario_bloqueio: sanitized.usuarioBloqueio || null,
+            observacoes_bloqueio: sanitized.observacoesBloqueio || null
           }, { onConflict: 'cnpj' })
         );
       }

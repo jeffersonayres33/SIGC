@@ -72,6 +72,15 @@ const SUBGROUPS_PROFISSIONAIS: SubGroupConfig[] = [
     description: 'Estados do registro profissional perante o conselho (ex: Definitivo, Provisório, Remido, Suspenso).',
     linkInfo: 'Controla a aptidão do profissional para emissão de certidões e assunção de RT.',
     badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200'
+  },
+  {
+    key: 'MOTIVO_SITUACAO_PROFISSIONAL',
+    label: 'Motivos de Situação (PF)',
+    icon: Layers,
+    singular: 'Motivo de Situação',
+    description: 'Motivos cadastrais de alteração de situação dos profissionais (ex: Falecimento, Transferência, Jubilação).',
+    linkInfo: 'Vinculado ao formulário de Cadastro de Profissionais.',
+    badgeColor: 'bg-purple-50 text-purple-700 border-purple-200'
   }
 ];
 
@@ -111,6 +120,15 @@ const SUBGROUPS_EMPRESAS: SubGroupConfig[] = [
     description: 'Status operacional e regulatório dos estabelecimentos registrados (ex: Definitiva, Provisória, Baixada).',
     linkInfo: 'Utilizado no controle de regularidade de CRT e licenciamento sanitário.',
     badgeColor: 'bg-amber-50 text-amber-700 border-amber-200'
+  },
+  {
+    key: 'MOTIVO_SITUACAO_EMPRESA',
+    label: 'Motivos de Situação (PJ)',
+    icon: Layers,
+    singular: 'Motivo de Situação',
+    description: 'Motivos cadastrais de alteração de situação ou condição dos estabelecimentos (ex: Fechamento, Suspensão).',
+    linkInfo: 'Vinculado ao formulário de Cadastro de Empresas (PJ).',
+    badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200'
   },
   {
     key: 'MUNICIPIO',

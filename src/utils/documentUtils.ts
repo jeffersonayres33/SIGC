@@ -154,6 +154,27 @@ export interface ViaCEPResponse {
   erro?: boolean;
 }
 
+export function dateToInput(dateStr: string): string {
+  if (!dateStr) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+  const parts = dateStr.split('/');
+  if (parts.length === 3) {
+    const [d, m, y] = parts;
+    if (y && m && d) return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  }
+  return '';
+}
+
+export function inputToDate(dateVal: string): string {
+  if (!dateVal) return '';
+  const parts = dateVal.split('-');
+  if (parts.length === 3) {
+    const [y, m, d] = parts;
+    if (y && m && d) return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+  }
+  return dateVal;
+}
+
 /**
  * Busca de endereço automático pelo serviço público ViaCEP
  */

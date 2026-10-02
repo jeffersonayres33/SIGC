@@ -1,7 +1,11 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ajcdrtsdozbjvsdyhdly.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqY2RydHNkb3pianZzZHloZGx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxMTg4MTMsImV4cCI6MjEwNTY5NDgxM30.c3xptttpKoQbWQJRY5B4XYLjzM3iH2kB3D91BOzHga8';
+const env: Record<string, string | undefined> = typeof import.meta !== 'undefined' && (import.meta as any).env 
+  ? (import.meta as any).env 
+  : (typeof process !== 'undefined' ? process.env : {});
+
+const supabaseUrl = env.VITE_SUPABASE_URL || 'https://ajcdrtsdozbjvsdyhdly.supabase.co';
+const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqY2RydHNkb3pianZzZHloZGx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxMTg4MTMsImV4cCI6MjEwNTY5NDgxM30.c3xptttpKoQbWQJRY5B4XYLjzM3iH2kB3D91BOzHga8';
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 

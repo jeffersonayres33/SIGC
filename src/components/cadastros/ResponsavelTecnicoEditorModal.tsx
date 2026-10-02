@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { Profissional, ResponsavelTecnico, HorarioTrabalhoRT, HorarioFuncionamentoItem } from '../../types';
 import { storageService, calculateIntervalHours, calculateDayTotalHours, DEFAULT_HORARIOS_RT, calculateRtWeeklyHours, DEFAULT_HORARIOS_FUNCIONAMENTO } from '../../services/storageService';
-import { maskCPF } from '../../utils/documentUtils';
+import { maskCPF, dateToInput, inputToDate } from '../../utils/documentUtils';
 import { toastService } from '../../services/toastService';
 
 interface ResponsavelTecnicoEditorModalProps {
@@ -790,10 +790,9 @@ export const ResponsavelTecnicoEditorModal: React.FC<ResponsavelTecnicoEditorMod
               <div>
                 <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Data de Assunção / Início</label>
                 <input
-                  type="text"
-                  value={dataInicio}
-                  onChange={(e) => setDataInicio(e.target.value)}
-                  placeholder="DD/MM/AAAA"
+                  type="date"
+                  value={dateToInput(dataInicio)}
+                  onChange={(e) => setDataInicio(inputToDate(e.target.value))}
                   className="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 font-mono font-semibold text-xs"
                 />
               </div>

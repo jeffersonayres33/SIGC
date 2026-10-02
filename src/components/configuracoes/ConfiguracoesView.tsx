@@ -138,6 +138,20 @@ export const ConfiguracoesView: React.FC = () => {
     config.digitosMinimosInscricaoEmpresa ?? 4
   );
 
+  const previewInscricaoProvisoriaPF = formatInscricaoCompleta(
+    config.prefixoInscricaoProvisoriaProfissional || 'CRF-AM/PROV',
+    config.proximoNumeroInscricaoProvisoriaProfissional || 100,
+    config.sufixoInscricaoProvisoriaProfissional,
+    config.digitosMinimosInscricaoProvisoriaProfissional ?? 4
+  );
+
+  const previewInscricaoProvisoriaPJ = formatInscricaoCompleta(
+    config.prefixoInscricaoProvisoriaEmpresa || 'CRF-AM/PROV',
+    config.proximoNumeroInscricaoProvisoriaEmpresa || 100,
+    config.sufixoInscricaoProvisoriaEmpresa ?? '-PJ',
+    config.digitosMinimosInscricaoProvisoriaEmpresa ?? 4
+  );
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (config.validarCNPJ && config.cnpj && !isCnpjValid) {
@@ -449,6 +463,227 @@ export const ConfiguracoesView: React.FC = () => {
                 <div className="text-[10px] text-blue-600 bg-white px-2 py-1 rounded-lg border border-blue-200 font-semibold uppercase">
                   Incremento Automático (+1)
                 </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Sub-seção: Inscrições Provisórias (PF & PJ) com Prefixo Próprio e Continuidade Cronológica */}
+          <div className="border-t border-purple-200/60 pt-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                  <span>Inscrições Provisórias - Prefixos, Numeração Própria e Prazos</span>
+                  <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-[10px] font-bold">DIFERENCIAÇÃO DE REGISTRO</span>
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Diferencia os inscritos provisórios com prefixo específico. Ao concluir o período provisório, o registro é efetivado como definitivo dando continuidade à numeração cronológica oficial.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-1">
+              {/* Bloco Provisório PF */}
+              <div className="bg-amber-50/40 border border-amber-300/80 rounded-xl p-4 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-amber-950 text-xs flex items-center space-x-1.5 uppercase">
+                    <Users className="w-4 h-4 text-amber-600" />
+                    <span>Inscrição Provisória Profissional (PF)</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-amber-100 text-amber-800 border border-amber-300 rounded-md">
+                    PROVISÓRIA PF
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 text-xs">
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1 uppercase text-[10px]">
+                      Prefixo *:
+                    </label>
+                    <input
+                      type="text"
+                      value={config.prefixoInscricaoProvisoriaProfissional}
+                      onChange={(e) => handleChange('prefixoInscricaoProvisoriaProfissional', e.target.value)}
+                      placeholder="CRF-AM/PROV"
+                      className="w-full px-2.5 py-2 bg-white border border-amber-300 rounded-xl text-slate-900 font-mono font-bold uppercase focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1 uppercase text-[10px]">
+                      Próximo Nº *:
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={config.proximoNumeroInscricaoProvisoriaProfissional}
+                      onChange={(e) => handleChange('proximoNumeroInscricaoProvisoriaProfissional', parseInt(e.target.value, 10) || 1)}
+                      className="w-full px-2.5 py-2 bg-amber-100/60 border border-amber-300 rounded-xl text-amber-950 font-mono font-bold text-sm focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1 uppercase text-[10px]">
+                      Zeros Esquerda:
+                    </label>
+                    <select
+                      value={config.digitosMinimosInscricaoProvisoriaProfissional ?? 4}
+                      onChange={(e) => handleChange('digitosMinimosInscricaoProvisoriaProfissional', parseInt(e.target.value, 10))}
+                      className="w-full px-2 py-2 bg-white border border-amber-300 rounded-xl text-slate-900 font-semibold text-[11px] uppercase focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value={0}>SEM ZEROS (100)</option>
+                      <option value={4}>4 DÍGITOS (0100)</option>
+                      <option value={5}>5 DÍGITOS (00100)</option>
+                      <option value={6}>6 DÍGITOS (000100)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1 uppercase text-[10px]">
+                      Sufixo:
+                    </label>
+                    <input
+                      type="text"
+                      value={config.sufixoInscricaoProvisoriaProfissional || ''}
+                      onChange={(e) => handleChange('sufixoInscricaoProvisoriaProfissional', e.target.value.toUpperCase())}
+                      placeholder="Vazio"
+                      className="w-full px-2.5 py-2 bg-white border border-amber-300 rounded-xl text-slate-900 font-mono uppercase focus:ring-2 focus:ring-amber-500 text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1 uppercase text-[10px]">
+                      Validade (Meses):
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={60}
+                      value={config.validadeProvisoriaMesesProfissional ?? 12}
+                      onChange={(e) => handleChange('validadeProvisoriaMesesProfissional', parseInt(e.target.value, 10) || 12)}
+                      className="w-full px-2.5 py-2 bg-white border border-amber-300 rounded-xl text-slate-900 font-mono font-bold text-xs focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Live Preview Box */}
+                <div className="p-3 bg-amber-100/70 border border-amber-300 rounded-xl flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-amber-800 font-bold uppercase tracking-wide block">Prévia da Próxima Inscrição Provisória PF:</span>
+                    <span className="text-sm font-mono font-extrabold text-amber-950">{previewInscricaoProvisoriaPF}</span>
+                  </div>
+                  <div className="text-[10px] text-amber-700 bg-white px-2 py-1 rounded-lg border border-amber-300 font-semibold uppercase">
+                    Provisório ({config.validadeProvisoriaMesesProfissional ?? 12} meses)
+                  </div>
+                </div>
+              </div>
+
+              {/* Bloco Provisório PJ */}
+              <div className="bg-amber-50/40 border border-amber-300/80 rounded-xl p-4 space-y-3 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-amber-950 text-xs flex items-center space-x-1.5 uppercase">
+                    <Building2 className="w-4 h-4 text-amber-600" />
+                    <span>Inscrição Provisória de Empresas (PJ)</span>
+                  </div>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-amber-100 text-amber-800 border border-amber-300 rounded-md">
+                    PROVISÓRIA PJ
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 text-xs">
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1 uppercase text-[10px]">
+                      Prefixo *:
+                    </label>
+                    <input
+                      type="text"
+                      value={config.prefixoInscricaoProvisoriaEmpresa}
+                      onChange={(e) => handleChange('prefixoInscricaoProvisoriaEmpresa', e.target.value)}
+                      placeholder="CRF-AM/PROV"
+                      className="w-full px-2.5 py-2 bg-white border border-amber-300 rounded-xl text-slate-900 font-mono font-bold uppercase focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1 uppercase text-[10px]">
+                      Próximo Nº *:
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={config.proximoNumeroInscricaoProvisoriaEmpresa}
+                      onChange={(e) => handleChange('proximoNumeroInscricaoProvisoriaEmpresa', parseInt(e.target.value, 10) || 1)}
+                      className="w-full px-2.5 py-2 bg-amber-100/60 border border-amber-300 rounded-xl text-amber-950 font-mono font-bold text-sm focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1 uppercase text-[10px]">
+                      Zeros Esquerda:
+                    </label>
+                    <select
+                      value={config.digitosMinimosInscricaoProvisoriaEmpresa ?? 4}
+                      onChange={(e) => handleChange('digitosMinimosInscricaoProvisoriaEmpresa', parseInt(e.target.value, 10))}
+                      className="w-full px-2 py-2 bg-white border border-amber-300 rounded-xl text-slate-900 font-semibold text-[11px] uppercase focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value={0}>SEM ZEROS (100)</option>
+                      <option value={4}>4 DÍGITOS (0100)</option>
+                      <option value={5}>5 DÍGITOS (00100)</option>
+                      <option value={6}>6 DÍGITOS (000100)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1 uppercase text-[10px]">
+                      Sufixo:
+                    </label>
+                    <input
+                      type="text"
+                      value={config.sufixoInscricaoProvisoriaEmpresa || ''}
+                      onChange={(e) => handleChange('sufixoInscricaoProvisoriaEmpresa', e.target.value.toUpperCase())}
+                      placeholder="-PJ"
+                      className="w-full px-2.5 py-2 bg-white border border-amber-300 rounded-xl text-slate-900 font-mono uppercase focus:ring-2 focus:ring-amber-500 text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-semibold mb-1 uppercase text-[10px]">
+                      Validade (Meses):
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={60}
+                      value={config.validadeProvisoriaMesesEmpresa ?? 12}
+                      onChange={(e) => handleChange('validadeProvisoriaMesesEmpresa', parseInt(e.target.value, 10) || 12)}
+                      className="w-full px-2.5 py-2 bg-white border border-amber-300 rounded-xl text-slate-900 font-mono font-bold text-xs focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Live Preview Box */}
+                <div className="p-3 bg-amber-100/70 border border-amber-300 rounded-xl flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-amber-800 font-bold uppercase tracking-wide block">Prévia da Próxima Inscrição Provisória PJ:</span>
+                    <span className="text-sm font-mono font-extrabold text-amber-950">{previewInscricaoProvisoriaPJ}</span>
+                  </div>
+                  <div className="text-[10px] text-amber-700 bg-white px-2 py-1 rounded-lg border border-amber-300 font-semibold uppercase">
+                    Provisório ({config.validadeProvisoriaMesesEmpresa ?? 12} meses)
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Banner Informativo de Continuidade Cronológica */}
+            <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3 text-xs text-blue-900">
+              <Sparkles className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <strong className="block text-blue-950 uppercase font-bold text-[11px]">
+                  Regra de Transição & Continuidade da Numeração Cronológica dos Inscritos Definitivos
+                </strong>
+                <p className="text-slate-600 text-[11px] leading-relaxed">
+                  Quando o profissional ou empresa com Inscrição Provisória conclui o período provisório ou tem seu diploma/documentação homologada, utilize a ação <strong>"Efetivar Inscrição Definitiva"</strong> diretamente na tela de <strong>Cadastro de Profissionais</strong> ou <strong>Cadastro de Empresas</strong>. O sistema automaticamente tornará o cadastro <strong>Definitivo</strong>, emitindo a <strong>próxima numeração cronológica sequencial definitiva</strong> (ex: {previewInscricaoPF} para PF e {previewInscricaoPJ} para PJ), garantindo continuidade histórica oficial sem lacunas.
+                </p>
               </div>
             </div>
           </div>

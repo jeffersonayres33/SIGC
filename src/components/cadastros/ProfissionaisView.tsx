@@ -42,7 +42,8 @@ import {
   FileEdit,
   ArrowRight,
   Activity,
-  FileSpreadsheet
+  FileSpreadsheet,
+  ShieldAlert
 } from 'lucide-react';
 import { Profissional, SituacaoProfissional, TipoAssociado, Empresa, ProtocoloProcesso } from '../../types';
 import { storageService } from '../../services/storageService';
@@ -56,7 +57,9 @@ import {
   validateCEP,
   fetchAddressByCEP,
   maskRG, 
-  sanitizeToUpper 
+  sanitizeToUpper,
+  dateToInput,
+  inputToDate
 } from '../../utils/documentUtils';
 
 interface ProfissionaisViewProps {
@@ -65,6 +68,7 @@ interface ProfissionaisViewProps {
 
 export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBoletoPix }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [inscricaoFilter, setInscricaoFilter] = useState('');
   const [situacaoFilter, setSituacaoFilter] = useState<string>('Todos');
   const [tipoFilter, setTipoFilter] = useState<string>('Todos');
   const [statusFinFilter, setStatusFinFilter] = useState<string>('Todos');
@@ -72,11 +76,28 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
   const [enderecoFilter, setEnderecoFilter] = useState('');
   const [complementoFilter, setComplementoFilter] = useState('');
   const [habilitacaoFilter, setHabilitacaoFilter] = useState('Todos');
+  const [dataNascimentoFilter, setDataNascimentoFilter] = useState('');
+  const [naturalidadeFilter, setNaturalidadeFilter] = useState('');
+  const [dtInicioInscProvisoriaFilter, setDtInicioInscProvisoriaFilter] = useState('');
+  const [dtVencInscProvisoriaFilter, setDtVencInscProvisoriaFilter] = useState('');
+  const [dataSolicitacaoBaixaFilter, setDataSolicitacaoBaixaFilter] = useState('');
+  const [dataReabilitacaoFilter, setDataReabilitacaoFilter] = useState('');
+  const [anuidadeReduzidaFilter, setAnuidadeReduzidaFilter] = useState('Todos');
+  const [isentoAnuidadeFilter, setIsentoAnuidadeFilter] = useState('Todos');
+  const [eVotanteFilter, setEVotanteFilter] = useState('Todos');
+  const [eMilitarFilter, setEMilitarFilter] = useState('Todos');
+  const [estadoCivilFilter, setEstadoCivilFilter] = useState('Todos');
+  const [nomeMaeFilter, setNomeMaeFilter] = useState('');
+  const [bloqueadoFilter, setBloqueadoFilter] = useState('Todos');
+  const [motivoBloqueioFilter, setMotivoBloqueioFilter] = useState('');
+  const [dataBloqueioFilter, setDataBloqueioFilter] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 15;
 
   const handleClearFilters = () => {
     setSearchTerm('');
+    setInscricaoFilter('');
     setSituacaoFilter('Todos');
     setTipoFilter('Todos');
     setStatusFinFilter('Todos');
@@ -84,6 +105,21 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
     setEnderecoFilter('');
     setComplementoFilter('');
     setHabilitacaoFilter('Todos');
+    setDataNascimentoFilter('');
+    setNaturalidadeFilter('');
+    setDtInicioInscProvisoriaFilter('');
+    setDtVencInscProvisoriaFilter('');
+    setDataSolicitacaoBaixaFilter('');
+    setDataReabilitacaoFilter('');
+    setAnuidadeReduzidaFilter('Todos');
+    setIsentoAnuidadeFilter('Todos');
+    setEVotanteFilter('Todos');
+    setEMilitarFilter('Todos');
+    setEstadoCivilFilter('Todos');
+    setNomeMaeFilter('');
+    setBloqueadoFilter('Todos');
+    setMotivoBloqueioFilter('');
+    setDataBloqueioFilter('');
     setPage(1);
     toastService.info('Filtros Limpos', 'Todos os filtros de profissionais foram redefinidos.');
   };
@@ -113,14 +149,229 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
 
   // Cadastro / Edição Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalTab, setModalTab] = useState<'dados_pessoais' | 'filiacao_formacao' | 'endereco_contato' | 'empresas_rt' | 'posicao_financeira'>('dados_pessoais');
+  const [modalTab, setModalTab] = useState<'dados_pessoais' | 'filiacao_formacao' | 'endereco_contato' | 'empresas_rt' | 'posicao_financeira' | 'bloqueio'>('dados_pessoais');
   const [editingProfissional, setEditingProfissional] = useState<Partial<Profissional> | null>(null);
   const [profToDelete, setProfToDelete] = useState<Profissional | null>(null);
+  const [profToConvertDefinitivo, setProfToConvertDefinitivo] = useState<Profissional | null>(null);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
+
+  const [initialModalSituacao, setInitialModalSituacao] = useState<string>('');
+  const [provisorioConfirmModal, setProvisorioConfirmModal] = useState<{
+    isOpen: boolean;
+    targetSituacao: string;
+    prevSituacao: string;
+    numeroAtual: string;
+    novaInscricao: string;
+  } | null>(null);
+
+  const handleSituacaoChange = (novaSituacao: string) => {
+    if (!editingProfissional) return;
+    const currentSit = editingProfissional.situacao || 'Definitivo';
+    const wasProvisorio = storageService.isSituacaoProvisoria(currentSit);
+    const willBeProvisorio = storageService.isSituacaoProvisoria(novaSituacao);
+
+    if (!wasProvisorio && willBeProvisorio) {
+      // Pergunta se deseja mesmo alterar para Provisório mantendo o número atual
+      const inscricaoAtual = editingProfissional.inscricao || '';
+      const numeroAtual = storageService.extrairNumeroInscricao(inscricaoAtual) || String(councilConfig.proximoNumeroInscricaoProvisoriaProfissional || 100);
+      const novaInscricaoProvisoria = storageService.alternarInscricaoParaProvisorio(inscricaoAtual, 'PF');
+
+      setProvisorioConfirmModal({
+        isOpen: true,
+        targetSituacao: novaSituacao,
+        prevSituacao: currentSit,
+        numeroAtual,
+        novaInscricao: novaInscricaoProvisoria
+      });
+    } else if (wasProvisorio && !willBeProvisorio) {
+      // Voltando de Provisório para Definitivo (altera somente prefixo e sufixo mantendo o número atual)
+      const inscricaoAtual = editingProfissional.inscricao || '';
+      const novaInscricaoDefinitiva = storageService.alternarInscricaoParaDefinitivo(inscricaoAtual, 'PF');
+      const numeroAtual = storageService.extrairNumeroInscricao(inscricaoAtual);
+
+      setEditingProfissional(prev => prev ? ({
+        ...prev,
+        situacao: novaSituacao as any,
+        inscricao: novaInscricaoDefinitiva
+      }) : null);
+
+      toastService.info(
+        'Inscrição Revertida para Definitiva',
+        `A numeração cronológica (${numeroAtual}) foi mantida e o prefixo/sufixo definitivo aplicado com sucesso.`
+      );
+    } else {
+      setEditingProfissional(prev => prev ? ({
+        ...prev,
+        situacao: novaSituacao as any
+      }) : null);
+    }
+  };
+
+  const handleConfirmChangeToProvisorio = () => {
+    if (!provisorioConfirmModal || !editingProfissional) return;
+    const { targetSituacao, novaInscricao, numeroAtual } = provisorioConfirmModal;
+
+    const validadeMeses = councilConfig.validadeProvisoriaMesesProfissional ?? 12;
+    const today = new Date();
+    const vencDate = new Date();
+    vencDate.setMonth(vencDate.getMonth() + validadeMeses);
+
+    setEditingProfissional(prev => {
+      if (!prev) return null;
+      const inscricaoAtual = prev.inscricao || '';
+      const isCurrentlyDefinitivo = !storageService.isSituacaoProvisoria(prev.situacao);
+      const prevDefinitiva = isCurrentlyDefinitivo ? inscricaoAtual : prev.inscricaoDefinitivaAnterior;
+
+      return {
+        ...prev,
+        situacao: targetSituacao as any,
+        inscricao: novaInscricao,
+        inscricaoDefinitivaAnterior: prevDefinitiva,
+        dtInicioInscProvisoria: prev.dtInicioInscProvisoria || today.toLocaleDateString('pt-BR'),
+        dtVencInscProvisoria: prev.dtVencInscProvisoria || vencDate.toLocaleDateString('pt-BR')
+      };
+    });
+
+    setProvisorioConfirmModal(null);
+    toastService.success(
+      'Situação Alterada para Provisório',
+      `O número (${numeroAtual}) foi preservado e o prefixo/sufixo alterado para o padrão provisório (${novaInscricao}).`
+    );
+  };
+
+  const handleSelectTipoInscricao = (tipo: 'Definitiva' | 'Provisória') => {
+    if (!editingProfissional) return;
+    if (editingProfissional.id) {
+      // Cadastro existente: usa a lógica de alteração de situação que preserva o número e formata prefixo/sufixo
+      if (tipo === 'Provisória') {
+        handleSituacaoChange('Provisório');
+      } else {
+        handleSituacaoChange('Definitivo');
+      }
+    } else {
+      // Novo cadastro: gera um novo número sequencial do lote correspondente
+      if (tipo === 'Provisória') {
+        const generated = storageService.peekNextInscricaoProvisoriaProfissional();
+        const validadeMeses = councilConfig.validadeProvisoriaMesesProfissional ?? 12;
+        const today = new Date();
+        const vencDate = new Date();
+        vencDate.setMonth(vencDate.getMonth() + validadeMeses);
+
+        setEditingProfissional(prev => prev ? ({
+          ...prev,
+          inscricao: generated,
+          situacao: 'Provisório',
+          dtInicioInscProvisoria: today.toLocaleDateString('pt-BR'),
+          dtVencInscProvisoria: vencDate.toLocaleDateString('pt-BR')
+        }) : null);
+      } else {
+        const generated = storageService.peekNextInscricaoProfissional();
+        setEditingProfissional(prev => prev ? ({
+          ...prev,
+          inscricao: generated,
+          situacao: 'Definitivo'
+        }) : null);
+      }
+    }
+  };
+
+  const handleConfirmConversaoDefinitiva = () => {
+    if (!profToConvertDefinitivo) return;
+    const updated = storageService.converterProfissionalParaDefinitivo(profToConvertDefinitivo.id);
+    if (updated) {
+      toastService.success(
+        'Inscrição Definitiva Efetivada!',
+        `O profissional ${updated.nome} agora possui a inscrição definitiva ${updated.inscricao}. Numeração anterior (${profToConvertDefinitivo.inscricao}) arquivada com sucesso.`
+      );
+      if (selectedProfissional && selectedProfissional.id === updated.id) {
+        setSelectedProfissional(updated);
+      }
+    } else {
+      toastService.error('Erro na Conversão', 'Não foi possível converter a inscrição para definitiva.');
+    }
+    setProfToConvertDefinitivo(null);
+  };
+
+  // Modal de Visualização da Foto em Tamanho Grande & Upload Avançado
+  const [previewPhotoModal, setPreviewPhotoModal] = useState<{ url: string; nome: string; info?: string } | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+
+  // Otimização e compressão inteligente de fotos em alta resolução (suporta arquivos de até 25MB)
+  const optimizePhotoUpload = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Erro ao ler o arquivo de imagem.'));
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('O arquivo selecionado não é uma imagem válida.'));
+        img.onload = () => {
+          // Mantém proporção e nitidez com limite amplo em alta definição (até 1600x1600)
+          const maxDimension = 1600;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(e.target?.result as string);
+            return;
+          }
+
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Exportar em alta qualidade (JPEG 90%) para manter fidelidade visual e peso leve
+          const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.90);
+          resolve(optimizedDataUrl);
+        };
+        img.src = e.target?.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handlePhotoFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Limite generoso de 25 MB para fotos de câmeras modernas e smartphones
+    if (file.size > 25 * 1024 * 1024) {
+      toastService.warning('Arquivo Muito Grande', 'A foto selecionada ultrapassa o limite de 25MB.');
+      return;
+    }
+
+    try {
+      setIsUploadingPhoto(true);
+      const optimizedUrl = await optimizePhotoUpload(file);
+      setEditingProfissional(prev => prev ? ({ ...prev, fotoUrl: optimizedUrl }) : null);
+      toastService.success(
+        'Foto Carregada com Sucesso',
+        `Imagem de ${(file.size / (1024 * 1024)).toFixed(1)}MB processada e otimizada em alta definição!`
+      );
+    } catch (err: any) {
+      toastService.error('Erro no Upload', err?.message || 'Não foi possível carregar a imagem.');
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
 
   const councilConfig = storageService.getCouncilConfig();
   const cadastrosTipos = storageService.getCadastrosBasicos('TIPO_PROFISSIONAL').filter(i => i.ativo);
   const cadastrosSituacoes = storageService.getCadastrosBasicos('SITUACAO_PROFISSIONAL').filter(i => i.ativo);
+  const cadastrosMotivosSituacaoProf = storageService.getCadastrosBasicos('MOTIVO_SITUACAO_PROFISSIONAL').filter(i => i.ativo);
   const cadastrosHabilitacoes = storageService.getCadastrosBasicos('HABILITACAO').filter(i => i.ativo);
   const cadastrosTiposRequerimento = storageService.getCadastrosBasicos('TIPO_REQUERIMENTO_PROTOCOLO').filter(i => i.ativo);
   const cadastrosSetoresProtocolo = storageService.getCadastrosBasicos('SETOR_PROTOCOLO').filter(i => i.ativo);
@@ -130,26 +381,58 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
   // Fetch paginated professionals
   const result = storageService.getProfissionaisPaginated(page, pageSize, {
     search: searchTerm,
+    inscricao: inscricaoFilter,
     situacao: situacaoFilter,
     tipoAssociado: tipoFilter,
     statusFinanceiro: statusFinFilter,
     cep: cepFilter,
     endereco: enderecoFilter,
     complemento: complementoFilter,
-    habilitacao: habilitacaoFilter
+    habilitacao: habilitacaoFilter,
+    dataNascimento: dataNascimentoFilter,
+    naturalidade: naturalidadeFilter,
+    dtInicioInscProvisoria: dtInicioInscProvisoriaFilter,
+    dtVencInscProvisoria: dtVencInscProvisoriaFilter,
+    dataSolicitacaoBaixa: dataSolicitacaoBaixaFilter,
+    dataReabilitacao: dataReabilitacaoFilter,
+    anuidadeReduzida: anuidadeReduzidaFilter,
+    isentoAnuidade: isentoAnuidadeFilter,
+    eVotante: eVotanteFilter,
+    eMilitar: eMilitarFilter,
+    estadoCivil: estadoCivilFilter,
+    nomeMae: nomeMaeFilter,
+    bloqueado: bloqueadoFilter,
+    motivoBloqueio: motivoBloqueioFilter,
+    dataBloqueio: dataBloqueioFilter
   });
 
   // Busca conjunto completo de profissionais filtrados para exportação
   const getAllFilteredProfissionais = () => {
     return storageService.getProfissionaisPaginated(1, 10000, {
       search: searchTerm,
+      inscricao: inscricaoFilter,
       situacao: situacaoFilter,
       tipoAssociado: tipoFilter,
       statusFinanceiro: statusFinFilter,
       cep: cepFilter,
       endereco: enderecoFilter,
       complemento: complementoFilter,
-      habilitacao: habilitacaoFilter
+      habilitacao: habilitacaoFilter,
+      dataNascimento: dataNascimentoFilter,
+      naturalidade: naturalidadeFilter,
+      dtInicioInscProvisoria: dtInicioInscProvisoriaFilter,
+      dtVencInscProvisoria: dtVencInscProvisoriaFilter,
+      dataSolicitacaoBaixa: dataSolicitacaoBaixaFilter,
+      dataReabilitacao: dataReabilitacaoFilter,
+      anuidadeReduzida: anuidadeReduzidaFilter,
+      isentoAnuidade: isentoAnuidadeFilter,
+      eVotante: eVotanteFilter,
+      eMilitar: eMilitarFilter,
+      estadoCivil: estadoCivilFilter,
+      nomeMae: nomeMaeFilter,
+      bloqueado: bloqueadoFilter,
+      motivoBloqueio: motivoBloqueioFilter,
+      dataBloqueio: dataBloqueioFilter
     }).items;
   };
 
@@ -224,18 +507,55 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
       cpf: '',
       rg: '',
       orgaoExpeditor: 'SSP/AM',
-      dataNascimento: '15/05/1990',
+      dataNascimento: '',
       sexo: 'F',
       nacionalidade: 'BRASILEIRA',
-      naturalidade: 'MANAUS/AM',
+      naturalidade: '',
       nomeMae: '',
       nomePai: '',
       situacao: (cadastrosSituacoes[0]?.nome as any) || 'Definitivo',
+      motivoSituacao: '',
+      dtInicioInscProvisoria: '',
+      dtVencInscProvisoria: '',
+      dataSolicitacaoBaixa: '',
+      dataReabilitacao: '',
+      transferidoOutroRegional: false,
+      nrInscricaoRegionalOrigem: '',
+      anuidRefAnoInscricaoEmDia: false,
+      ufRegionalOrigem: councilConfig.uf || 'AM',
+      anuidadeReduzida: false,
+      isentoAnuidade: false,
+      eVotante: true,
+      eMilitar: false,
+      dtVenctoMilitar: '',
+      recadastrado: false,
+      dataRecadastramento: '',
+      estadoCivil: '',
+      dataMandatoSeguranca: '',
+      orgaoMandatoSeguranca: '',
+      observacaoMandato: '',
+      formaEnvioBoletoParcelamento: '',
+      grupoSanguineo: '',
+      fatorRH: '',
+      doadorOrgaosTecidos: false,
+      participouCursoQualifarma: '',
+      rgDataExpedicao: '',
+      rgDataVencimento: '',
+      tituloEleitoral: '',
+      tituloZona: '',
+      tituloSecao: '',
+      tituloUfExp: councilConfig.uf || 'AM',
+      reservista: '',
+      cartTrabalho: '',
+      cartTrabalhoSerie: '',
+      cartTrabalhoUfExp: councilConfig.uf || 'AM',
+      cartTrabalhoDataExp: '',
+      nomeSocial: '',
       tipoAssociado: (cadastrosTipos[0]?.nome as any) || 'Farmacêutico',
       dataInscricao: new Date().toLocaleDateString('pt-BR'),
-      dataColacaoGrau: '18/12/2015',
-      dataExpDiploma: '20/01/2016',
-      faculdade: 'UNIVERSIDADE FEDERAL DO AMAZONAS - UFAM',
+      dataColacaoGrau: '',
+      dataExpDiploma: '',
+      faculdade: '',
       emailPessoal: '',
       emailComercial: '',
       telefone: '',
@@ -246,16 +566,32 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
       endereco: '',
       bairro: '',
       statusFinanceiro: 'Adimplente',
-      carteiraProfissional: `CFF-${Math.floor(10000 + Math.random() * 90000)}`,
-      habilitacoes: ['Farmácia Comunitária e Dispensação'],
-      fotoUrl: ''
+      carteiraProfissional: '',
+      habilitacoes: [],
+      fotoUrl: '',
+      bloqueado: false,
+      motivoBloqueio: '',
+      dataBloqueio: '',
+      dataDesbloqueioPrevista: '',
+      usuarioBloqueio: '',
+      observacoesBloqueio: ''
     });
     setModalTab('dados_pessoais');
     setIsModalOpen(true);
   };
 
   const handleOpenEditModal = (prof: Profissional) => {
-    setEditingProfissional({ ...prof });
+    const matched = cadastrosSituacoes.find(s => 
+      storageService.isSituacaoProvisoria(s.nome) === storageService.isSituacaoProvisoria(prof.situacao) &&
+      (storageService.isSituacaoProvisoria(s.nome) || s.nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === (prof.situacao || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase())
+    );
+    const situacaoNormalizada = matched ? matched.nome : (prof.situacao || 'Definitivo');
+
+    setEditingProfissional({ 
+      ...prof,
+      situacao: situacaoNormalizada
+    });
+    setInitialModalSituacao(situacaoNormalizada);
     setModalTab('dados_pessoais');
     setIsModalOpen(true);
   };
@@ -306,14 +642,25 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
       return;
     }
 
-    if (!editingProfissional.cpf || !validateCPF(editingProfissional.cpf)) {
-      toastService.warning('CPF Inválido', 'O CPF informado é inválido. Corrija para prosseguir.');
+    if (!editingProfissional.cpf || !editingProfissional.cpf.trim()) {
+      toastService.warning('CPF Obrigatório', 'Por favor preencha o CPF do profissional.');
+      return;
+    }
+
+    if (councilConfig.validarCPF && !validateCPF(editingProfissional.cpf)) {
+      toastService.warning('CPF Inválido', 'O CPF informado é inválido. Corrija para prosseguir (ou mantenha a validação de CPF desativada em Configurações).');
+      return;
+    }
+
+    if (!editingProfissional.fotoUrl?.trim()) {
+      toastService.warning('Foto Obrigatória', 'Por favor faça o upload da foto do profissional para prosseguir.');
       return;
     }
 
     const isNew = !editingProfissional.id;
+    const isProvisorio = editingProfissional.situacao === 'Provisório' || editingProfissional.situacao === 'Provisoria' || editingProfissional.inscricao?.includes('PROV');
     const finalInscricao = isNew 
-      ? storageService.getNextInscricaoProfissional(true)
+      ? (isProvisorio ? storageService.getNextInscricaoProvisoriaProfissional(true) : storageService.getNextInscricaoProfissional(true))
       : editingProfissional.inscricao!;
 
     const rawProfissional: Profissional = {
@@ -330,6 +677,44 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
       nomeMae: editingProfissional.nomeMae?.trim() || '',
       nomePai: editingProfissional.nomePai?.trim() || '',
       situacao: editingProfissional.situacao || 'Definitivo',
+      motivoSituacao: editingProfissional.motivoSituacao || '',
+      dtInicioInscProvisoria: editingProfissional.dtInicioInscProvisoria || '',
+      dtVencInscProvisoria: editingProfissional.dtVencInscProvisoria || '',
+      dataSolicitacaoBaixa: editingProfissional.dataSolicitacaoBaixa || '',
+      dataReabilitacao: editingProfissional.dataReabilitacao || '',
+      dataConversaoDefinitiva: editingProfissional.dataConversaoDefinitiva || '',
+      transferidoOutroRegional: Boolean(editingProfissional.transferidoOutroRegional),
+      nrInscricaoRegionalOrigem: editingProfissional.nrInscricaoRegionalOrigem || '',
+      anuidRefAnoInscricaoEmDia: Boolean(editingProfissional.anuidRefAnoInscricaoEmDia),
+      ufRegionalOrigem: editingProfissional.ufRegionalOrigem || '',
+      anuidadeReduzida: Boolean(editingProfissional.anuidadeReduzida),
+      isentoAnuidade: Boolean(editingProfissional.isentoAnuidade),
+      eVotante: Boolean(editingProfissional.eVotante),
+      eMilitar: Boolean(editingProfissional.eMilitar),
+      dtVenctoMilitar: editingProfissional.dtVenctoMilitar || '',
+      recadastrado: Boolean(editingProfissional.recadastrado),
+      dataRecadastramento: editingProfissional.dataRecadastramento || '',
+      estadoCivil: editingProfissional.estadoCivil || 'Solteiro',
+      dataMandatoSeguranca: editingProfissional.dataMandatoSeguranca || '',
+      orgaoMandatoSeguranca: editingProfissional.orgaoMandatoSeguranca || '',
+      observacaoMandato: editingProfissional.observacaoMandato || '',
+      formaEnvioBoletoParcelamento: editingProfissional.formaEnvioBoletoParcelamento || '',
+      grupoSanguineo: editingProfissional.grupoSanguineo || '',
+      fatorRH: editingProfissional.fatorRH || '',
+      doadorOrgaosTecidos: Boolean(editingProfissional.doadorOrgaosTecidos),
+      participouCursoQualifarma: editingProfissional.participouCursoQualifarma || '',
+      rgDataExpedicao: editingProfissional.rgDataExpedicao || '',
+      rgDataVencimento: editingProfissional.rgDataVencimento || '',
+      tituloEleitoral: editingProfissional.tituloEleitoral || '',
+      tituloZona: editingProfissional.tituloZona || '',
+      tituloSecao: editingProfissional.tituloSecao || '',
+      tituloUfExp: editingProfissional.tituloUfExp || '',
+      reservista: editingProfissional.reservista || '',
+      cartTrabalho: editingProfissional.cartTrabalho || '',
+      cartTrabalhoSerie: editingProfissional.cartTrabalhoSerie || '',
+      cartTrabalhoUfExp: editingProfissional.cartTrabalhoUfExp || '',
+      cartTrabalhoDataExp: editingProfissional.cartTrabalhoDataExp || '',
+      nomeSocial: editingProfissional.nomeSocial || '',
       tipoAssociado: editingProfissional.tipoAssociado || 'Farmacêutico',
       dataInscricao: editingProfissional.dataInscricao || new Date().toLocaleDateString('pt-BR'),
       dataColacaoGrau: editingProfissional.dataColacaoGrau || '',
@@ -349,7 +734,13 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
       carteiraProfissional: editingProfissional.carteiraProfissional || '',
       habilitacoes: editingProfissional.habilitacoes || [],
       fotoUrl: editingProfissional.fotoUrl || '',
-      observacoes: editingProfissional.observacoes || ''
+      observacoes: editingProfissional.observacoes || '',
+      bloqueado: Boolean(editingProfissional.bloqueado),
+      motivoBloqueio: editingProfissional.motivoBloqueio || '',
+      dataBloqueio: editingProfissional.dataBloqueio || '',
+      dataDesbloqueioPrevista: editingProfissional.dataDesbloqueioPrevista || '',
+      usuarioBloqueio: editingProfissional.usuarioBloqueio || '',
+      observacoesBloqueio: editingProfissional.observacoesBloqueio || ''
     };
 
     const finalProf = sanitizeToUpper(rawProfissional, ['id', 'fotoUrl', 'emailPessoal', 'emailComercial']);
@@ -610,14 +1001,14 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
         </div>
       </div>
 
-      {/* Filter Toolbar */}
+      {/* Filter Toolbar with Persistent Search & Expandable Advanced Filters */}
       <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-xs space-y-3 text-xs">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
-          <div className="sm:col-span-2 lg:col-span-4 relative min-w-0">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="relative flex-1 w-full">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="PESQUISAR NOME, CPF, INSCRIÇÃO..."
+              placeholder="PESQUISAR NOME, CPF, INSCRIÇÃO, CEP, ENDEREÇO..."
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -627,99 +1018,404 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
             />
           </div>
 
-          <div className="sm:col-span-1 lg:col-span-3 min-w-0">
-            <select
-              value={tipoFilter}
-              onChange={(e) => {
-                setTipoFilter(e.target.value);
-                setPage(1);
-              }}
-              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-purple-500/20 text-xs"
-            >
-              <option value="Todos">TIPO: TODOS</option>
-              {cadastrosTipos.map(t => (
-                <option key={t.id} value={t.nome}>{t.nome}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="sm:col-span-1 lg:col-span-2 min-w-0">
-            <select
-              value={situacaoFilter}
-              onChange={(e) => {
-                setSituacaoFilter(e.target.value);
-                setPage(1);
-              }}
-              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-purple-500/20 text-xs"
-            >
-              <option value="Todos">SITUAÇÃO: TODAS</option>
-              {cadastrosSituacoes.map(s => (
-                <option key={s.id} value={s.nome}>{s.nome}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="sm:col-span-2 lg:col-span-3 flex items-center space-x-2 min-w-0">
-            <select
-              value={statusFinFilter}
-              onChange={(e) => {
-                setStatusFinFilter(e.target.value);
-                setPage(1);
-              }}
-              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-purple-500/20 text-xs"
-            >
-              <option value="Todos">FINANCEIRO: TODOS</option>
-              <option value="Adimplente">ADIMPLENTE</option>
-              <option value="Inadimplente">INADIMPLENTE</option>
-              <option value="Isento">ISENTO</option>
-              <option value="Parcelamento">PARCELAMENTO</option>
-            </select>
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
             <button
-              onClick={handleClearFilters}
-              className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs uppercase transition-colors shrink-0 cursor-pointer"
-              title="Limpar todos os filtros"
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex items-center space-x-1.5 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all uppercase shadow-2xs cursor-pointer ${
+                showFilters ? 'bg-purple-50 border-purple-300 text-purple-700' : 'bg-white border-slate-300 hover:bg-slate-50 text-slate-700'
+              }`}
             >
-              Limpar
+              <Filter className="w-4 h-4 text-purple-600" />
+              <span>{showFilters ? 'Ocultar Filtros' : 'Filtros'}</span>
             </button>
+            {(searchTerm || inscricaoFilter || situacaoFilter !== 'Todos' || tipoFilter !== 'Todos' || statusFinFilter !== 'Todos' || cepFilter || enderecoFilter || complementoFilter || habilitacaoFilter !== 'Todos' || dataNascimentoFilter || naturalidadeFilter || dtInicioInscProvisoriaFilter || dtVencInscProvisoriaFilter || dataSolicitacaoBaixaFilter || dataReabilitacaoFilter || anuidadeReduzidaFilter !== 'Todos' || isentoAnuidadeFilter !== 'Todos' || eVotanteFilter !== 'Todos' || eMilitarFilter !== 'Todos' || estadoCivilFilter !== 'Todos' || nomeMaeFilter || bloqueadoFilter !== 'Todos' || motivoBloqueioFilter || dataBloqueioFilter) && (
+              <button
+                onClick={handleClearFilters}
+                className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs uppercase transition-colors cursor-pointer"
+                title="Limpar todos os filtros"
+              >
+                Limpar
+              </button>
+            )}
           </div>
         </div>
 
-        {/* Linha 2 de Filtros Avançados: CEP, Endereço, Habilitação */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100 text-xs">
-          <input
-            type="text"
-            placeholder="FILTRAR POR CEP..."
-            value={cepFilter}
-            onChange={(e) => {
-              setCepFilter(e.target.value);
-              setPage(1);
-            }}
-            className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl uppercase font-medium"
-          />
-          <input
-            type="text"
-            placeholder="ENDEREÇO / BAIRRO..."
-            value={enderecoFilter}
-            onChange={(e) => {
-              setEnderecoFilter(e.target.value);
-              setPage(1);
-            }}
-            className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl uppercase font-medium"
-          />
-          <select
-            value={habilitacaoFilter}
-            onChange={(e) => {
-              setHabilitacaoFilter(e.target.value);
-              setPage(1);
-            }}
-            className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs"
-          >
-            <option value="Todos">HABILITAÇÃO: TODAS</option>
-            {cadastrosHabilitacoes.map(h => (
-              <option key={h.id} value={h.nome}>{h.nome}</option>
-            ))}
-          </select>
-        </div>
+        {/* Expandable Advanced Filters */}
+        {showFilters && (
+          <div className="pt-3 border-t border-slate-100 space-y-4 animate-in fade-in duration-150">
+            {/* Bloco 1: Identificação & Classificação Profissional */}
+            <div>
+              <span className="text-[10px] font-bold text-purple-900 uppercase tracking-wider block mb-1.5">
+                1. Identificação & Classificação
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2.5">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nº Inscrição (Exato)</label>
+                  <input
+                    type="text"
+                    placeholder="EX: 1000..."
+                    value={inscricaoFilter}
+                    onChange={(e) => {
+                      setInscricaoFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-mono font-bold uppercase text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tipo de Profissional</label>
+                  <select
+                    value={tipoFilter}
+                    onChange={(e) => {
+                      setTipoFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs"
+                  >
+                    <option value="Todos">TODOS</option>
+                    {cadastrosTipos.map(t => (
+                      <option key={t.id} value={t.nome}>{t.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Situação Cadastral</label>
+                  <select
+                    value={situacaoFilter}
+                    onChange={(e) => {
+                      setSituacaoFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs"
+                  >
+                    <option value="Todos">TODAS</option>
+                    {cadastrosSituacoes.map(s => (
+                      <option key={s.id} value={s.nome}>{s.nome}</option>
+                    ))}
+                    {!cadastrosSituacoes.some(s => s.nome.toLowerCase() === 'remido') && <option value="Remido">REMIDO</option>}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Status Financeiro</label>
+                  <select
+                    value={statusFinFilter}
+                    onChange={(e) => {
+                      setStatusFinFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs"
+                  >
+                    <option value="Todos">TODOS</option>
+                    <option value="Adimplente">ADIMPLENTE</option>
+                    <option value="Inadimplente">INADIMPLENTE</option>
+                    <option value="Isento">ISENTO</option>
+                    <option value="Parcelamento">PARCELAMENTO</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Habilitação</label>
+                  <select
+                    value={habilitacaoFilter}
+                    onChange={(e) => {
+                      setHabilitacaoFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs"
+                  >
+                    <option value="Todos">TODAS</option>
+                    {cadastrosHabilitacoes.map(h => (
+                      <option key={h.id} value={h.nome}>{h.nome}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Naturalidade</label>
+                  <input
+                    type="text"
+                    placeholder="MANAUS/AM..."
+                    value={naturalidadeFilter}
+                    onChange={(e) => {
+                      setNaturalidadeFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl uppercase font-medium text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Bloco 2: Datas & Prazos Oficiais */}
+            <div>
+              <span className="text-[10px] font-bold text-purple-900 uppercase tracking-wider block mb-1.5">
+                2. Datas & Prazos Cadastrais
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Data de Nascimento</label>
+                  <input
+                    type="date"
+                    value={dataNascimentoFilter}
+                    onChange={(e) => {
+                      setDataNascimentoFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl font-mono text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Dt. Início Insc. Provisória</label>
+                  <input
+                    type="date"
+                    value={dtInicioInscProvisoriaFilter}
+                    onChange={(e) => {
+                      setDtInicioInscProvisoriaFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl font-mono text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Dt. Venc. Insc. Provisória</label>
+                  <input
+                    type="date"
+                    value={dtVencInscProvisoriaFilter}
+                    onChange={(e) => {
+                      setDtVencInscProvisoriaFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl font-mono text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Data Solicitação Baixa</label>
+                  <input
+                    type="date"
+                    value={dataSolicitacaoBaixaFilter}
+                    onChange={(e) => {
+                      setDataSolicitacaoBaixaFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl font-mono text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Data da Reabilitação</label>
+                  <input
+                    type="date"
+                    value={dataReabilitacaoFilter}
+                    onChange={(e) => {
+                      setDataReabilitacaoFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl font-mono text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Bloco 3: Dados Pessoais & Localização */}
+            <div>
+              <span className="text-[10px] font-bold text-purple-900 uppercase tracking-wider block mb-1.5">
+                3. Dados Pessoais, Filiação & Endereço
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nome da Mãe</label>
+                  <input
+                    type="text"
+                    placeholder="NOME DA MÃE..."
+                    value={nomeMaeFilter}
+                    onChange={(e) => {
+                      setNomeMaeFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl uppercase font-medium text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Estado Civil</label>
+                  <select
+                    value={estadoCivilFilter}
+                    onChange={(e) => {
+                      setEstadoCivilFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs"
+                  >
+                    <option value="Todos">TODOS</option>
+                    <option value="Solteiro">SOLTEIRO(A)</option>
+                    <option value="Casado">CASADO(A)</option>
+                    <option value="Divorciado">DIVORCIADO(A)</option>
+                    <option value="Viúvo">VIÚVO(A)</option>
+                    <option value="Separado">SEPARADO(A)</option>
+                    <option value="União Estável">UNIÃO ESTÁVEL</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">CEP</label>
+                  <input
+                    type="text"
+                    placeholder="00000-000..."
+                    value={cepFilter}
+                    onChange={(e) => {
+                      setCepFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl uppercase font-medium font-mono text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Endereço / Bairro</label>
+                  <input
+                    type="text"
+                    placeholder="LOGRADOURO OU BAIRRO..."
+                    value={enderecoFilter}
+                    onChange={(e) => {
+                      setEnderecoFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl uppercase font-medium text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Bloco 4: Isenções & Obrigações */}
+            <div>
+              <span className="text-[10px] font-bold text-purple-900 uppercase tracking-wider block mb-1.5">
+                4. Isenções, Direitos & Situação Militar
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Anuidade Reduzida?</label>
+                  <select
+                    value={anuidadeReduzidaFilter}
+                    onChange={(e) => {
+                      setAnuidadeReduzidaFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs"
+                  >
+                    <option value="Todos">TODOS</option>
+                    <option value="Sim">SIM (REDUZIDA)</option>
+                    <option value="Não">NÃO (INTEGRAL)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Isento de Anuidade</label>
+                  <select
+                    value={isentoAnuidadeFilter}
+                    onChange={(e) => {
+                      setIsentoAnuidadeFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs"
+                  >
+                    <option value="Todos">TODOS</option>
+                    <option value="Sim">SIM (ISENTO)</option>
+                    <option value="Não">NÃO</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">É Votante?</label>
+                  <select
+                    value={eVotanteFilter}
+                    onChange={(e) => {
+                      setEVotanteFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs"
+                  >
+                    <option value="Todos">TODOS</option>
+                    <option value="Sim">SIM (VOTANTE)</option>
+                    <option value="Não">NÃO (NÃO VOTANTE)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">É Militar?</label>
+                  <select
+                    value={eMilitarFilter}
+                    onChange={(e) => {
+                      setEMilitarFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs"
+                  >
+                    <option value="Todos">TODOS</option>
+                    <option value="Sim">SIM (MILITAR)</option>
+                    <option value="Não">NÃO (CIVIL)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Bloco 5: Controle de Bloqueio do Cadastro */}
+            <div className="p-3 bg-red-50/50 border border-red-200/80 rounded-xl space-y-2">
+              <span className="text-[10px] font-bold text-red-900 uppercase tracking-wider block">
+                5. Status de Bloqueio do Cadastro do Profissional
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Status de Bloqueio</label>
+                  <select
+                    value={bloqueadoFilter}
+                    onChange={(e) => {
+                      setBloqueadoFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs"
+                  >
+                    <option value="Todos">TODOS OS STATUS</option>
+                    <option value="Sim">🔒 APENAS BLOQUEADOS</option>
+                    <option value="Não">🟢 APENAS DESBLOQUEADOS / ATIVOS</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Motivo do Bloqueio</label>
+                  <input
+                    type="text"
+                    placeholder="MOTIVO DO BLOQUEIO..."
+                    value={motivoBloqueioFilter}
+                    onChange={(e) => {
+                      setMotivoBloqueioFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl uppercase font-medium text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Data do Bloqueio</label>
+                  <input
+                    type="date"
+                    value={dataBloqueioFilter}
+                    onChange={(e) => {
+                      setDataBloqueioFilter(e.target.value);
+                      setPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl font-mono text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Barra Informativa de Profissionais Filtrados */}
@@ -764,21 +1460,50 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                   <tr key={prof.id} className="hover:bg-purple-50/40 transition-colors">
                     <td className="py-3.5 px-4">
                       <div className="flex items-center space-x-2.5">
-                        <div className="w-9 h-9 rounded-full bg-purple-100 border border-purple-200 flex items-center justify-center overflow-hidden shrink-0 font-bold text-purple-700 text-xs">
+                        <div 
+                          onClick={() => prof.fotoUrl && setPreviewPhotoModal({ 
+                            url: prof.fotoUrl, 
+                            nome: prof.nome, 
+                            info: `Inscrição: ${prof.inscricao} • ${prof.tipoAssociado}` 
+                          })}
+                          className={`group relative w-10 h-10 rounded-full bg-purple-100 border border-purple-200 flex items-center justify-center overflow-hidden shrink-0 font-bold text-purple-700 text-xs shadow-2xs ${
+                            prof.fotoUrl ? 'cursor-pointer hover:ring-2 hover:ring-purple-500 hover:scale-105 transition-all' : ''
+                          }`}
+                          title={prof.fotoUrl ? "Clique para visualizar a foto em tamanho grande" : prof.nome}
+                        >
                           {prof.fotoUrl ? (
-                            <img src={prof.fotoUrl} alt={prof.nome} className="w-full h-full object-cover" />
+                            <>
+                              <img src={prof.fotoUrl} alt={prof.nome} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
+                              <div className="absolute inset-0 bg-slate-950/45 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                                <Eye className="w-4 h-4 drop-shadow-sm" />
+                              </div>
+                            </>
                           ) : (
                             prof.nome.substring(0, 2).toUpperCase()
                           )}
                         </div>
                         <div>
-                          <div className="font-mono font-bold text-purple-800">{prof.inscricao}</div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-bold text-purple-800">{prof.inscricao}</span>
+                            {(prof.situacao === 'Provisório' || prof.situacao === 'Provisoria' || prof.inscricao?.includes('PROV') || Boolean(prof.dtVencInscProvisoria)) && (
+                              <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-bold border border-amber-300 uppercase shrink-0">
+                                PROV
+                              </span>
+                            )}
+                          </div>
                           <div className="text-[10px] text-slate-400 font-mono">{prof.dataInscricao}</div>
                         </div>
                       </div>
                     </td>
                     <td className="py-3.5 px-4">
-                      <div className="font-bold text-slate-900 uppercase">{prof.nome}</div>
+                      <div className="flex items-center gap-2">
+                        <div className="font-bold text-slate-900 uppercase">{prof.nome}</div>
+                        {prof.bloqueado && (
+                          <span className="px-2 py-0.5 rounded bg-rose-600 text-white font-bold text-[9px] uppercase">
+                            🔴 BLOQUEADO
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[10px] text-slate-500 font-mono">{maskCPF(prof.cpf)}</div>
                     </td>
                     <td className="py-3.5 px-4">
@@ -789,14 +1514,16 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                     </td>
                     <td className="py-3.5 px-4">
                       <div className="text-slate-800 uppercase font-medium">{prof.cidade} - {prof.uf}</div>
-                      <div className="text-[10px] text-slate-500 font-mono">{prof.telefone}</div>
+                      <div className="text-[10px] text-slate-500 font-mono">
+                        CEP: {prof.cep || 'NÃO INF.'} • {prof.telefone || 'S/ TEL'}
+                      </div>
                     </td>
                     <td className="py-3.5 px-4 text-center">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
                         prof.situacao === 'Definitivo'
                           ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                           : prof.situacao === 'Provisório'
-                          ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
                           : prof.situacao === 'Suspenso'
                           ? 'bg-rose-50 text-rose-700 border border-rose-200'
                           : 'bg-slate-100 text-slate-700 border border-slate-200'
@@ -817,6 +1544,15 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end space-x-1.5">
+                        {(prof.situacao === 'Provisório' || prof.situacao === 'Provisoria' || prof.inscricao?.includes('PROV') || Boolean(prof.dtVencInscProvisoria)) && (
+                          <button
+                            onClick={() => setProfToConvertDefinitivo(prof)}
+                            title="EFETIVAR INSCRIÇÃO DEFINITIVA (Sequencial Cronológico Definitivo)"
+                            className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 transition-colors cursor-pointer"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             setSelectedProfissional(prof);
@@ -886,9 +1622,25 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
             {/* Header do Cadastro */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-100 pb-4">
               <div className="flex items-center space-x-3.5">
-                <div className="w-14 h-14 rounded-2xl bg-purple-100 border border-purple-200 flex items-center justify-center overflow-hidden shrink-0 font-bold text-purple-700 text-base shadow-xs">
+                <div 
+                  onClick={() => selectedProfissional.fotoUrl && setPreviewPhotoModal({ 
+                    url: selectedProfissional.fotoUrl, 
+                    nome: selectedProfissional.nome, 
+                    info: `Inscrição: ${selectedProfissional.inscricao} • ${selectedProfissional.tipoAssociado}` 
+                  })}
+                  className={`group relative w-14 h-14 rounded-2xl bg-purple-100 border border-purple-200 flex items-center justify-center overflow-hidden shrink-0 font-bold text-purple-700 text-base shadow-xs ${
+                    selectedProfissional.fotoUrl ? 'cursor-pointer hover:ring-2 hover:ring-purple-500 hover:scale-105 transition-all' : ''
+                  }`}
+                  title={selectedProfissional.fotoUrl ? "Clique para visualizar a foto em tamanho grande" : selectedProfissional.nome}
+                >
                   {selectedProfissional.fotoUrl ? (
-                    <img src={selectedProfissional.fotoUrl} alt={selectedProfissional.nome} className="w-full h-full object-cover" />
+                    <>
+                      <img src={selectedProfissional.fotoUrl} alt={selectedProfissional.nome} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                      <div className="absolute inset-0 bg-slate-950/45 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity text-white">
+                        <Eye className="w-4 h-4 drop-shadow-sm" />
+                        <span className="text-[7px] font-bold uppercase mt-0.5 tracking-wider">Ampliar</span>
+                      </div>
+                    </>
                   ) : (
                     selectedProfissional.nome.substring(0, 2).toUpperCase()
                   )}
@@ -1079,6 +1831,50 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                       <span className="text-slate-800">{selectedProfissional.cidade}/{selectedProfissional.uf} (CEP: {selectedProfissional.cep || '-'})</span>
                     </div>
                   </div>
+                </div>
+
+                {/* Situação Cadastral, Motivo e Informações de Bloqueio */}
+                <div className={`p-4 rounded-2xl border space-y-2 uppercase text-xs ${
+                  selectedProfissional.bloqueado ? 'bg-red-50/85 border-red-300 text-red-950' : 'bg-slate-50 border-slate-200/80 text-slate-800'
+                }`}>
+                  <div className="font-bold uppercase text-xs pb-2 border-b border-slate-200 flex items-center justify-between">
+                    <span className="flex items-center space-x-1.5">
+                      <ShieldAlert className={`w-4 h-4 ${selectedProfissional.bloqueado ? 'text-red-600' : 'text-purple-600'}`} />
+                      <span>SITUAÇÃO, MOTIVO & CONTROLE DE BLOQUEIO</span>
+                    </span>
+                    <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
+                      selectedProfissional.bloqueado ? 'bg-red-600 text-white' : 'bg-emerald-100 text-emerald-800'
+                    }`}>
+                      {selectedProfissional.bloqueado ? '🔒 BLOQUEADO' : '🟢 ATIVO'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">SITUAÇÃO:</span>
+                      <strong>{selectedProfissional.situacao}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">MOTIVO DA SITUAÇÃO:</span>
+                      <span>{selectedProfissional.motivoSituacao || '-'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[10px]">REGIONAL DE ORIGEM:</span>
+                      <span>{selectedProfissional.transferidoOutroRegional ? `SIM (${selectedProfissional.nrInscricaoRegionalOrigem || '-'}/${selectedProfissional.ufRegionalOrigem || 'AM'})` : 'NÃO'}</span>
+                    </div>
+                  </div>
+                  {selectedProfissional.bloqueado && (
+                    <div className="p-3 bg-white border border-red-200 rounded-xl space-y-1 mt-2 text-[11px]">
+                      <div><span className="text-red-700 font-bold">MOTIVO DO BLOQUEIO:</span> {selectedProfissional.motivoBloqueio || 'NÃO INFORMADO'}</div>
+                      <div className="grid grid-cols-2 gap-2 font-mono">
+                        <div><span className="text-slate-400">DATA BLOQUEIO:</span> {selectedProfissional.dataBloqueio || '-'}</div>
+                        <div><span className="text-slate-400">PREVISÃO DESBLOQUEIO:</span> {selectedProfissional.dataDesbloqueioPrevista || 'NÃO INFORMADA'}</div>
+                      </div>
+                      <div><span className="text-slate-400">AUTORIDADE / RESPONSÁVEL:</span> {selectedProfissional.usuarioBloqueio || '-'}</div>
+                      {selectedProfissional.observacoesBloqueio && (
+                        <div><span className="text-slate-400">OBSERVAÇÕES:</span> {selectedProfissional.observacoesBloqueio}</div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1738,22 +2534,83 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
               </button>
             </div>
 
-            {/* Inscription Cronológica Box */}
-            {!editingProfissional.id && (
-              <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-xl flex items-center justify-between">
-                <div className="flex items-center space-x-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-purple-600 text-white flex items-center justify-center font-mono text-xs shrink-0">
-                    <Hash className="w-4 h-4" />
+            {/* Inscription Cronológica Box with Definitiva / Provisória Toggle */}
+            {!editingProfissional.id ? (
+              <div className="p-3 bg-purple-50/70 border border-purple-200 rounded-xl space-y-2">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-purple-600 text-white flex items-center justify-center font-mono text-xs shrink-0">
+                      <Hash className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-purple-700 font-bold uppercase block">Inscrição Cronológica Automática:</span>
+                      <span className="font-mono font-extrabold text-purple-900 text-sm">{editingProfissional.inscricao}</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] text-purple-700 font-bold uppercase block">Inscrição Cronológica Automática:</span>
-                    <span className="font-mono font-extrabold text-purple-900 text-sm">{editingProfissional.inscricao}</span>
+
+                  {/* Toggle Definitiva vs Provisória */}
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-purple-200 shadow-2xs shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectTipoInscricao('Definitiva')}
+                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                        !storageService.isSituacaoProvisoria(editingProfissional.situacao)
+                          ? 'bg-purple-600 text-white shadow-xs'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      Definitiva
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectTipoInscricao('Provisória')}
+                      className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                        storageService.isSituacaoProvisoria(editingProfissional.situacao)
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'text-amber-800 hover:bg-amber-50'
+                      }`}
+                    >
+                      Provisória
+                    </button>
                   </div>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 bg-purple-100 text-purple-800 font-bold rounded-md uppercase shrink-0">
-                  Sequencial +1
-                </span>
+
+                {storageService.isSituacaoProvisoria(editingProfissional.situacao) && (
+                  <div className="text-[10px] text-amber-900 bg-amber-100/70 border border-amber-300 p-2 rounded-lg flex items-center justify-between">
+                    <span>
+                      Inscrição Provisória com validade de {councilConfig.validadeProvisoriaMesesProfissional ?? 12} meses ({editingProfissional.dtInicioInscProvisoria} a {editingProfissional.dtVencInscProvisoria}).
+                    </span>
+                    <span className="font-bold uppercase text-[9px] bg-amber-200 px-1.5 py-0.5 rounded text-amber-900 shrink-0">
+                      Provisório
+                    </span>
+                  </div>
+                )}
               </div>
+            ) : (
+              (storageService.isSituacaoProvisoria(editingProfissional.situacao) || editingProfissional.inscricao?.includes('PROV')) && (
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-start sm:items-center space-x-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-amber-600 text-white flex items-center justify-center font-mono text-xs shrink-0">
+                      <Sparkles className="w-4 h-4 animate-pulse" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-amber-800 font-bold uppercase block">Inscrição Provisória Ativa: {editingProfissional.inscricao}</span>
+                      <span className="text-[11px] text-slate-600 block sm:inline">Período provisório concluído? Converta agora para definitiva dando continuidade cronológica.</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsModalOpen(false);
+                      setProfToConvertDefinitivo(editingProfissional as Profissional);
+                    }}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg uppercase shadow-xs flex items-center space-x-1.5 cursor-pointer shrink-0 self-end sm:self-auto"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Efetivar Definitivo</span>
+                  </button>
+                </div>
+              )
             )}
 
             {/* Tabs Selector */}
@@ -1808,32 +2665,186 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                 <DollarSign className="w-3.5 h-3.5" />
                 <span>5. Financeiro</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setModalTab('bloqueio')}
+                className={`px-3 py-2 rounded-lg font-bold text-[11px] uppercase transition-all shrink-0 flex items-center space-x-1.5 cursor-pointer ${
+                  modalTab === 'bloqueio' ? 'bg-red-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <ShieldAlert className="w-3.5 h-3.5" />
+                <span>6. Bloqueio</span>
+                {editingProfissional.bloqueado && (
+                  <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase bg-white text-red-700 ml-1">
+                    BLOQUEADO
+                  </span>
+                )}
+              </button>
             </div>
 
             <form onSubmit={handleSaveProfissional} className="space-y-4">
+              {/* ABA BLOQUEIO */}
+              {modalTab === 'bloqueio' && (
+                <div className="space-y-4 p-4 bg-red-50/40 border border-red-200 rounded-xl">
+                  <div className="flex items-center space-x-2 text-red-900 font-bold uppercase text-xs mb-2">
+                    <ShieldAlert className="w-4 h-4 text-red-600" />
+                    <span>Controle de Bloqueio e Restrição Cadastral do Profissional</span>
+                  </div>
+
+                  <div className="p-3 bg-white border border-red-200 rounded-xl flex items-center justify-between shadow-xs">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-700 uppercase block">Status de Bloqueio do Cadastro</span>
+                      <span className={`text-xs font-bold uppercase ${editingProfissional.bloqueado ? 'text-red-600' : 'text-emerald-600'}`}>
+                        {editingProfissional.bloqueado ? '🔒 CADASTRO BLOQUEADO' : '🟢 CADASTRO ATIVO / DESBLOQUEADO'}
+                      </span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(editingProfissional.bloqueado)}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          const todayStr = new Date().toLocaleDateString('pt-BR');
+                          setEditingProfissional(prev => prev ? ({ 
+                            ...prev, 
+                            bloqueado: isChecked,
+                            dataBloqueio: isChecked && !prev.dataBloqueio ? todayStr : prev.dataBloqueio 
+                          }) : null);
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                    </label>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Motivo do Bloqueio</label>
+                      <select
+                        value={editingProfissional.motivoBloqueio || ''}
+                        onChange={(e) => setEditingProfissional(prev => prev ? ({ ...prev, motivoBloqueio: e.target.value.toUpperCase() }) : null)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 uppercase font-semibold text-xs"
+                      >
+                        <option value="">SELECIONE O MOTIVO DO BLOQUEIO</option>
+                        <option value="INADIMPLENCIA ANUIDADE">INADIMPLÊNCIA DE ANUIDADE</option>
+                        <option value="PROCESSO ÉTICO DISCIPLINAR">PROCESSO ÉTICO DISCIPLINAR</option>
+                        <option value="SUSPENSÃO JUDICIAL">SUSPENSÃO JUDICIAL</option>
+                        <option value="FALTA DE DOCUMENTAÇÃO OBRIGATÓRIA">FALTA DE DOCUMENTAÇÃO OBRIGATÓRIA</option>
+                        <option value="OUTROS">OUTROS</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Data do Bloqueio</label>
+                      <input
+                        type="date"
+                        value={dateToInput(editingProfissional.dataBloqueio || '')}
+                        onChange={(e) => setEditingProfissional(prev => prev ? ({ ...prev, dataBloqueio: inputToDate(e.target.value) }) : null)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 font-mono text-xs cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Data Prevista de Desbloqueio</label>
+                      <input
+                        type="date"
+                        value={dateToInput(editingProfissional.dataDesbloqueioPrevista || '')}
+                        onChange={(e) => setEditingProfissional(prev => prev ? ({ ...prev, dataDesbloqueioPrevista: inputToDate(e.target.value) }) : null)}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 font-mono text-xs cursor-pointer"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Usuário Responsável / Autoridade</label>
+                      <input
+                        type="text"
+                        value={editingProfissional.usuarioBloqueio || ''}
+                        onChange={(e) => setEditingProfissional(prev => prev ? ({ ...prev, usuarioBloqueio: e.target.value.toUpperCase() }) : null)}
+                        placeholder="EX: SETOR JURÍDICO / DIRETORIA"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 uppercase font-semibold text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Observações / Justificativa do Bloqueio</label>
+                    <textarea
+                      rows={3}
+                      value={editingProfissional.observacoesBloqueio || ''}
+                      onChange={(e) => setEditingProfissional(prev => prev ? ({ ...prev, observacoesBloqueio: e.target.value.toUpperCase() }) : null)}
+                      placeholder="INFORME OS DETALHES, NÚMERO DO PROCESSO OU DELIBERAÇÃO..."
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 uppercase text-xs"
+                    />
+                  </div>
+                </div>
+              )}
               {/* ABA 1: DADOS PESSOAIS */}
               {modalTab === 'dados_pessoais' && (
                 <div className="space-y-3.5">
                   {/* Foto do Profissional */}
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center space-x-3.5">
-                    <div className="w-14 h-14 rounded-full bg-purple-100 border border-purple-200 flex items-center justify-center overflow-hidden shrink-0 font-bold text-purple-700 text-sm">
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-center space-x-3.5">
+                    <div 
+                      onClick={() => editingProfissional.fotoUrl && setPreviewPhotoModal({ 
+                        url: editingProfissional.fotoUrl, 
+                        nome: editingProfissional.nome || 'Foto do Profissional', 
+                        info: 'Pré-visualização da foto carregada' 
+                      })}
+                      className={`group relative w-16 h-16 rounded-full bg-purple-100 border-2 border-purple-200 flex items-center justify-center overflow-hidden shrink-0 font-bold text-purple-700 text-sm shadow-xs ${
+                        editingProfissional.fotoUrl ? 'cursor-pointer hover:ring-2 hover:ring-purple-500 transition-all' : ''
+                      }`}
+                      title={editingProfissional.fotoUrl ? "Clique para visualizar a foto em tamanho grande" : "Aguardando upload da foto"}
+                    >
                       {editingProfissional.fotoUrl ? (
-                        <img src={editingProfissional.fotoUrl} alt="Foto" className="w-full h-full object-cover" />
+                        <>
+                          <img src={editingProfissional.fotoUrl} alt="Foto" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                          <div className="absolute inset-0 bg-slate-950/45 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity text-white">
+                            <Eye className="w-4 h-4 drop-shadow-sm" />
+                            <span className="text-[7px] font-bold uppercase mt-0.5">Ampliar</span>
+                          </div>
+                        </>
+                      ) : isUploadingPhoto ? (
+                        <Loader2 className="w-6 h-6 text-purple-600 animate-spin" />
                       ) : (
-                        <Camera className="w-6 h-6 text-purple-400" />
+                        <Camera className="w-7 h-7 text-purple-400" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">
-                        URL da Foto do Profissional (Opcional)
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-slate-700 font-bold uppercase text-[10px]">
+                          Foto do Profissional (Upload Obrigatório) *
+                        </label>
+                        {editingProfissional.fotoUrl && (
+                          <button
+                            type="button"
+                            onClick={() => setPreviewPhotoModal({ 
+                              url: editingProfissional.fotoUrl!, 
+                              nome: editingProfissional.nome || 'Foto do Profissional', 
+                              info: 'Pré-visualização da foto carregada' 
+                            })}
+                            className="inline-flex items-center space-x-1 text-[10px] text-purple-700 hover:text-purple-900 font-bold uppercase hover:underline cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Ver foto em tamanho grande</span>
+                          </button>
+                        )}
+                      </div>
                       <input
-                        type="url"
-                        value={editingProfissional.fotoUrl || ''}
-                        onChange={(e) => setEditingProfissional(prev => ({ ...prev, fotoUrl: e.target.value }))}
-                        placeholder="https://exemplo.com/foto-profissional.jpg"
-                        className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 text-xs font-mono"
+                        type="file"
+                        accept="image/*"
+                        onChange={handlePhotoFileChange}
+                        disabled={isUploadingPhoto}
+                        className="w-full text-xs text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer disabled:opacity-50"
                       />
+                      <div className="flex items-center justify-between mt-1 text-[10px] text-slate-400">
+                        <span>Formatos aceitos: JPG, PNG, WEBP (Limite ampliado para até 25MB)</span>
+                        {isUploadingPhoto && (
+                          <span className="text-purple-600 font-semibold flex items-center gap-1">
+                            <Loader2 className="w-3 h-3 animate-spin" /> Processando imagem...
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -1864,11 +2875,14 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                         onChange={(e) => setEditingProfissional(prev => ({ ...prev, cpf: maskCPF(e.target.value) }))}
                         placeholder="000.000.000-00"
                         className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-slate-900 font-mono font-bold ${
-                          editingProfissional.cpf && !isCpfValid ? 'border-rose-400 bg-rose-50/50' : 'border-slate-300'
+                          councilConfig.validarCPF && editingProfissional.cpf && !isCpfValid ? 'border-rose-400 bg-rose-50/50' : 'border-slate-300'
                         }`}
                       />
-                      {editingProfissional.cpf && !isCpfValid && (
+                      {councilConfig.validarCPF && editingProfissional.cpf && !isCpfValid && (
                         <span className="text-[10px] text-rose-600 font-semibold block mt-0.5">CPF Inválido</span>
+                      )}
+                      {!councilConfig.validarCPF && editingProfissional.cpf && (
+                        <span className="text-[10px] text-slate-400 font-medium block mt-0.5">Validação de CPF desativada (Qualquer número aceito)</span>
                       )}
                     </div>
 
@@ -1903,10 +2917,9 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                     <div>
                       <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Data de Nascimento</label>
                       <input
-                        type="text"
-                        value={editingProfissional.dataNascimento || ''}
-                        onChange={(e) => setEditingProfissional(prev => ({ ...prev, dataNascimento: e.target.value }))}
-                        placeholder="DD/MM/AAAA"
+                        type="date"
+                        value={dateToInput(editingProfissional.dataNascimento || '')}
+                        onChange={(e) => setEditingProfissional(prev => ({ ...prev, dataNascimento: inputToDate(e.target.value) }))}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-mono"
                       />
                     </div>
@@ -1943,7 +2956,7 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                       <select
                         value={editingProfissional.tipoAssociado || 'Farmacêutico'}
                         onChange={(e) => setEditingProfissional(prev => ({ ...prev, tipoAssociado: e.target.value as any }))}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs"
                       >
                         {cadastrosTipos.map(t => (
                           <option key={t.id} value={t.nome}>{t.nome}</option>
@@ -1956,14 +2969,202 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                         Situação Cadastral *
                       </label>
                       <select
-                        value={editingProfissional.situacao || 'Definitivo'}
-                        onChange={(e) => setEditingProfissional(prev => ({ ...prev, situacao: e.target.value as any }))}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase"
+                        value={
+                          cadastrosSituacoes.find(s => 
+                            storageService.isSituacaoProvisoria(s.nome) === storageService.isSituacaoProvisoria(editingProfissional.situacao) &&
+                            (storageService.isSituacaoProvisoria(s.nome) || s.nome.toLowerCase() === editingProfissional.situacao?.toLowerCase())
+                          )?.nome || editingProfissional.situacao || 'Definitivo'
+                        }
+                        onChange={(e) => handleSituacaoChange(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs"
                       >
                         {cadastrosSituacoes.map(s => (
-                          <option key={s.id} value={s.nome}>{s.nome}</option>
+                          <option key={s.id} value={s.nome}>{s.nome.toUpperCase()}</option>
                         ))}
+                        {editingProfissional.situacao && !cadastrosSituacoes.some(s => s.nome.toLowerCase() === editingProfissional.situacao?.toLowerCase()) && (
+                          <option value={editingProfissional.situacao}>{editingProfissional.situacao.toUpperCase()} (Atual)</option>
+                        )}
                       </select>
+                    </div>
+                  </div>
+
+                  {/* SEÇÃO COMPLEMENTAR DO CADASTRO DE PROFISSIONAL (CONFORME ANEXO) */}
+                  <div className="space-y-3.5 pt-3 border-t border-slate-200">
+                    {/* Motivo da Situação */}
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <label className="block text-slate-800 font-bold uppercase text-[11px]">Motivo da Situação (Cadastros Básicos):</label>
+                        <button
+                          type="button"
+                          onClick={() => toastService.success('Motivo Atualizado', 'Motivo da situação alterado com conservação da mesma situação.')}
+                          className="px-3 py-1 bg-white hover:bg-slate-100 border border-slate-300 rounded-lg text-slate-700 font-bold text-[10px] uppercase cursor-pointer"
+                        >
+                          Mudar somente o Motivo e conservar a mesma situação
+                        </button>
+                      </div>
+                      <select
+                        value={editingProfissional.motivoSituacao || ''}
+                        onChange={(e) => setEditingProfissional(prev => ({ ...prev, motivoSituacao: e.target.value.toUpperCase() }))}
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 uppercase font-semibold text-xs"
+                      >
+                        <option value="">SELECIONE O MOTIVO DA SITUAÇÃO</option>
+                        {cadastrosMotivosSituacaoProf.map(m => (
+                          <option key={m.id} value={m.nome}>{m.nome.toUpperCase()}</option>
+                        ))}
+                        {editingProfissional.motivoSituacao && !cadastrosMotivosSituacaoProf.some(m => m.nome.toLowerCase() === editingProfissional.motivoSituacao?.toLowerCase()) && (
+                          <option value={editingProfissional.motivoSituacao}>{editingProfissional.motivoSituacao.toUpperCase()} (Atual)</option>
+                        )}
+                      </select>
+                    </div>
+
+                    {/* Datas Específicas */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                      <div>
+                        <label className="block text-slate-700 font-bold mb-1 uppercase text-[9px]">Dt. Início Insc. Provisória</label>
+                        <input
+                          type="date"
+                          value={dateToInput(editingProfissional.dtInicioInscProvisoria || '')}
+                          onChange={(e) => setEditingProfissional(prev => ({ ...prev, dtInicioInscProvisoria: inputToDate(e.target.value) }))}
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl font-mono text-xs text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-700 font-bold mb-1 uppercase text-[9px]">Dt. Venc. Insc. Provisória</label>
+                        <input
+                          type="date"
+                          value={dateToInput(editingProfissional.dtVencInscProvisoria || '')}
+                          onChange={(e) => setEditingProfissional(prev => ({ ...prev, dtVencInscProvisoria: inputToDate(e.target.value) }))}
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl font-mono text-xs text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-700 font-bold mb-1 uppercase text-[9px]">Data Solicitação Baixa</label>
+                        <input
+                          type="date"
+                          value={dateToInput(editingProfissional.dataSolicitacaoBaixa || '')}
+                          onChange={(e) => setEditingProfissional(prev => ({ ...prev, dataSolicitacaoBaixa: inputToDate(e.target.value) }))}
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl font-mono text-xs text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-700 font-bold mb-1 uppercase text-[9px]">Data da Reabilitação</label>
+                        <input
+                          type="date"
+                          value={dateToInput(editingProfissional.dataReabilitacao || '')}
+                          onChange={(e) => setEditingProfissional(prev => ({ ...prev, dataReabilitacao: inputToDate(e.target.value) }))}
+                          className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-xl font-mono text-xs text-slate-900"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Regional de Origem */}
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-center">
+                        <label className="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={Boolean(editingProfissional.transferidoOutroRegional)}
+                            onChange={(e) => setEditingProfissional(prev => ({ ...prev, transferidoOutroRegional: e.target.checked }))}
+                            className="rounded text-purple-600"
+                          />
+                          <span className="font-bold text-slate-700 uppercase text-[11px]">Transferido de Outro Regional</span>
+                        </label>
+                        <div>
+                          <input
+                            type="text"
+                            value={editingProfissional.nrInscricaoRegionalOrigem || ''}
+                            onChange={(e) => setEditingProfissional(prev => ({ ...prev, nrInscricaoRegionalOrigem: e.target.value.toUpperCase() }))}
+                            placeholder="NR. INSCRIÇÃO ORIGEM"
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl uppercase font-mono"
+                          />
+                        </div>
+                        <div>
+                          <select
+                            value={editingProfissional.ufRegionalOrigem || 'AM'}
+                            onChange={(e) => setEditingProfissional(prev => ({ ...prev, ufRegionalOrigem: e.target.value }))}
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-xl uppercase font-bold"
+                          >
+                            {['AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN', 'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'].map(uf => (
+                              <option key={uf} value={uf}>U.F. Origem: {uf}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                      <label className="flex items-center space-x-2 cursor-pointer pt-1">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(editingProfissional.anuidRefAnoInscricaoEmDia)}
+                          onChange={(e) => setEditingProfissional(prev => ({ ...prev, anuidRefAnoInscricaoEmDia: e.target.checked }))}
+                          className="rounded text-purple-600"
+                        />
+                        <span className="font-medium text-slate-700 uppercase text-[11px]">Anuid. Ref. Ano da Inscrição em dia no Regional de Origem?</span>
+                      </label>
+                    </div>
+
+                    {/* Checkboxes e Flags */}
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(editingProfissional.anuidadeReduzida)}
+                          onChange={(e) => setEditingProfissional(prev => ({ ...prev, anuidadeReduzida: e.target.checked }))}
+                          className="rounded text-purple-600"
+                        />
+                        <span className="font-medium text-slate-700 uppercase text-[11px]">Anuidade Reduzida?</span>
+                      </label>
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(editingProfissional.isentoAnuidade)}
+                          onChange={(e) => setEditingProfissional(prev => ({ ...prev, isentoAnuidade: e.target.checked }))}
+                          className="rounded text-purple-600"
+                        />
+                        <span className="font-medium text-slate-700 uppercase text-[11px]">Isento de Anuidade</span>
+                      </label>
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(editingProfissional.eVotante)}
+                          onChange={(e) => setEditingProfissional(prev => ({ ...prev, eVotante: e.target.checked }))}
+                          className="rounded text-purple-600"
+                        />
+                        <span className="font-medium text-slate-700 uppercase text-[11px]">É Votante?</span>
+                      </label>
+                      <label className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(editingProfissional.eMilitar)}
+                          onChange={(e) => setEditingProfissional(prev => ({ ...prev, eMilitar: e.target.checked }))}
+                          className="rounded text-purple-600"
+                        />
+                        <span className="font-medium text-slate-700 uppercase text-[11px]">É Militar?</span>
+                      </label>
+                    </div>
+
+                    {/* Estado Civil e Nome Social */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                      <div>
+                        <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Estado Civil</label>
+                        <select
+                          value={editingProfissional.estadoCivil || 'Solteiro'}
+                          onChange={(e) => setEditingProfissional(prev => ({ ...prev, estadoCivil: e.target.value }))}
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 uppercase font-semibold"
+                        >
+                          {['Solteiro', 'Casado', 'Viúvo', 'Desquitado', 'Divorciado', 'Outros'].map(ec => (
+                            <option key={ec} value={ec}>{ec.toUpperCase()}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Nome Social</label>
+                        <input
+                          type="text"
+                          value={editingProfissional.nomeSocial || ''}
+                          onChange={(e) => setEditingProfissional(prev => ({ ...prev, nomeSocial: e.target.value.toUpperCase() }))}
+                          placeholder="NOME SOCIAL (SE HOUVER)"
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 uppercase font-medium"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2011,10 +3212,9 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                     <div>
                       <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Data de Colação de Grau</label>
                       <input
-                        type="text"
-                        value={editingProfissional.dataColacaoGrau || ''}
-                        onChange={(e) => setEditingProfissional(prev => ({ ...prev, dataColacaoGrau: e.target.value }))}
-                        placeholder="DD/MM/AAAA"
+                        type="date"
+                        value={dateToInput(editingProfissional.dataColacaoGrau || '')}
+                        onChange={(e) => setEditingProfissional(prev => ({ ...prev, dataColacaoGrau: inputToDate(e.target.value) }))}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-mono"
                       />
                     </div>
@@ -2330,6 +3530,209 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                 className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold shadow-md shadow-rose-500/20 transition-colors uppercase cursor-pointer"
               >
                 SIM, EXCLUIR
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: VISUALIZAR FOTO DO PROFISSIONAL EM TAMANHO GRANDE (LIGHTBOX)       */}
+      {/* ========================================================================= */}
+      {previewPhotoModal && (
+        <div 
+          className="fixed inset-0 z-70 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200"
+          onClick={() => setPreviewPhotoModal(null)}
+        >
+          <div 
+            className="relative bg-slate-900 border border-slate-700/80 rounded-3xl max-w-3xl w-full max-h-[94vh] flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-900/90">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 rounded-xl bg-purple-600/20 text-purple-400 border border-purple-500/30 flex items-center justify-center">
+                  <Eye className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wide">
+                    {previewPhotoModal.nome}
+                  </h3>
+                  {previewPhotoModal.info && (
+                    <p className="text-[11px] text-purple-300 font-mono">
+                      {previewPhotoModal.info}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <a
+                  href={previewPhotoModal.url}
+                  download={`foto_${previewPhotoModal.nome.replace(/\s+/g, '_').toLowerCase()}.jpg`}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
+                  title="Baixar foto em alta definição"
+                >
+                  <Download className="w-4 h-4" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreviewPhotoModal(null)}
+                  className="p-2 rounded-xl bg-slate-800 hover:bg-rose-900/50 text-slate-300 hover:text-rose-300 transition-colors cursor-pointer"
+                  title="Fechar (Esc)"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Imagem em tamanho grande */}
+            <div className="p-4 sm:p-6 flex items-center justify-center overflow-auto bg-slate-950/70 max-h-[75vh]">
+              <img 
+                src={previewPhotoModal.url} 
+                alt={previewPhotoModal.nome} 
+                className="max-h-[70vh] max-w-full object-contain rounded-2xl shadow-2xl border border-slate-800 transition-all"
+              />
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-3 border-t border-slate-800 bg-slate-900/80 flex items-center justify-between text-[11px] text-slate-400">
+              <span className="flex items-center gap-1.5">
+                <Camera className="w-3.5 h-3.5 text-purple-400" />
+                Foto Oficial em Alta Resolução
+              </span>
+              <button
+                type="button"
+                onClick={() => setPreviewPhotoModal(null)}
+                className="px-4 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition-colors cursor-pointer uppercase text-xs"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal de Confirmação para Efetivação de Inscrição Definitiva */}
+      {profToConvertDefinitivo && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl text-xs space-y-4 animate-in fade-in zoom-in-95">
+            <div className="flex items-start space-x-3.5 border-b border-slate-100 pb-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                <Sparkles className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-bold text-slate-900 uppercase">
+                  Efetivar Inscrição Definitiva do Profissional
+                </h3>
+                <p className="text-[11px] text-slate-500 uppercase mt-0.5 font-semibold">
+                  Transição oficial de Inscrição Provisória para Definitiva
+                </p>
+              </div>
+              <button
+                onClick={() => setProfToConvertDefinitivo(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+                <div className="font-bold text-slate-900 text-sm uppercase">{profToConvertDefinitivo.nome}</div>
+                <div className="text-[11px] text-slate-600 font-mono">CPF: {maskCPF(profToConvertDefinitivo.cpf)} • {profToConvertDefinitivo.tipoAssociado}</div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
+                  <span className="text-[10px] text-amber-800 font-bold uppercase block">Inscrição Provisória Atual:</span>
+                  <span className="text-sm font-mono font-extrabold text-amber-950 block">{profToConvertDefinitivo.inscricao}</span>
+                  <span className="text-[10px] text-amber-700 block">Será arquivada no histórico</span>
+                </div>
+
+                <div className="p-3 bg-emerald-50 border border-emerald-300 rounded-xl space-y-1">
+                  <span className="text-[10px] text-emerald-800 font-bold uppercase block">Nova Inscrição Definitiva:</span>
+                  <span className="text-sm font-mono font-extrabold text-emerald-950 block">{storageService.peekNextInscricaoProfissional()}</span>
+                  <span className="text-[10px] text-emerald-700 block">Próximo cronológico oficial (+1)</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-[11px] text-blue-900 leading-relaxed">
+                <strong>Continuidade Cronológica:</strong> Ao confirmar, o cadastro do profissional receberá a situação <strong>"Definitivo"</strong> e a numeração cronológica dos inscritos definitivos dará continuidade sequencial regular. Todos os vínculos de responsabilidade técnica (RT) em empresas ativas serão atualizados automaticamente.
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setProfToConvertDefinitivo(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold uppercase text-xs cursor-pointer transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmConversaoDefinitiva}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold uppercase text-xs flex items-center space-x-1.5 cursor-pointer shadow-md shadow-emerald-500/20 transition-all"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Confirmar Efetivação Definitiva</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação para Alteração para Provisório */}
+      {provisorioConfirmModal?.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-70 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-amber-300 space-y-4">
+            <div className="flex items-center space-x-3 text-amber-600">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 uppercase">Alterar Cadastro para Provisório?</h3>
+                <p className="text-[11px] text-slate-500 font-medium">Confirmação de alteração da situação cadastral</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-amber-50/80 rounded-xl border border-amber-200 text-xs text-amber-950 space-y-2">
+              <p>
+                A situação cadastral do profissional será alterada para <strong className="uppercase">Provisório</strong>.
+              </p>
+              <div className="p-2.5 bg-white rounded-lg border border-amber-200 text-[11px] space-y-1 font-medium">
+                <div className="flex justify-between text-slate-600">
+                  <span>Número Sequencial:</span>
+                  <strong className="font-mono text-slate-900">{provisorioConfirmModal.numeroAtual} (MANTIDO)</strong>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Inscrição Atual:</span>
+                  <span className="font-mono text-slate-700">{editingProfissional?.inscricao}</span>
+                </div>
+                <div className="flex justify-between text-amber-900 font-bold border-t border-amber-100 pt-1">
+                  <span>Nova Inscrição Provisória:</span>
+                  <span className="font-mono text-amber-800">{provisorioConfirmModal.novaInscricao}</span>
+                </div>
+              </div>
+              <p className="text-[11px] text-amber-800">
+                * Conforme as configurações do Conselho, apenas o prefixo e sufixo serão modificados, mantendo o número atual. Ao retornar para definitivo no futuro, o prefixo e sufixo definitivos serão restaurados mantendo a numeração.
+              </p>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setProvisorioConfirmModal(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl uppercase transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmChangeToProvisorio}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl uppercase transition-colors flex items-center space-x-1.5 shadow-md shadow-amber-500/20 cursor-pointer"
+              >
+                <Check className="w-4 h-4" />
+                <span>Sim, Alterar para Provisório</span>
               </button>
             </div>
           </div>

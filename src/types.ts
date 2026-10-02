@@ -41,11 +41,9 @@ export type CondicaoFirma =
   | string;
 
 export type TipoEmpresa = 
-  | 'Matriz'
-  | 'Filial'
-  | 'Privado'
-  | 'Público'
-  | 'Filantrópico'
+  | 'PRIVADO'
+  | 'PÚBLICO'
+  | 'FILANTRÓPICO'
   | string;
 
 export type SituacaoFirma = 
@@ -77,7 +75,9 @@ export type CategoriaCadastroBasico =
   | 'SITUACAO_VINCULO'
   | 'TIPO_REQUERIMENTO_PROTOCOLO'
   | 'SETOR_PROTOCOLO'
-  | 'STATUS_PROTOCOLO';
+  | 'STATUS_PROTOCOLO'
+  | 'MOTIVO_SITUACAO_EMPRESA'
+  | 'MOTIVO_SITUACAO_PROFISSIONAL';
 
 export interface ItemCadastroBasico {
   id: string;
@@ -157,17 +157,57 @@ export interface ResponsavelTecnico {
 export interface Profissional {
   id: string;
   inscricao: string;
+  inscricaoAnterior?: string;
+  inscricaoDefinitivaAnterior?: string;
   nome: string;
   cpf: string;
   rg: string;
   orgaoExpeditor: string;
   dataNascimento: string;
-  sexo: 'M' | 'F' | 'Outro';
+  sexo: 'M' | 'F' | 'Outro' | string;
   nacionalidade: string;
   naturalidade: string;
   nomeMae: string;
   nomePai?: string;
   situacao: SituacaoProfissional;
+  motivoSituacao?: string;
+  dtInicioInscProvisoria?: string;
+  dtVencInscProvisoria?: string;
+  dataSolicitacaoBaixa?: string;
+  dataReabilitacao?: string;
+  dataConversaoDefinitiva?: string;
+  transferidoOutroRegional?: boolean;
+  nrInscricaoRegionalOrigem?: string;
+  anuidRefAnoInscricaoEmDia?: boolean;
+  ufRegionalOrigem?: string;
+  anuidadeReduzida?: boolean;
+  isentoAnuidade?: boolean;
+  eVotante?: boolean;
+  eMilitar?: boolean;
+  dtVenctoMilitar?: string;
+  recadastrado?: boolean;
+  dataRecadastramento?: string;
+  estadoCivil?: string;
+  dataMandatoSeguranca?: string;
+  orgaoMandatoSeguranca?: string;
+  observacaoMandato?: string;
+  formaEnvioBoletoParcelamento?: string;
+  grupoSanguineo?: string;
+  fatorRH?: string;
+  doadorOrgaosTecidos?: boolean;
+  participouCursoQualifarma?: string;
+  rgDataExpedicao?: string;
+  rgDataVencimento?: string;
+  tituloEleitoral?: string;
+  tituloZona?: string;
+  tituloSecao?: string;
+  tituloUfExp?: string;
+  reservista?: string;
+  cartTrabalho?: string;
+  cartTrabalhoSerie?: string;
+  cartTrabalhoUfExp?: string;
+  cartTrabalhoDataExp?: string;
+  nomeSocial?: string;
   tipoAssociado: TipoAssociado;
   habilitacoes?: string[];
   dataInscricao: string;
@@ -188,6 +228,12 @@ export interface Profissional {
   carteiraProfissional?: string;
   fotoUrl?: string;
   observacoes?: string;
+  bloqueado?: boolean;
+  motivoBloqueio?: string;
+  dataBloqueio?: string;
+  dataDesbloqueioPrevista?: string;
+  usuarioBloqueio?: string;
+  observacoesBloqueio?: string;
 }
 
 export interface Empresa {
@@ -196,15 +242,29 @@ export interface Empresa {
   razaoSocial: string;
   nomeFantasia: string;
   inscricao: string;
+  inscricaoAnterior?: string;
+  inscricaoDefinitivaAnterior?: string;
   inscricaoEstadual?: string;
   categoria: string;
+  categoriaEmpresa?: string;
   tipoEstabelecimento: string;
   naturezaAtividade?: string;
-  tipoEmpresa: TipoEmpresa;
-  condicao: CondicaoFirma;
-  situacao: SituacaoFirma;
+  tipoEmpresa: TipoEmpresa | string;
+  condicao: CondicaoFirma | string;
+  situacao: SituacaoFirma | string;
+  motivoSituacao?: string;
+  dtInicioInscProvisoria?: string;
+  dtVencInscProvisoria?: string;
+  dataConversaoDefinitiva?: string;
   capitalSocial?: number;
   assistenciaPlena: boolean;
+  isentoAnuidade?: boolean;
+  anuidadeReduzida?: boolean;
+  recadastrado?: boolean;
+  dataRecadastramento?: string;
+  isentoTaxaCertificado?: boolean;
+  horarioPlantao?: string;
+  horasTolerancia?: number | string;
   dataInscricao: string;
   validadeCRT?: string;
   numeroCRT?: string;
@@ -232,6 +292,12 @@ export interface Empresa {
   cargaHorariaAssistenciaSemanal?: number;
   justificativaCondicao?: string;
   regraAssistenciaAplicada?: string;
+  bloqueado?: boolean;
+  motivoBloqueio?: string;
+  dataBloqueio?: string;
+  dataDesbloqueioPrevista?: string;
+  usuarioBloqueio?: string;
+  observacoesBloqueio?: string;
 }
 
 export interface LancamentoFinanceiro {
@@ -376,6 +442,12 @@ export interface ProtocoloProcesso {
   tipo: string;
   interessado: string;
   documentoInteressado: string;
+  tipoInteressado?: 'PROFISSIONAL' | 'EMPRESA' | 'PUBLICO';
+  vinculoId?: string;
+  vinculoInscricao?: string;
+  vinculoDetalhes?: string;
+  contatoEmail?: string;
+  contatoTelefone?: string;
   dataInscricao: string;
   dataAbertura: string;
   dataUltimaAtualizacao: string;
