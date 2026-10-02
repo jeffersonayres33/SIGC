@@ -2,46 +2,53 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ["main"] # Se a sua branch principal se chamar master, mude aqui para "master"
+    branches:
+      - main
+      - master
+  workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
 
+concurrency:
+  group: 'pages'
+  cancel-in-progress: true
+
 jobs:
-  build:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
-      - name: Setup Node
+
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          
+          cache: npm
+
       - name: Install dependencies
-        run: npm install
-        
-      - name: Build
+        run: npm ci || npm install
+
+      - name: Build project
         run: npm run build
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          
+          VITE_SUPABASE_URL: https://ajcdrtsdozbjvsdyhdly.supabase.co
+          VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFqY2RydHNkb3pianZzZHloZGx5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAxMTg4MTMsImV4cCI6MjEwNTY5NDgxM30.c3xptttpKoQbWQJRY5B4XYLjzM3iH2kB3D91BOzHga8
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./dist
 
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

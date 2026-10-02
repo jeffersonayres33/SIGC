@@ -585,7 +585,7 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
       storageService.isSituacaoProvisoria(s.nome) === storageService.isSituacaoProvisoria(prof.situacao) &&
       (storageService.isSituacaoProvisoria(s.nome) || s.nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === (prof.situacao || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase())
     );
-    const situacaoNormalizada = matched ? matched.nome : (prof.situacao || 'Definitivo');
+    const situacaoNormalizada = (matched ? matched.nome : (prof.situacao || 'Definitivo')).toUpperCase();
 
     setEditingProfissional({ 
       ...prof,
@@ -658,7 +658,7 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
     }
 
     const isNew = !editingProfissional.id;
-    const isProvisorio = editingProfissional.situacao === 'Provisório' || editingProfissional.situacao === 'Provisoria' || editingProfissional.inscricao?.includes('PROV');
+    const isProvisorio = storageService.isSituacaoProvisoria(editingProfissional.situacao) || editingProfissional.inscricao?.includes('PROV');
     const finalInscricao = isNew 
       ? (isProvisorio ? storageService.getNextInscricaoProvisoriaProfissional(true) : storageService.getNextInscricaoProfissional(true))
       : editingProfissional.inscricao!;
@@ -1520,11 +1520,11 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                     </td>
                     <td className="py-3.5 px-4 text-center">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
-                        prof.situacao === 'Definitivo'
+                        (prof.situacao || '').toLowerCase().startsWith('definit')
                           ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : prof.situacao === 'Provisório'
+                          : storageService.isSituacaoProvisoria(prof.situacao)
                           ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                          : prof.situacao === 'Suspenso'
+                          : (prof.situacao || '').toLowerCase().startsWith('suspen')
                           ? 'bg-rose-50 text-rose-700 border border-rose-200'
                           : 'bg-slate-100 text-slate-700 border border-slate-200'
                       }`}>
@@ -2970,19 +2970,19 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                       </label>
                       <select
                         value={
-                          cadastrosSituacoes.find(s => 
+                          (cadastrosSituacoes.find(s => 
                             storageService.isSituacaoProvisoria(s.nome) === storageService.isSituacaoProvisoria(editingProfissional.situacao) &&
                             (storageService.isSituacaoProvisoria(s.nome) || s.nome.toLowerCase() === editingProfissional.situacao?.toLowerCase())
-                          )?.nome || editingProfissional.situacao || 'Definitivo'
+                          )?.nome || editingProfissional.situacao || 'Definitivo').toUpperCase()
                         }
                         onChange={(e) => handleSituacaoChange(e.target.value)}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs"
                       >
                         {cadastrosSituacoes.map(s => (
-                          <option key={s.id} value={s.nome}>{s.nome.toUpperCase()}</option>
+                          <option key={s.id} value={s.nome.toUpperCase()}>{s.nome.toUpperCase()}</option>
                         ))}
                         {editingProfissional.situacao && !cadastrosSituacoes.some(s => s.nome.toLowerCase() === editingProfissional.situacao?.toLowerCase()) && (
-                          <option value={editingProfissional.situacao}>{editingProfissional.situacao.toUpperCase()} (Atual)</option>
+                          <option value={editingProfissional.situacao.toUpperCase()}>{editingProfissional.situacao.toUpperCase()} (Atual)</option>
                         )}
                       </select>
                     </div>

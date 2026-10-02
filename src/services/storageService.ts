@@ -680,6 +680,7 @@ class StorageService {
           dataSolicitacaoBaixa: p.data_solicitacao_baixa || undefined,
           dataReabilitacao: p.data_reabilitacao || undefined,
           dataConversaoDefinitiva: p.data_conversao_definitiva || undefined,
+          inscricaoDefinitivaAnterior: p.inscricao_definitiva_anterior || undefined,
           anuidadeReduzida: Boolean(p.anuidade_reduzida),
           isentoAnuidade: Boolean(p.isento_anuidade),
           eVotante: p.e_votante !== undefined ? Boolean(p.e_votante) : true,
@@ -717,6 +718,7 @@ class StorageService {
           dtInicioInscProvisoria: e.dt_inicio_insc_provisoria || undefined,
           dtVencInscProvisoria: e.dt_venc_insc_provisoria || undefined,
           dataConversaoDefinitiva: e.data_conversao_definitiva || undefined,
+          inscricaoDefinitivaAnterior: e.inscricao_definitiva_anterior || undefined,
           capitalSocial: Number(e.capital_social) || 0,
           assistenciaPlena: Boolean(e.assistencia_plena),
           isentoAnuidade: Boolean(e.isento_anuidade),
@@ -961,7 +963,7 @@ class StorageService {
       }));
 
       if (profRows.length > 0) {
-        const { error: pErr } = await supabase.from('profissionais').upsert(profRows, { onConflict: 'cpf' });
+        const { error: pErr } = await supabase.from('profissionais').upsert(profRows, { onConflict: 'id' });
         if (pErr) throw new Error(`Falha ao migrar Profissionais: ${pErr.message}`);
       }
 
@@ -1012,7 +1014,7 @@ class StorageService {
       }));
 
       if (empRows.length > 0) {
-        const { error: eErr } = await supabase.from('empresas').upsert(empRows, { onConflict: 'cnpj' });
+        const { error: eErr } = await supabase.from('empresas').upsert(empRows, { onConflict: 'id' });
         if (eErr) throw new Error(`Falha ao migrar Empresas: ${eErr.message}`);
       }
 
@@ -2406,6 +2408,7 @@ class StorageService {
             id: sanitized.id,
             inscricao: sanitized.inscricao,
             inscricao_anterior: sanitized.inscricaoAnterior || null,
+            inscricao_definitiva_anterior: sanitized.inscricaoDefinitivaAnterior || null,
             nome: sanitized.nome,
             cpf: sanitized.cpf,
             rg: sanitized.rg || '',
@@ -2454,7 +2457,7 @@ class StorageService {
             data_desbloqueio_prevista: sanitized.dataDesbloqueioPrevista || null,
             usuario_bloqueio: sanitized.usuarioBloqueio || null,
             observacoes_bloqueio: sanitized.observacoesBloqueio || null
-          }, { onConflict: 'cpf' })
+          }, { onConflict: 'id' })
         );
       }
     } catch (e) {}
@@ -2674,6 +2677,7 @@ class StorageService {
             nome_fantasia: sanitized.nomeFantasia || '',
             inscricao: sanitized.inscricao,
             inscricao_anterior: sanitized.inscricaoAnterior || null,
+            inscricao_definitiva_anterior: sanitized.inscricaoDefinitivaAnterior || null,
             inscricao_estadual: sanitized.inscricaoEstadual || null,
             categoria: sanitized.categoria || '',
             categoria_empresa: sanitized.categoriaEmpresa || sanitized.categoria || '',
@@ -2722,7 +2726,7 @@ class StorageService {
             data_desbloqueio_prevista: sanitized.dataDesbloqueioPrevista || null,
             usuario_bloqueio: sanitized.usuarioBloqueio || null,
             observacoes_bloqueio: sanitized.observacoesBloqueio || null
-          }, { onConflict: 'cnpj' })
+          }, { onConflict: 'id' })
         );
       }
     } catch (e) {}

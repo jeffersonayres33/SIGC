@@ -426,7 +426,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
       s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === 
       (cloned.situacao || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     );
-    cloned.situacao = matched || cloned.situacao || 'Definitiva';
+    cloned.situacao = (matched || cloned.situacao || 'Definitiva').toUpperCase();
 
     setEditingEmpresa(cloned);
     setModalTab('dados_pj');
@@ -1135,7 +1135,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                     <td className="py-3 px-4 font-mono font-bold">
                       <div className="flex items-center gap-1.5">
                         <span className="text-blue-700">{empresa.inscricao}</span>
-                        {(empresa.situacao === 'Provisória' || empresa.situacao === 'Provisorio' || empresa.inscricao?.includes('PROV') || Boolean(empresa.dtVencInscProvisoria)) && (
+                        {(storageService.isSituacaoProvisoria(empresa.situacao) || empresa.inscricao?.includes('PROV') || Boolean(empresa.dtVencInscProvisoria)) && (
                           <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[9px] font-bold border border-amber-300 uppercase shrink-0">
                             PROV
                           </span>
@@ -1948,8 +1948,12 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                               type="radio"
                               name="situacaoFirma"
                               checked={
-                                storageService.isSituacaoProvisoria(sit) === storageService.isSituacaoProvisoria(editingEmpresa.situacao) &&
-                                (storageService.isSituacaoProvisoria(sit) || sit.toLowerCase() === editingEmpresa.situacao?.toLowerCase())
+                                (storageService.isSituacaoProvisoria(sit) && storageService.isSituacaoProvisoria(editingEmpresa.situacao)) ||
+                                (
+                                  sit.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().startsWith('definit') && 
+                                  (editingEmpresa.situacao || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().startsWith('definit')
+                                ) ||
+                                sit.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() === (editingEmpresa.situacao || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
                               }
                               onChange={() => handleSituacaoEmpresaChange(sit)}
                               className="text-blue-600 focus:ring-blue-500"

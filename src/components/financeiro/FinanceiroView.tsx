@@ -25,6 +25,7 @@ import { LancamentoFinanceiro } from '../../types';
 import { storageService } from '../../services/storageService';
 import { exportToCSV, exportToPDF } from '../../services/exportService';
 import { toastService } from '../../services/toastService';
+import { dateToInput, inputToDate } from '../../utils/documentUtils';
 
 interface FinanceiroViewProps {
   onOpenBoletoPix?: (lancamento: LancamentoFinanceiro) => void;
@@ -526,6 +527,19 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({ onOpenBoletoPix 
                     <option value="Multa de Fiscalização">Multa de Fiscalização</option>
                   </select>
                 </div>
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Data de Vencimento *</label>
+                  <input
+                    type="date"
+                    required
+                    value={dateToInput(novoLanc.dataVencimento || '')}
+                    onChange={(e) => setNovoLanc(prev => ({ ...prev, dataVencimento: inputToDate(e.target.value) }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-700 font-bold mb-1">Exercício</label>
                   <input
