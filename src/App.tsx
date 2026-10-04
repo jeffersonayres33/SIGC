@@ -20,6 +20,7 @@ import { CrtModal } from './components/modals/CrtModal';
 import { BoletoPixModal } from './components/modals/BoletoPixModal';
 import { CdaModal } from './components/modals/CdaModal';
 import { SupabaseManagerModal } from './components/common/SupabaseManagerModal';
+import { SyncErrorModal } from './components/common/SyncErrorModal';
 
 import { UserRole, Empresa, LancamentoFinanceiro, ProcessoCobranca } from './types';
 import { storageService } from './services/storageService';
@@ -32,6 +33,8 @@ export default function App() {
   const [councilConfig, setCouncilConfig] = useState(storageService.getCouncilConfig());
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
+  const [syncErrors, setSyncErrors] = useState(storageService.getSyncErrors());
+  const [isSyncErrorModalOpen, setIsSyncErrorModalOpen] = useState(false);
 
   // Modals state
   const [crtEmpresa, setCrtEmpresa] = useState<Empresa | null>(null);
@@ -39,9 +42,19 @@ export default function App() {
   const [cdaProcesso, setCdaProcesso] = useState<ProcessoCobranca | null>(null);
 
   useEffect(() => {
+    let lastLength = storageService.getSyncErrors().length;
     const unsubscribe = storageService.subscribe(() => {
       setNetworkStatus(storageService.getNetworkStatus());
       setCouncilConfig(storageService.getCouncilConfig());
+      
+      const newErrors = storageService.getSyncErrors();
+      setSyncErrors(newErrors);
+      
+      // Auto-open modal when a new database error occurs
+      if (newErrors.length > lastLength) {
+        setIsSyncErrorModalOpen(true);
+      }
+      lastLength = newErrors.length;
     });
     return () => {
       unsubscribe();
@@ -175,6 +188,24 @@ export default function App() {
         isOpen={isSupabaseModalOpen}
         onClose={() => setIsSupabaseModalOpen(false)}
       />
+
+      <SyncErrorModal
+        isOpen={isSyncErrorModalOpen}
+        onClose={() => setIsSyncErrorModalOpen(false)}
+        errors={syncErrors}
+      />
+
+      {/* Floating Diagnostics Button */}
+      {syncErrors.length > 0 && (
+        <button
+          onClick={() => setIsSyncErrorModalOpen(true)}
+          className="fixed bottom-5 left-5 z-40 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10px] uppercase px-3 py-2 rounded-xl shadow-lg border border-rose-500 flex items-center space-x-1.5 animate-bounce transition-all cursor-pointer"
+          title="Clique para diagnosticar falhas no Banco de Dados"
+        >
+          <span className="w-2 h-2 bg-white rounded-full animate-ping" />
+          <span>{syncErrors.length} Erro(s) de Sincronismo</span>
+        </button>
+      )}
 
       {/* Global Toast Alerts */}
       <ToastContainer />

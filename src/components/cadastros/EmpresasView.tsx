@@ -38,7 +38,8 @@ import {
   Award,
   Scale,
   FileSpreadsheet,
-  ShieldAlert
+  ShieldAlert,
+  History
 } from 'lucide-react';
 import { Empresa, CondicaoFirma, Socio, ResponsavelTecnico, Profissional, HorarioFuncionamentoItem, HorarioAssistenciaItem } from '../../types';
 import { storageService, DEFAULT_HORARIOS_FUNCIONAMENTO, DEFAULT_HORARIOS_ASSISTENCIA, calculateIntervalHours, calculateDayTotalHours } from '../../services/storageService';
@@ -119,7 +120,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
 
   const [selectedEmpresa, setSelectedEmpresa] = useState<Empresa | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalTab, setModalTab] = useState<'dados_pj' | 'horarios' | 'responsaveis_rt' | 'socios_qsa' | 'endereco' | 'posicao_financeira' | 'bloqueio'>('dados_pj');
+  const [modalTab, setModalTab] = useState<'dados_pj' | 'horarios' | 'responsaveis_rt' | 'socios_qsa' | 'endereco' | 'posicao_financeira' | 'bloqueio' | 'historico'>('dados_pj');
   const [editingEmpresa, setEditingEmpresa] = useState<Partial<Empresa> | null>(null);
   const [empresaToDelete, setEmpresaToDelete] = useState<Empresa | null>(null);
   const [empresaToConvertDefinitiva, setEmpresaToConvertDefinitiva] = useState<Empresa | null>(null);
@@ -153,21 +154,34 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
         novaInscricao: novaInscricaoProvisoria
       });
     } else if (wasProvisorio && !willBeProvisorio) {
-      // Voltando de Provisório para Definitivo (altera somente prefixo e sufixo mantendo o número atual)
       const inscricaoAtual = editingEmpresa.inscricao || '';
-      const novaInscricaoDefinitiva = storageService.alternarInscricaoParaDefinitivo(inscricaoAtual, 'PJ');
-      const numeroAtual = storageService.extrairNumeroInscricao(inscricaoAtual);
+      const foiDef = storageService.foiDefinitivoEmAlgumMomento(editingEmpresa.id || '', 'EMPRESA');
+      let novaInscricaoDefinitiva = '';
 
-      setEditingEmpresa(prev => prev ? ({
-        ...prev,
-        situacao: novaSituacao as any,
-        inscricao: novaInscricaoDefinitiva
-      }) : null);
-
-      toastService.info(
-        'Inscrição Revertida para Definitiva',
-        `A numeração cronológica (${numeroAtual}) foi mantida e o prefixo/sufixo definitivo aplicado com sucesso.`
-      );
+      if (foiDef) {
+        novaInscricaoDefinitiva = storageService.alternarInscricaoParaDefinitivo(inscricaoAtual, 'PJ');
+        const numeroAtual = storageService.extrairNumeroInscricao(inscricaoAtual);
+        setEditingEmpresa(prev => prev ? ({
+          ...prev,
+          situacao: novaSituacao as any,
+          inscricao: novaInscricaoDefinitiva
+        }) : null);
+        toastService.info(
+          'Inscrição Revertida para Definitiva',
+          `A numeração cronológica original (${numeroAtual}) foi mantida e o prefixo/sufixo definitivo aplicado com sucesso.`
+        );
+      } else {
+        novaInscricaoDefinitiva = storageService.getNextInscricaoEmpresa(true);
+        setEditingEmpresa(prev => prev ? ({
+          ...prev,
+          situacao: novaSituacao as any,
+          inscricao: novaInscricaoDefinitiva
+        }) : null);
+        toastService.info(
+          'Inscrição Definitiva Gerada',
+          `Nova numeração sequencial definitiva gerada (${novaInscricaoDefinitiva}) seguindo a continuidade cronológica.`
+        );
+      }
     } else {
       setEditingEmpresa(prev => prev ? ({
         ...prev,
@@ -384,7 +398,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
       categoria: 'Comércio Varejista',
       categoriaEmpresa: 'Micro empresa',
       tipoEstabelecimento: (cadastrosTiposEmpresa[0]?.nome as any) || 'Drogaria',
-      tipoEmpresa: 'Privado',
+      tipoEmpresa: 'PRIVADO',
       naturezaAtividade: 'FARMÁCIA SEM MANIPULAÇÃO OU DROGARIA',
       condicao: 'Regular',
       situacao: 'Definitiva',
@@ -484,34 +498,46 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
       return;
     }
 
-     const isEditing = Boolean(editingEmpresa.id);
-     let finalInscricao = editingEmpresa.inscricao;
- 
-     if (!isEditing) {
-       const isProvisorio = editingEmpresa.situacao === 'Provisória' || editingEmpresa.situacao === 'Provisorio';
-       finalInscricao = isProvisorio 
-         ? storageService.getNextInscricaoProvisoriaEmpresa(true)
-         : storageService.getNextInscricaoEmpresa(true);
-     }
- 
-     // Executar auditoria de regularidade e cálculo automático de condição e justificativa
-     const avaliacao = storageService.avaliarRegularidadeAssistencia(editingEmpresa);
- 
-     const rawEmpresa: Empresa = {
-       id: editingEmpresa.id || `emp-${Date.now()}`,
-       cnpj: editingEmpresa.cnpj.trim(),
-       razaoSocial: editingEmpresa.razaoSocial.trim(),
-       nomeFantasia: editingEmpresa.nomeFantasia || editingEmpresa.razaoSocial,
-       inscricao: finalInscricao || storageService.peekNextInscricaoEmpresa(),
-       inscricaoEstadual: editingEmpresa.inscricaoEstadual || 'ISENTO',
-       categoria: editingEmpresa.categoria || 'COMÉRCIO VAREJISTA',
-       categoriaEmpresa: editingEmpresa.categoriaEmpresa || editingEmpresa.categoria || 'Micro empresa',
-       tipoEstabelecimento: editingEmpresa.tipoEstabelecimento || 'Drogaria',
-       naturezaAtividade: editingEmpresa.naturezaAtividade || 'FARMÁCIA SEM MANIPULAÇÃO OU DROGARIA',
-       tipoEmpresa: editingEmpresa.tipoEmpresa || 'Matriz',
-       condicao: avaliacao.condicao,
-       situacao: editingEmpresa.situacao || 'Definitiva',
-       motivoSituacao: editingEmpresa.motivoSituacao || '',
+    const cleanCnpjDigits = (editingEmpresa.cnpj || '').replace(/\D/g, '');
+    const duplicateEmp = storageService.getEmpresas().find(e => 
+      e.id !== editingEmpresa.id && (e.cnpj || '').replace(/\D/g, '') === cleanCnpjDigits
+    );
+    if (duplicateEmp) {
+      toastService.warning(
+        'CNPJ Já Cadastrado',
+        `Já existe uma empresa cadastrada com este CNPJ (${maskCNPJ(cleanCnpjDigits)}): ${duplicateEmp.razaoSocial} (Inscrição: ${duplicateEmp.inscricao}).`
+      );
+      return;
+    }
+
+    const isEditing = Boolean(editingEmpresa.id);
+    let finalInscricao = editingEmpresa.inscricao;
+
+    if (!isEditing) {
+      const isProvisorio = editingEmpresa.situacao === 'Provisória' || editingEmpresa.situacao === 'Provisorio';
+      finalInscricao = isProvisorio 
+        ? storageService.getNextInscricaoProvisoriaEmpresa(true)
+        : storageService.getNextInscricaoEmpresa(true);
+    }
+
+    // Executar auditoria de regularidade e cálculo automático de condição e justificativa
+    const avaliacao = storageService.avaliarRegularidadeAssistencia(editingEmpresa);
+
+    const rawEmpresa: Empresa = {
+      id: editingEmpresa.id || `emp-${Date.now()}`,
+      cnpj: editingEmpresa.cnpj.trim(),
+      razaoSocial: editingEmpresa.razaoSocial.trim(),
+      nomeFantasia: editingEmpresa.nomeFantasia || editingEmpresa.razaoSocial,
+      inscricao: finalInscricao || storageService.peekNextInscricaoEmpresa(),
+      inscricaoEstadual: editingEmpresa.inscricaoEstadual || 'ISENTO',
+      categoria: editingEmpresa.categoria || 'COMÉRCIO VAREJISTA',
+      categoriaEmpresa: editingEmpresa.categoriaEmpresa || editingEmpresa.categoria || 'Micro empresa',
+      tipoEstabelecimento: editingEmpresa.tipoEstabelecimento || 'Drogaria',
+      naturezaAtividade: editingEmpresa.naturezaAtividade || 'FARMÁCIA SEM MANIPULAÇÃO OU DROGARIA',
+      tipoEmpresa: editingEmpresa.tipoEmpresa || 'PRIVADO',
+      condicao: avaliacao.condicao,
+      situacao: editingEmpresa.situacao || 'Definitiva',
+      motivoSituacao: editingEmpresa.motivoSituacao || '',
        dtInicioInscProvisoria: editingEmpresa.dtInicioInscProvisoria || '',
        dtVencInscProvisoria: editingEmpresa.dtVencInscProvisoria || '',
        dataConversaoDefinitiva: editingEmpresa.dataConversaoDefinitiva || '',
@@ -525,7 +551,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
       dataInscricao: editingEmpresa.dataInscricao || new Date().toLocaleDateString('pt-BR'),
       validadeCRT: editingEmpresa.validadeCRT || `31/12/${new Date().getFullYear()}`,
       numeroCRT: editingEmpresa.numeroCRT || `CRT-${Math.floor(1000 + Math.random() * 9000)}/${new Date().getFullYear()}`,
-      assistenciaPlena: avaliacao.horasFuncionamentoSemanais > 0 && avaliacao.horasAssistenciaSemanais >= avaliacao.horasFuncionamentoSemanais,
+      assistenciaPlena: editingEmpresa.assistenciaPlena !== undefined ? Boolean(editingEmpresa.assistenciaPlena) : (avaliacao.horasFuncionamentoSemanais > 0 && avaliacao.horasAssistenciaSemanais >= avaliacao.horasFuncionamentoSemanais),
       cargaHorariaFuncionamentoSemanal: avaliacao.horasFuncionamentoSemanais,
       cargaHorariaAssistenciaSemanal: avaliacao.horasAssistenciaSemanais,
       regraAssistenciaAplicada: avaliacao.regraAplicada?.baseLegal || avaliacao.regraAplicada?.descricao || 'Diretrizes Técnicas CRF',
@@ -1326,21 +1352,56 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                   DADOS DO ESTABELECIMENTO
                 </div>
                 <div><span className="text-slate-400">FANTASIA:</span> <strong className="text-slate-800">{selectedEmpresa.nomeFantasia}</strong></div>
-                <div><span className="text-slate-400">RAMO:</span> <span className="text-slate-800">{selectedEmpresa.tipoEstabelecimento}</span></div>
-                <div><span className="text-slate-400">TIPO:</span> <span className="text-slate-800">{selectedEmpresa.tipoEmpresa}</span></div>
+                <div><span className="text-slate-400">RAMO / TIPO ESTAB:</span> <span className="text-slate-800 font-bold">{selectedEmpresa.tipoEstabelecimento}</span></div>
+                <div><span className="text-slate-400">TIPO EMPRESA:</span> <span className="text-slate-800">{selectedEmpresa.tipoEmpresa}</span></div>
+                <div><span className="text-slate-400">CATEGORIA:</span> <span className="text-slate-800">{selectedEmpresa.categoria}</span></div>
+                <div><span className="text-slate-400">CATEGORIA EMPRESA:</span> <span className="text-slate-800">{selectedEmpresa.categoriaEmpresa || selectedEmpresa.categoria || 'NÃO INFORMADO'}</span></div>
+                <div><span className="text-slate-400">NATUREZA DA ATIVIDADE:</span> <span className="text-slate-800 font-semibold">{selectedEmpresa.naturezaAtividade || 'NÃO INFORMADA'}</span></div>
                 <div><span className="text-slate-400">CAPITAL SOCIAL:</span> <span className="text-slate-800 font-mono">R$ {Number(selectedEmpresa.capitalSocial).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
                 <div><span className="text-slate-400">ENDEREÇO:</span> <span className="text-slate-800">{selectedEmpresa.endereco}, {selectedEmpresa.bairro} - {selectedEmpresa.cidade}/{selectedEmpresa.uf} (CEP: {selectedEmpresa.cep})</span></div>
+                {selectedEmpresa.complemento && <div><span className="text-slate-400">COMPLEMENTO:</span> <span className="text-slate-800">{selectedEmpresa.complemento}</span></div>}
               </div>
 
               <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-1.5 uppercase">
                 <div className="font-bold text-blue-900 uppercase text-[10px] pb-1 border-b border-slate-200">
-                  CERTIDÃO & REGULARIDADE (CRT)
+                  CERTIDÃO, REGULARIDADE & PARÂMETROS
                 </div>
                 <div><span className="text-slate-400">NÚMERO CRT:</span> <strong className="text-slate-800 font-mono">{selectedEmpresa.numeroCRT}</strong></div>
                 <div><span className="text-slate-400">VALIDADE CRT:</span> <span className="text-slate-800">{selectedEmpresa.validadeCRT}</span></div>
+                <div><span className="text-slate-400">PROCESSO:</span> <span className="text-slate-800 font-mono">{selectedEmpresa.numeroProcesso || '-'}</span></div>
                 <div><span className="text-slate-400">ASSISTÊNCIA PLENA:</span> <span className="font-bold text-emerald-700">{selectedEmpresa.assistenciaPlena ? 'SIM (COBERTURA INTEGRAL)' : 'PARCIAL'}</span></div>
                 <div><span className="text-slate-400">TELEFONE:</span> <span className="text-slate-800 font-mono">{selectedEmpresa.telefone}</span></div>
                 <div><span className="text-slate-400">E-MAIL:</span> <span className="text-slate-800 lowercase font-mono">{selectedEmpresa.email}</span></div>
+                
+                <div className="pt-2 border-t border-slate-200/60 grid grid-cols-2 gap-2 text-[10px] font-bold text-slate-600">
+                  <div className="p-1 rounded bg-slate-100 flex flex-col justify-center">
+                    <span className="text-[8px] text-slate-400">ISENTO ANUIDADE?</span>
+                    <span className={selectedEmpresa.isentoAnuidade ? 'text-indigo-700' : 'text-slate-500'}>{selectedEmpresa.isentoAnuidade ? 'SIM' : 'NÃO'}</span>
+                  </div>
+                  <div className="p-1 rounded bg-slate-100 flex flex-col justify-center">
+                    <span className="text-[8px] text-slate-400">ANUIDADE REDUZIDA?</span>
+                    <span className={selectedEmpresa.anuidadeReduzida ? 'text-purple-700' : 'text-slate-500'}>{selectedEmpresa.anuidadeReduzida ? 'SIM' : 'NÃO'}</span>
+                  </div>
+                  <div className="p-1 rounded bg-slate-100 flex flex-col justify-center">
+                    <span className="text-[8px] text-slate-400">ISENTO CERTIF.?</span>
+                    <span className={selectedEmpresa.isentoTaxaCertificado ? 'text-blue-700' : 'text-slate-500'}>{selectedEmpresa.isentoTaxaCertificado ? 'SIM' : 'NÃO'}</span>
+                  </div>
+                  <div className="p-1 rounded bg-slate-100 flex flex-col justify-center">
+                    <span className="text-[8px] text-slate-400">RECADASTRO?</span>
+                    <span className={selectedEmpresa.recadastrado ? 'text-emerald-700' : 'text-slate-500'}>{selectedEmpresa.recadastrado ? `SIM (${selectedEmpresa.dataRecadastramento || '-'})` : 'NÃO'}</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1.5 text-[10px] font-bold text-slate-600">
+                  <div className="p-1 rounded bg-slate-100 flex flex-col justify-center">
+                    <span className="text-[8px] text-slate-400">PLANTÃO / HORÁRIO:</span>
+                    <span className="text-slate-800 font-mono text-[9px]">{selectedEmpresa.horarioPlantao || 'NÃO CONFIGURADO'}</span>
+                  </div>
+                  <div className="p-1 rounded bg-slate-100 flex flex-col justify-center">
+                    <span className="text-[8px] text-slate-400">HORAS DE TOLERÂNCIA:</span>
+                    <span className="text-slate-800 font-mono text-[10px]">{selectedEmpresa.horasTolerancia || 0} HORAS</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -1488,6 +1549,58 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
               )}
             </div>
 
+            {/* Quadro de Auditoria de Dados (Histórico) */}
+            <div className="border border-slate-200 rounded-xl p-3.5 bg-white space-y-2">
+              <span className="font-bold text-slate-900 uppercase text-[11px] flex items-center space-x-1.5">
+                <Clock className="w-4 h-4 text-blue-600" />
+                <span>Histórico Completo de Auditoria de Dados (Firma)</span>
+              </span>
+              <span className="text-[10px] text-slate-500 font-mono mt-0.5 block">
+                ATUALIZAÇÕES E ALTERAÇÕES FEITAS NO CADASTRO DESTE ESTABELECIMENTO
+              </span>
+
+              {storageService.getHistoricoAuditoriaByTarget(selectedEmpresa.id, 'EMPRESA').length === 0 ? (
+                <div className="p-8 text-center text-slate-400 bg-slate-50 border border-slate-200 rounded-xl border-dashed">
+                  <Clock className="w-8 h-8 mx-auto text-slate-300 opacity-60 mb-2" />
+                  <span className="font-bold uppercase text-[11px] block text-slate-600">Sem alterações registradas</span>
+                  <p className="text-[9px] text-slate-500 mt-0.5 uppercase">Nenhum evento registrado de modificação para este cadastro.</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[30vh] overflow-y-auto pr-1">
+                  {storageService.getHistoricoAuditoriaByTarget(selectedEmpresa.id, 'EMPRESA').map((audit) => (
+                    <div key={audit.id} className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 shadow-2xs">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5 text-[9px]">
+                        <span className="font-extrabold uppercase bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded-md border border-blue-200">
+                          CAMPO: {audit.campo}
+                        </span>
+                        <div className="flex items-center space-x-1.5 text-slate-400 font-bold font-mono">
+                          <span className="bg-slate-200 text-slate-600 px-1.5 py-0.2 rounded uppercase">OPERADOR: {audit.usuario}</span>
+                          <span>•</span>
+                          <span>{audit.dataFormatada}</span>
+                        </div>
+                      </div>
+                      {audit.campo === 'CADASTRO' ? (
+                        <div className="p-2 bg-blue-50 border border-blue-100 rounded text-[11px] font-semibold text-blue-900 uppercase">
+                          {audit.valorNovo}
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] uppercase font-medium">
+                          <div className="p-2 bg-white border border-slate-200 rounded text-slate-600">
+                            <span className="text-[8px] text-slate-400 block font-bold">VALOR ANTERIOR:</span>
+                            <span className="font-mono mt-0.5 block truncate max-w-full text-ellipsis overflow-hidden">{audit.valorAnterior || <em className="text-slate-400 text-[9px]">VAZIO</em>}</span>
+                          </div>
+                          <div className="p-2 bg-emerald-50/50 border border-emerald-100 rounded text-emerald-800">
+                            <span className="text-[8px] text-emerald-400 block font-bold">VALOR NOVO:</span>
+                            <span className="font-mono mt-0.5 block font-bold truncate max-w-full text-ellipsis overflow-hidden">{audit.valorNovo || <em className="text-emerald-400 text-[9px]">VAZIO</em>}</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="flex flex-col sm:flex-row items-center justify-between gap-2 pt-2 border-t border-slate-100">
               <button
                 onClick={() => {
@@ -1607,7 +1720,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                 )}
               </div>
             ) : (
-              (storageService.isSituacaoProvisoria(editingEmpresa.situacao) || editingEmpresa.inscricao?.includes('PROV') || Boolean(editingEmpresa.dtVencInscProvisoria)) && (
+              storageService.isSituacaoProvisoria(editingEmpresa.situacao) && (
                 <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="flex items-start sm:items-center space-x-2.5">
                     <div className="w-7 h-7 rounded-lg bg-amber-600 text-white flex items-center justify-center font-mono text-xs shrink-0">
@@ -1722,6 +1835,16 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                   </span>
                 )}
               </button>
+              <button
+                type="button"
+                onClick={() => setModalTab('historico')}
+                className={`px-3 py-2 rounded-lg font-bold text-[11px] uppercase transition-all shrink-0 flex items-center space-x-1.5 cursor-pointer ${
+                  modalTab === 'historico' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <History className="w-3.5 h-3.5" />
+                <span>8. Histórico</span>
+              </button>
             </div>
 
             <form onSubmit={handleSaveEmpresa} className="space-y-4">
@@ -1822,6 +1945,73 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                   </div>
                 </div>
               )}
+
+              {/* ABA HISTÓRICO DE ALTERAÇÕES */}
+              {modalTab === 'historico' && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div className="flex items-center space-x-2 text-slate-800 font-bold uppercase text-xs mb-1">
+                      <History className="w-4 h-4 text-blue-600" />
+                      <span>Histórico de Alterações Cadastrais da Firma (Trilha de Auditoria)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 uppercase font-semibold leading-relaxed">
+                      Todas as alterações feitas nos dados desta empresa são auditadas automaticamente pelo sistema, registrando operador responsável, data/hora e comparativo de campos modificados.
+                    </p>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[400px] overflow-y-auto bg-white shadow-xs">
+                    {!editingEmpresa.id ? (
+                      <div className="p-8 text-center text-slate-500 text-xs">
+                        <History className="w-8 h-8 mx-auto text-slate-300 mb-2 opacity-50 animate-pulse" />
+                        <span className="text-xs uppercase font-extrabold block">Novo Cadastro</span>
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold">O histórico será gerado após salvar a empresa pela primeira vez.</span>
+                      </div>
+                    ) : storageService.getHistoricoAuditoriaByTarget(editingEmpresa.id, 'EMPRESA').length === 0 ? (
+                      <div className="p-8 text-center text-slate-500 text-xs">
+                        <History className="w-8 h-8 mx-auto text-slate-300 mb-2 opacity-50" />
+                        <span className="text-xs uppercase font-extrabold block">Sem Alterações</span>
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold">Nenhuma alteração cadastral foi registrada para esta empresa até o momento.</span>
+                      </div>
+                    ) : (
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 border-b border-slate-200 text-[10px] text-slate-700 font-extrabold uppercase">
+                            <th className="px-3.5 py-2.5">Data/Hora</th>
+                            <th className="px-3.5 py-2.5">Usuário</th>
+                            <th className="px-3.5 py-2.5">Campo Alterado</th>
+                            <th className="px-3.5 py-2.5">Valor Anterior</th>
+                            <th className="px-3.5 py-2.5">Novo Valor</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {storageService.getHistoricoAuditoriaByTarget(editingEmpresa.id, 'EMPRESA').map((log) => (
+                            <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                              <td className="px-3.5 py-3 font-mono font-bold text-slate-600 shrink-0 whitespace-nowrap">
+                                {log.dataFormatada}
+                              </td>
+                              <td className="px-3.5 py-3 whitespace-nowrap">
+                                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-extrabold uppercase rounded-md text-[9px] border border-blue-100">
+                                  {log.usuario || 'SISTEMA'}
+                                </span>
+                              </td>
+                              <td className="px-3.5 py-3 font-semibold text-slate-700 uppercase">
+                                {log.campo}
+                              </td>
+                              <td className="px-3.5 py-3 text-red-600 line-through max-w-[150px] truncate" title={log.valorAnterior || ''}>
+                                {log.valorAnterior || '-'}
+                              </td>
+                              <td className="px-3.5 py-3 text-emerald-700 font-semibold max-w-[150px] truncate" title={log.valorNovo || ''}>
+                                {log.valorNovo || '-'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* ABA 1: DADOS PJ */}
               {modalTab === 'dados_pj' && (
                 <div className="space-y-3.5">
@@ -1896,7 +2086,9 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                     <div>
                       <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Tipo de Estabelecimento *</label>
                       <select
-                        value={editingEmpresa.tipoEstabelecimento || 'Drogaria'}
+                        value={
+                          (cadastrosTiposEmpresa.find(t => t.nome.toUpperCase() === (editingEmpresa.tipoEstabelecimento || 'Drogaria').toUpperCase())?.nome || editingEmpresa.tipoEstabelecimento || 'Drogaria')
+                        }
                         onChange={(e) => setEditingEmpresa(prev => ({ ...prev, tipoEstabelecimento: e.target.value }))}
                         className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs"
                       >
@@ -1909,7 +2101,9 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                     <div>
                       <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Natureza de Atividade (Cadastro Básico) *</label>
                       <select
-                        value={editingEmpresa.naturezaAtividade || ''}
+                        value={
+                          (cadastrosNaturezaAtividade.find(nat => nat.nome.toUpperCase() === (editingEmpresa.naturezaAtividade || '').toUpperCase())?.nome || editingEmpresa.naturezaAtividade || '')
+                        }
                         onChange={(e) => setEditingEmpresa(prev => ({ ...prev, naturezaAtividade: e.target.value }))}
                         className="w-full px-2.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs"
                       >
@@ -2000,7 +2194,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                             <input
                               type="radio"
                               name="tipoEmpresaRadio"
-                              checked={(editingEmpresa.tipoEmpresa || 'PRIVADO') === tp}
+                              checked={(editingEmpresa.tipoEmpresa || 'PRIVADO').toUpperCase() === tp.toUpperCase()}
                               onChange={() => setEditingEmpresa(prev => prev ? ({ ...prev, tipoEmpresa: tp as any }) : null)}
                               className="text-blue-600 focus:ring-blue-500 cursor-pointer"
                             />
@@ -2027,7 +2221,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                             <input
                               type="radio"
                               name="categoriaEmpresaRadio"
-                              checked={(editingEmpresa.categoriaEmpresa || editingEmpresa.categoria || 'Micro empresa') === cat}
+                              checked={(editingEmpresa.categoriaEmpresa || editingEmpresa.categoria || 'MICRO EMPRESA').toUpperCase() === cat.toUpperCase()}
                               onChange={() => setEditingEmpresa(prev => ({ ...prev, categoriaEmpresa: cat, categoria: cat }))}
                               className="text-blue-600 focus:ring-blue-500"
                             />
@@ -2047,7 +2241,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                               <input
                                 type="radio"
                                 name="condicaoFirmaRadio"
-                                checked={(editingEmpresa.condicao || 'Regular') === cond}
+                                checked={(editingEmpresa.condicao || 'REGULAR').toUpperCase() === cond.toUpperCase()}
                                 onChange={() => setEditingEmpresa(prev => ({ ...prev, condicao: cond as any }))}
                                 className="text-blue-600 focus:ring-blue-500"
                               />

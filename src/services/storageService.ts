@@ -17,7 +17,8 @@ import {
   TipoExigenciaAssistencia,
   HorarioFuncionamentoItem,
   HorarioAssistenciaItem,
-  CondicaoFirma
+  CondicaoFirma,
+  HistoricoAuditoria
 } from '../types';
 import { 
   INITIAL_PROFISSIONAIS, 
@@ -30,7 +31,7 @@ import {
   INITIAL_MICROSERVICES,
   generateSingleProfissional 
 } from './mockDataGenerator';
-import { sanitizeToUpper, formatInscricaoCompleta, dateToInput, inputToDate } from '../utils/documentUtils';
+import { sanitizeToUpper, formatInscricaoCompleta, dateToInput, inputToDate, maskCPF, maskCNPJ } from '../utils/documentUtils';
 import { supabase, checkSupabaseConnection, SupabaseHealthCheck } from './supabaseClient';
 
 const STORAGE_KEYS = {
@@ -46,7 +47,8 @@ const STORAGE_KEYS = {
   COUNCIL_CONFIG: 'siscon_council_config_v1',
   CADASTROS_BASICOS: 'siscon_cadastros_basicos_v1',
   REGRAS_ASSISTENCIA: 'siscon_regras_assistencia_v1',
-  SUPABASE_SYNC_ENABLED: 'siscon_supabase_sync_enabled'
+  SUPABASE_SYNC_ENABLED: 'siscon_supabase_sync_enabled',
+  HISTORICO_AUDITORIA: 'siscon_historico_auditoria_v1'
 };
 
 function runBackgroundSupabase(queryPromise: any) {
@@ -426,6 +428,7 @@ class StorageService {
   private formularios: FormularioDinamico[] = [];
   private respostasForms: RespostaFormulario[] = [];
   private offlineQueue: TermoFiscalizacao[] = [];
+  private historicoAuditoria: HistoricoAuditoria[] = [];
   private cadastrosBasicos: ItemCadastroBasico[] = INITIAL_CADASTROS_BASICOS;
   private regrasAssistencia: RegraAssistenciaFarmaceutica[] = INITIAL_REGRAS_ASSISTENCIA;
   private councilConfig: CouncilConfig = DEFAULT_COUNCIL_CONFIG;
@@ -434,6 +437,28 @@ class StorageService {
   private isSupabaseSyncing: boolean = false;
   private lastSupabaseStatus: SupabaseHealthCheck | null = null;
   private listeners: Set<() => void> = new Set();
+  private syncErrors: { id: string; target: string; recordName: string; fieldName?: string; errorMessage: string; timestamp: string }[] = [];
+
+  public getSyncErrors() {
+    return this.syncErrors;
+  }
+
+  public clearSyncErrors() {
+    this.syncErrors = [];
+    this.notify();
+  }
+
+  public addSyncError(target: string, recordName: string, errorMessage: string, fieldName?: string) {
+    this.syncErrors.unshift({
+      id: `err-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+      target,
+      recordName,
+      fieldName,
+      errorMessage,
+      timestamp: new Date().toLocaleTimeString('pt-BR')
+    });
+    this.notify();
+  }
 
   constructor() {
     this.init();
@@ -502,6 +527,9 @@ class StorageService {
 
       const savedForms = localStorage.getItem(STORAGE_KEYS.FORMULARIOS);
       this.formularios = savedForms ? JSON.parse(savedForms) : INITIAL_DYNAMIC_FORMS;
+
+      const savedAuditoria = localStorage.getItem(STORAGE_KEYS.HISTORICO_AUDITORIA);
+      this.historicoAuditoria = savedAuditoria ? JSON.parse(savedAuditoria) : [];
 
       const savedQueue = localStorage.getItem(STORAGE_KEYS.OFFLINE_QUEUE);
       this.offlineQueue = savedQueue ? JSON.parse(savedQueue) : [];
@@ -686,6 +714,31 @@ class StorageService {
           eVotante: p.e_votante !== undefined ? Boolean(p.e_votante) : true,
           eMilitar: Boolean(p.e_militar),
           estadoCivil: p.estado_civil || undefined,
+          transferidoOutroRegional: Boolean(p.transferido_outro_regional),
+          nrInscricaoRegionalOrigem: p.nr_inscricao_regional_origem || undefined,
+          anuidRefAnoInscricaoEmDia: Boolean(p.anuid_ref_ano_insc_em_dia),
+          ufRegionalOrigem: p.uf_regional_origem || undefined,
+          dtVenctoMilitar: p.dt_vencto_militar || undefined,
+          dataMandatoSeguranca: p.data_mandato_seguranca || undefined,
+          orgaoMandatoSeguranca: p.orgao_mandato_seguranca || undefined,
+          observacaoMandato: p.observacao_mandato || undefined,
+          formaEnvioBoletoParcelamento: p.forma_envio_boleto_parcelamento || undefined,
+          grupoSanguineo: p.grupo_sanguineo || undefined,
+          fatorRH: p.fator_rh || undefined,
+          doadorOrgaosTecidos: Boolean(p.doador_orgaos_tecidos),
+          participouCursoQualifarma: p.participou_curso_qualifarma || undefined,
+          rgDataExpedicao: p.rg_data_expedicao || undefined,
+          rgDataVencimento: p.rg_data_vencimento || undefined,
+          tituloEleitoral: p.titulo_eleitoral || undefined,
+          tituloZona: p.titulo_zona || undefined,
+          tituloSecao: p.titulo_secao || undefined,
+          tituloUfExp: p.titulo_uf_exp || undefined,
+          reservista: p.reservista || undefined,
+          cartTrabalho: p.cart_trabalho || undefined,
+          cartTrabalhoSerie: p.cart_trabalho_serie || undefined,
+          cartTrabalhoUfExp: p.cart_trabalho_uf_exp || undefined,
+          cartTrabalhoDataExp: p.cart_trabalho_data_exp || undefined,
+          nomeSocial: p.nome_social || undefined,
           bloqueado: Boolean(p.bloqueado),
           motivoBloqueio: p.motivo_bloqueio,
           dataBloqueio: p.data_bloqueio,
@@ -720,7 +773,7 @@ class StorageService {
           dataConversaoDefinitiva: e.data_conversao_definitiva || undefined,
           inscricaoDefinitivaAnterior: e.inscricao_definitiva_anterior || undefined,
           capitalSocial: Number(e.capital_social) || 0,
-          assistenciaPlena: Boolean(e.assistencia_plena),
+          assistenciaPlena: e.assistencia_plena !== undefined && e.assistencia_plena !== null ? Boolean(e.assistencia_plena) : true,
           isentoAnuidade: Boolean(e.isento_anuidade),
           anuidadeReduzida: Boolean(e.anuidade_reduzida),
           recadastrado: Boolean(e.recadastrado),
@@ -749,6 +802,12 @@ class StorageService {
           resultadoUltimaFiscalizacao: e.resultado_ultima_fiscalizacao,
           socios: e.socios || [],
           responsaveisTecnicos: e.responsaveis_tecnicos || [],
+          horariosFuncionamento: e.horarios_funcionamento || [],
+          horariosAssistencia: e.horarios_assistencia || [],
+          cargaHorariaFuncionamentoSemanal: Number(e.carga_horaria_funcionamento_semanal) || 0,
+          cargaHorariaAssistenciaSemanal: Number(e.carga_horaria_assistencia_semanal) || 0,
+          justificativaCondicao: e.justificativa_condicao || '',
+          regraAssistenciaAplicada: e.regra_assistencia_aplicada || '',
           bloqueado: Boolean(e.bloqueado),
           motivoBloqueio: e.motivo_bloqueio,
           dataBloqueio: e.data_bloqueio,
@@ -786,6 +845,26 @@ class StorageService {
           pixCopiaECola: l.pix_copia_e_cola
         }));
         localStorage.setItem(STORAGE_KEYS.LANCAMENTOS, JSON.stringify(this.lancamentos));
+      }
+
+      // Fetch Historico Auditoria
+      try {
+        const { data: auditData } = await supabase.from('historico_auditoria').select('*').order('created_at', { ascending: false });
+        if (auditData && auditData.length > 0) {
+          this.historicoAuditoria = auditData.map(a => ({
+            id: a.id,
+            targetId: a.target_id,
+            targetTipo: a.target_tipo as 'PROFISSIONAL' | 'EMPRESA',
+            usuario: a.usuario,
+            dataFormatada: a.data_formatada,
+            campo: a.campo,
+            valorAnterior: a.valor_anterior,
+            valorNovo: a.valor_novo
+          }));
+          localStorage.setItem(STORAGE_KEYS.HISTORICO_AUDITORIA, JSON.stringify(this.historicoAuditoria));
+        }
+      } catch (ae) {
+        console.warn('Erro ao carregar historico_auditoria do Supabase:', ae);
       }
 
       // Fetch Council Config
@@ -2310,6 +2389,35 @@ class StorageService {
     return clean === 'provisorio' || clean === 'provisoria' || clean.startsWith('provis');
   }
 
+  public foiDefinitivoEmAlgumMomento(targetId: string, targetTipo: 'PROFISSIONAL' | 'EMPRESA'): boolean {
+    if (targetTipo === 'PROFISSIONAL') {
+      const prof = this.getProfissionalById(targetId);
+      if (prof) {
+        if (prof.inscricaoDefinitivaAnterior) return true;
+        if (prof.inscricaoAnterior && !this.isSituacaoProvisoria(prof.inscricaoAnterior) && !prof.inscricaoAnterior.toUpperCase().includes('PROV')) return true;
+        if (prof.situacao && !this.isSituacaoProvisoria(prof.situacao) && !prof.situacao.toUpperCase().includes('PROV')) return true;
+      }
+    } else {
+      const emp = this.getEmpresaById(targetId);
+      if (emp) {
+        if (emp.inscricaoDefinitivaAnterior) return true;
+        if (emp.inscricaoAnterior && !this.isSituacaoProvisoria(emp.inscricaoAnterior) && !emp.inscricaoAnterior.toUpperCase().includes('PROV')) return true;
+        if (emp.situacao && !this.isSituacaoProvisoria(emp.situacao) && !emp.situacao.toUpperCase().includes('PROV')) return true;
+      }
+    }
+
+    const audits = this.getHistoricoAuditoriaByTarget(targetId, targetTipo);
+    return audits.some(audit => {
+      const campoStr = (audit.campo || '').toUpperCase();
+      const valAntStr = (audit.valorAnterior || '').toUpperCase();
+      const valNovoStr = (audit.valorNovo || '').toUpperCase();
+      return (
+        (campoStr.includes('SITUA') || campoStr.includes('INSCRI')) &&
+        (valAntStr.includes('DEFINITIV') || valNovoStr.includes('DEFINITIV'))
+      );
+    });
+  }
+
   public converterProfissionalParaDefinitivo(profissionalId: string): Profissional | null {
     const prof = this.getProfissionalById(profissionalId);
     if (!prof) return null;
@@ -2317,12 +2425,10 @@ class StorageService {
     const inscricaoAnterior = prof.inscricao;
     let novaInscricaoDefinitiva = '';
 
-    if (prof.inscricaoDefinitivaAnterior) {
-      novaInscricaoDefinitiva = prof.inscricaoDefinitivaAnterior;
-    } else if (prof.inscricaoAnterior && !this.isSituacaoProvisoria(prof.inscricaoAnterior) && !prof.inscricaoAnterior.toUpperCase().includes('PROV')) {
-      novaInscricaoDefinitiva = prof.inscricaoAnterior;
-    } else if (prof.inscricao && !prof.inscricao.toUpperCase().includes('PROV')) {
-      novaInscricaoDefinitiva = prof.inscricao;
+    const foiDef = this.foiDefinitivoEmAlgumMomento(profissionalId, 'PROFISSIONAL');
+
+    if (foiDef) {
+      novaInscricaoDefinitiva = this.alternarInscricaoParaDefinitivo(inscricaoAnterior, 'PF');
     } else {
       novaInscricaoDefinitiva = this.getNextInscricaoProfissional(true);
     }
@@ -2331,6 +2437,7 @@ class StorageService {
       ...prof,
       inscricao: novaInscricaoDefinitiva,
       inscricaoAnterior: inscricaoAnterior,
+      inscricaoDefinitivaAnterior: novaInscricaoDefinitiva,
       situacao: 'Definitivo',
       dataConversaoDefinitiva: new Date().toLocaleDateString('pt-BR'),
       dataReabilitacao: prof.dataReabilitacao || new Date().toLocaleDateString('pt-BR'),
@@ -2370,12 +2477,10 @@ class StorageService {
     const inscricaoAnterior = emp.inscricao;
     let novaInscricaoDefinitiva = '';
 
-    if (emp.inscricaoDefinitivaAnterior) {
-      novaInscricaoDefinitiva = emp.inscricaoDefinitivaAnterior;
-    } else if (emp.inscricaoAnterior && !this.isSituacaoProvisoria(emp.inscricaoAnterior) && !emp.inscricaoAnterior.toUpperCase().includes('PROV')) {
-      novaInscricaoDefinitiva = emp.inscricaoAnterior;
-    } else if (emp.inscricao && !emp.inscricao.toUpperCase().includes('PROV')) {
-      novaInscricaoDefinitiva = emp.inscricao;
+    const foiDef = this.foiDefinitivoEmAlgumMomento(empresaId, 'EMPRESA');
+
+    if (foiDef) {
+      novaInscricaoDefinitiva = this.alternarInscricaoParaDefinitivo(inscricaoAnterior, 'PJ');
     } else {
       novaInscricaoDefinitiva = this.getNextInscricaoEmpresa(true);
     }
@@ -2384,6 +2489,7 @@ class StorageService {
       ...emp,
       inscricao: novaInscricaoDefinitiva,
       inscricaoAnterior: inscricaoAnterior,
+      inscricaoDefinitivaAnterior: novaInscricaoDefinitiva,
       situacao: 'Definitiva',
       dataConversaoDefinitiva: new Date().toLocaleDateString('pt-BR')
     };
@@ -2394,7 +2500,41 @@ class StorageService {
 
   public saveProfissional(prof: Profissional) {
     const sanitized = sanitizeToUpper(prof, ['id', 'fotoUrl', 'emailComercial', 'emailPessoal']);
-    const idx = this.customProfissionais.findIndex(p => p.id === sanitized.id || p.cpf === sanitized.cpf);
+    const cleanCpf = (c?: string) => (c || '').replace(/\D/g, '');
+    const cleanInsc = (i?: string) => (i || '').trim().toUpperCase();
+
+    if (sanitized.cpf) {
+      const digits = cleanCpf(sanitized.cpf);
+      if (digits.length === 11) {
+        sanitized.cpf = maskCPF(digits);
+      }
+    }
+
+    const existingProf = this.customProfissionais.find(p => 
+      (sanitized.id && p.id === sanitized.id) ||
+      (cleanCpf(sanitized.cpf) && cleanCpf(p.cpf) === cleanCpf(sanitized.cpf)) ||
+      (cleanInsc(sanitized.inscricao) && cleanInsc(p.inscricao) === cleanInsc(sanitized.inscricao))
+    );
+    if (existingProf) {
+      sanitized.id = existingProf.id;
+    }
+    const oldProf = existingProf;
+
+    const profFields = [
+      'nome', 'situacao', 'motivoSituacao', 'tipoAssociado', 'cpf', 'rg', 
+      'estadoCivil', 'telefone', 'celular', 'emailPessoal', 'emailComercial', 
+      'endereco', 'bairro', 'cidade', 'uf', 'cep', 'statusFinanceiro', 
+      'carteiraProfissional', 'bloqueado', 'motivoBloqueio', 
+      'transferidoOutroRegional', 'nrInscricaoRegionalOrigem', 'ufRegionalOrigem', 
+      'anuidRefAnoInscricaoEmDia'
+    ];
+    this.compareAndLogChanges(sanitized.id, 'PROFISSIONAL', oldProf, sanitized, profFields);
+
+    const idx = this.customProfissionais.findIndex(p => 
+      (sanitized.id && p.id === sanitized.id) ||
+      (cleanCpf(sanitized.cpf) && cleanCpf(p.cpf) === cleanCpf(sanitized.cpf)) ||
+      (cleanInsc(sanitized.inscricao) && cleanInsc(p.inscricao) === cleanInsc(sanitized.inscricao))
+    );
     if (idx >= 0) {
       this.customProfissionais[idx] = sanitized;
     } else {
@@ -2431,6 +2571,31 @@ class StorageService {
             e_votante: sanitized.eVotante ?? true,
             e_militar: sanitized.eMilitar ?? false,
             estado_civil: sanitized.estadoCivil || null,
+            transferido_outro_regional: sanitized.transferidoOutroRegional ?? false,
+            nr_inscricao_regional_origem: sanitized.nrInscricaoRegionalOrigem || null,
+            anuid_ref_ano_insc_em_dia: sanitized.anuidRefAnoInscricaoEmDia ?? false,
+            uf_regional_origem: sanitized.ufRegionalOrigem || null,
+            dt_vencto_militar: sanitized.dtVenctoMilitar || null,
+            data_mandato_seguranca: sanitized.dataMandatoSeguranca || null,
+            orgao_mandato_seguranca: sanitized.orgaoMandatoSeguranca || null,
+            observacao_mandato: sanitized.observacaoMandato || null,
+            forma_envio_boleto_parcelamento: sanitized.formaEnvioBoletoParcelamento || null,
+            grupo_sanguineo: sanitized.grupoSanguineo || null,
+            fator_rh: sanitized.fatorRH || null,
+            doador_orgaos_tecidos: sanitized.doadorOrgaosTecidos ?? false,
+            participou_curso_qualifarma: sanitized.participouCursoQualifarma || null,
+            rg_data_expedicao: sanitized.rgDataExpedicao || null,
+            rg_data_vencimento: sanitized.rgDataVencimento || null,
+            titulo_eleitoral: sanitized.tituloEleitoral || null,
+            titulo_zona: sanitized.tituloZona || null,
+            titulo_secao: sanitized.tituloSecao || null,
+            titulo_uf_exp: sanitized.tituloUfExp || null,
+            reservista: sanitized.reservista || null,
+            cart_trabalho: sanitized.cartTrabalho || null,
+            cart_trabalho_serie: sanitized.cartTrabalhoSerie || null,
+            cart_trabalho_uf_exp: sanitized.cartTrabalhoUfExp || null,
+            cart_trabalho_data_exp: sanitized.cartTrabalhoDataExp || null,
+            nome_social: sanitized.nomeSocial || null,
             tipo_associado: sanitized.tipoAssociado,
             habilitacoes: sanitized.habilitacoes || [],
             data_inscricao: sanitized.dataInscricao || '',
@@ -2457,10 +2622,26 @@ class StorageService {
             data_desbloqueio_prevista: sanitized.dataDesbloqueioPrevista || null,
             usuario_bloqueio: sanitized.usuarioBloqueio || null,
             observacoes_bloqueio: sanitized.observacoesBloqueio || null
-          }, { onConflict: 'id' })
+          }, { onConflict: 'id' }).then(({ error }) => {
+            if (error) {
+              console.warn('Supabase professional upsert failed:', error);
+              this.addSyncError(
+                'PROFISSIONAL',
+                sanitized.nome,
+                `Erro de banco de dados (Código ${error.code}): ${error.message}`,
+                error.details || undefined
+              );
+            }
+          })
         );
       }
-    } catch (e) {}
+    } catch (e: any) {
+      this.addSyncError(
+        'PROFISSIONAL',
+        sanitized.nome,
+        `Erro de LocalStorage: ${e?.message || 'Falha ao salvar localmente'}`
+      );
+    }
 
     // Re-evaluate and update any company where this professional is an RT
     this.empresas.forEach(emp => {
@@ -2650,7 +2831,26 @@ class StorageService {
 
   public saveEmpresa(empresa: Empresa) {
     const sanitized = sanitizeToUpper(empresa, ['id', 'email']);
-    
+    const cleanCnpj = (c?: string) => (c || '').replace(/\D/g, '');
+    const cleanInsc = (i?: string) => (i || '').trim().toUpperCase();
+
+    if (sanitized.cnpj) {
+      const digits = cleanCnpj(sanitized.cnpj);
+      if (digits.length === 14) {
+        sanitized.cnpj = maskCNPJ(digits);
+      }
+    }
+
+    const existingEmp = this.empresas.find(e => 
+      (sanitized.id && e.id === sanitized.id) ||
+      (cleanCnpj(sanitized.cnpj) && cleanCnpj(e.cnpj) === cleanCnpj(sanitized.cnpj)) ||
+      (cleanInsc(sanitized.inscricao) && cleanInsc(e.inscricao) === cleanInsc(sanitized.inscricao))
+    );
+    if (existingEmp) {
+      sanitized.id = existingEmp.id;
+    }
+    const oldEmp = existingEmp;
+
     // Auto-avaliação da condição sanitária/legal de Assistência Farmacêutica
     const avaliacao = this.avaliarRegularidadeAssistencia(sanitized);
     sanitized.condicao = avaliacao.condicao;
@@ -2658,9 +2858,27 @@ class StorageService {
     sanitized.regraAssistenciaAplicada = avaliacao.regraAplicada?.baseLegal || avaliacao.regraAplicada?.descricao || '';
     sanitized.cargaHorariaFuncionamentoSemanal = avaliacao.horasFuncionamentoSemanais;
     sanitized.cargaHorariaAssistenciaSemanal = avaliacao.horasAssistenciaSemanais;
-    sanitized.assistenciaPlena = avaliacao.regraAplicada?.tipoExigencia === 'ASSISTENCIA_PLENA' && avaliacao.condicao === 'Regular';
+    if (empresa.assistenciaPlena !== undefined && empresa.assistenciaPlena !== null) {
+      sanitized.assistenciaPlena = Boolean(empresa.assistenciaPlena);
+    } else {
+      sanitized.assistenciaPlena = avaliacao.regraAplicada?.tipoExigencia === 'ASSISTENCIA_PLENA' && avaliacao.condicao === 'Regular';
+    }
 
-    const idx = this.empresas.findIndex(e => e.id === sanitized.id || e.cnpj === sanitized.cnpj);
+    const empFields = [
+      'razaoSocial', 'nomeFantasia', 'cnpj', 'situacao', 'motivoSituacao', 
+      'tipoEstabelecimento', 'categoria', 'categoriaEmpresa', 'naturezaAtividade', 
+      'tipoEmpresa', 'condicao', 'capitalSocial', 'horarioPlantao', 'horasTolerancia', 
+      'numeroCRT', 'validadeCRT', 'numeroProcesso', 'bloqueado', 'motivoBloqueio',
+      'endereco', 'bairro', 'cidade', 'uf', 'cep', 'telefone', 'email',
+      'assistenciaPlena', 'isentoAnuidade', 'anuidadeReduzida', 'recadastrado', 'isentoTaxaCertificado'
+    ];
+    this.compareAndLogChanges(sanitized.id, 'EMPRESA', oldEmp, sanitized, empFields);
+
+    const idx = this.empresas.findIndex(e => 
+      (sanitized.id && e.id === sanitized.id) ||
+      (cleanCnpj(sanitized.cnpj) && cleanCnpj(e.cnpj) === cleanCnpj(sanitized.cnpj)) ||
+      (cleanInsc(sanitized.inscricao) && cleanInsc(e.inscricao) === cleanInsc(sanitized.inscricao))
+    );
     if (idx >= 0) {
       this.empresas[idx] = sanitized;
     } else {
@@ -2720,16 +2938,38 @@ class StorageService {
             resultado_ultima_fiscalizacao: sanitized.resultadoUltimaFiscalizacao || null,
             socios: sanitized.socios || [],
             responsaveis_tecnicos: sanitized.responsaveisTecnicos || [],
+            horarios_funcionamento: sanitized.horariosFuncionamento || [],
+            horarios_assistencia: sanitized.horariosAssistencia || [],
+            carga_horaria_funcionamento_semanal: sanitized.cargaHorariaFuncionamentoSemanal || 0,
+            carga_horaria_assistencia_semanal: sanitized.cargaHorariaAssistenciaSemanal || 0,
+            justificativa_condicao: sanitized.justificativaCondicao || null,
+            regra_assistencia_aplicada: sanitized.regraAssistenciaAplicada || null,
             bloqueado: sanitized.bloqueado ?? false,
             motivo_bloqueio: sanitized.motivoBloqueio || null,
             data_bloqueio: sanitized.dataBloqueio || null,
             data_desbloqueio_prevista: sanitized.dataDesbloqueioPrevista || null,
             usuario_bloqueio: sanitized.usuarioBloqueio || null,
             observacoes_bloqueio: sanitized.observacoesBloqueio || null
-          }, { onConflict: 'id' })
+          }, { onConflict: 'id' }).then(({ error }) => {
+            if (error) {
+              console.warn('Supabase empresa upsert failed:', error);
+              this.addSyncError(
+                'EMPRESA',
+                sanitized.razaoSocial,
+                `Erro de banco de dados (Código ${error.code}): ${error.message}`,
+                error.details || undefined
+              );
+            }
+          })
         );
       }
-    } catch (e) {}
+    } catch (e: any) {
+      this.addSyncError(
+        'EMPRESA',
+        sanitized.razaoSocial,
+        `Erro de LocalStorage: ${e?.message || 'Falha ao salvar localmente'}`
+      );
+    }
     this.migrateEmpresaDataToCadastrosBasicos();
     this.notify();
   }
@@ -3259,6 +3499,145 @@ class StorageService {
 
   public getMicroservices(): MicrosservicoStatus[] {
     return INITIAL_MICROSERVICES;
+  }
+
+  // ==============================================================================
+  // AUDIT HISTORY METHODS
+  // ==============================================================================
+  public getHistoricoAuditoriaByTarget(targetId: string, targetTipo: 'PROFISSIONAL' | 'EMPRESA'): HistoricoAuditoria[] {
+    return this.historicoAuditoria.filter(a => a.targetId === targetId && a.targetTipo === targetTipo);
+  }
+
+  private registrarAuditoria(
+    targetId: string,
+    targetTipo: 'PROFISSIONAL' | 'EMPRESA',
+    usuario: string,
+    campo: string,
+    valorAnterior: any,
+    valorNovo: any
+  ) {
+    const formattedDate = new Date().toLocaleString('pt-BR');
+    const entry: HistoricoAuditoria = {
+      id: `audit-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+      targetId,
+      targetTipo,
+      usuario: usuario || 'SISTEMA',
+      dataFormatada: formattedDate,
+      campo: campo.toUpperCase(),
+      valorAnterior: valorAnterior !== undefined && valorAnterior !== null ? String(valorAnterior) : '',
+      valorNovo: valorNovo !== undefined && valorNovo !== null ? String(valorNovo) : ''
+    };
+
+    // Salva localmente
+    this.historicoAuditoria.unshift(entry);
+    try {
+      localStorage.setItem(STORAGE_KEYS.HISTORICO_AUDITORIA, JSON.stringify(this.historicoAuditoria));
+    } catch (e) {}
+
+    // Salva no Supabase
+    if (this.isOnline) {
+      runBackgroundSupabase(
+        supabase.from('historico_auditoria').insert({
+          id: entry.id,
+          target_id: entry.targetId,
+          target_tipo: entry.targetTipo,
+          usuario: entry.usuario,
+          data_formatada: entry.dataFormatada,
+          campo: entry.campo,
+          valor_anterior: entry.valorAnterior,
+          valor_novo: entry.valorNovo
+        })
+      );
+    }
+  }
+
+  private compareAndLogChanges(
+    targetId: string,
+    targetTipo: 'PROFISSIONAL' | 'EMPRESA',
+    oldObj: any,
+    newObj: any,
+    fieldsToCompare: string[]
+  ) {
+    const usuario = this.getActiveUser();
+
+    if (!oldObj) {
+      // Registro inicial criado
+      this.registrarAuditoria(targetId, targetTipo, usuario, 'CADASTRO', null, 'REGISTRO INICIAL CRIADO NO SISTEMA');
+      return;
+    }
+
+    fieldsToCompare.forEach(field => {
+      const valOld = oldObj[field];
+      const valNew = newObj[field];
+      
+      const strOld = valOld !== undefined && valOld !== null ? String(valOld).trim() : '';
+      const strNew = valNew !== undefined && valNew !== null ? String(valNew).trim() : '';
+      
+      if (strOld !== strNew) {
+        const friendlyField = this.getFriendlyFieldName(field);
+        this.registrarAuditoria(targetId, targetTipo, usuario, friendlyField, strOld, strNew);
+      }
+    });
+  }
+
+  private getActiveUser(): string {
+    try {
+      const activeRole = localStorage.getItem('siscon_active_role') || 'SISTEMA';
+      return activeRole;
+    } catch (e) {
+      return 'SISTEMA';
+    }
+  }
+
+  private getFriendlyFieldName(field: string): string {
+    const map: Record<string, string> = {
+      nome: 'Nome Completo',
+      inscricao: 'Inscrição',
+      situacao: 'Situação',
+      motivoSituacao: 'Motivo da Situação',
+      tipoAssociado: 'Tipo de Associado',
+      cpf: 'CPF',
+      rg: 'RG',
+      estadoCivil: 'Estado Civil',
+      telefone: 'Telefone',
+      celular: 'Celular',
+      emailPessoal: 'E-mail Pessoal',
+      emailComercial: 'E-mail Comercial',
+      endereco: 'Endereço',
+      bairro: 'Bairro',
+      cidade: 'Cidade',
+      uf: 'U.F.',
+      cep: 'CEP',
+      complemento: 'Complemento',
+      statusFinanceiro: 'Status Financeiro',
+      carteiraProfissional: 'Carteira Profissional',
+      fotoUrl: 'Foto de Perfil',
+      observacoes: 'Observações',
+      bloqueado: 'Bloqueado',
+      motivoBloqueio: 'Motivo do Bloqueio',
+      transferidoOutroRegional: 'Transferido Outro Regional',
+      nrInscricaoRegionalOrigem: 'Nº Inscrição Origem',
+      ufRegionalOrigem: 'U.F. Origem',
+      anuidRefAnoInscricaoEmDia: 'Anuidade Regional Origem em Dia',
+      
+      // Campos de empresa
+      razaoSocial: 'Razão Social',
+      nomeFantasia: 'Nome Fantasia',
+      cnpj: 'CNPJ',
+      tipoEstabelecimento: 'Tipo de Estabelecimento',
+      categoria: 'Categoria',
+      categoriaEmpresa: 'Categoria da Empresa',
+      naturezaAtividade: 'Natureza da Atividade',
+      tipoEmpresa: 'Tipo de Empresa',
+      condicao: 'Condição Sanitária',
+      capitalSocial: 'Capital Social',
+      horarioPlantao: 'Horário de Plantão',
+      horasTolerancia: 'Horas de Tolerância',
+      numeroCRT: 'Número do CRT',
+      validadeCRT: 'Validade do CRT',
+      numeroProcesso: 'Número do Processo'
+    };
+    return map[field] || field;
   }
 }
 

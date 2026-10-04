@@ -122,6 +122,31 @@ CREATE TABLE IF NOT EXISTS public.profissionais (
     e_votante BOOLEAN DEFAULT TRUE,
     e_militar BOOLEAN DEFAULT FALSE,
     estado_civil VARCHAR(50),
+    transferido_outro_regional BOOLEAN DEFAULT FALSE,
+    nr_inscricao_regional_origem VARCHAR(50),
+    anuid_ref_ano_insc_em_dia BOOLEAN DEFAULT FALSE,
+    uf_regional_origem VARCHAR(2),
+    dt_vencto_militar VARCHAR(20),
+    data_mandato_seguranca VARCHAR(20),
+    orgao_mandato_seguranca VARCHAR(150),
+    observacao_mandato TEXT,
+    forma_envio_boleto_parcelamento VARCHAR(100),
+    grupo_sanguineo VARCHAR(5),
+    fator_rh VARCHAR(5),
+    doador_orgaos_tecidos BOOLEAN DEFAULT FALSE,
+    participou_curso_qualifarma VARCHAR(100),
+    rg_data_expedicao VARCHAR(20),
+    rg_data_vencimento VARCHAR(20),
+    titulo_eleitoral VARCHAR(50),
+    titulo_zona VARCHAR(20),
+    titulo_secao VARCHAR(20),
+    titulo_uf_exp VARCHAR(2),
+    reservista VARCHAR(50),
+    cart_trabalho VARCHAR(50),
+    cart_trabalho_serie VARCHAR(30),
+    cart_trabalho_uf_exp VARCHAR(2),
+    cart_trabalho_data_exp VARCHAR(20),
+    nome_social VARCHAR(200),
     bloqueado BOOLEAN DEFAULT FALSE,
     motivo_bloqueio VARCHAR(150),
     data_bloqueio VARCHAR(20),
@@ -190,6 +215,12 @@ CREATE TABLE IF NOT EXISTS public.empresas (
     resultado_ultima_fiscalizacao VARCHAR(50),
     socios JSONB DEFAULT '[]'::jsonb,
     responsaveis_tecnicos JSONB DEFAULT '[]'::jsonb,
+    horarios_funcionamento JSONB DEFAULT '[]'::jsonb,
+    horarios_assistencia JSONB DEFAULT '[]'::jsonb,
+    carga_horaria_funcionamento_semanal INTEGER DEFAULT 0,
+    carga_horaria_assistencia_semanal INTEGER DEFAULT 0,
+    justificativa_condicao TEXT,
+    regra_assistencia_aplicada VARCHAR(150),
     bloqueado BOOLEAN DEFAULT FALSE,
     motivo_bloqueio VARCHAR(150),
     data_bloqueio VARCHAR(20),
@@ -453,15 +484,43 @@ CREATE POLICY "Public access respostas_formularios" ON public.respostas_formular
 -- ==============================================================================
 
 -- Colunas adicionais de Profissionais (PF):
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS inscricao_anterior VARCHAR(50);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS inscricao_definitiva_anterior VARCHAR(50);
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS dt_inicio_insc_provisoria VARCHAR(20);
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS dt_venc_insc_provisoria VARCHAR(20);
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS data_solicitacao_baixa VARCHAR(20);
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS data_reabilitacao VARCHAR(20);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS data_conversao_definitiva VARCHAR(20);
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS anuidade_reduzida BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS isento_anuidade BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS e_votante BOOLEAN DEFAULT TRUE;
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS e_militar BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS estado_civil VARCHAR(50);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS transferido_outro_regional BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS nr_inscricao_regional_origem VARCHAR(50);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS anuid_ref_ano_insc_em_dia BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS uf_regional_origem VARCHAR(2);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS dt_vencto_militar VARCHAR(20);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS data_mandato_seguranca VARCHAR(20);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS orgao_mandato_seguranca VARCHAR(150);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS observacao_mandato TEXT;
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS forma_envio_boleto_parcelamento VARCHAR(100);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS grupo_sanguineo VARCHAR(5);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS fator_rh VARCHAR(5);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS doador_orgaos_tecidos BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS participou_curso_qualifarma VARCHAR(100);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS rg_data_expedicao VARCHAR(20);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS rg_data_vencimento VARCHAR(20);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS titulo_eleitoral VARCHAR(50);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS titulo_zona VARCHAR(20);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS titulo_secao VARCHAR(20);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS titulo_uf_exp VARCHAR(2);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS reservista VARCHAR(50);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS cart_trabalho VARCHAR(50);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS cart_trabalho_serie VARCHAR(30);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS cart_trabalho_uf_exp VARCHAR(2);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS cart_trabalho_data_exp VARCHAR(20);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS nome_social VARCHAR(200);
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS bloqueado BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS motivo_bloqueio VARCHAR(150);
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS data_bloqueio VARCHAR(20);
@@ -470,6 +529,11 @@ ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS usuario_bloqueio VARCH
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS observacoes_bloqueio TEXT;
 
 -- Colunas adicionais de Empresas (PJ):
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS inscricao_anterior VARCHAR(50);
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS inscricao_definitiva_anterior VARCHAR(50);
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS dt_inicio_insc_provisoria VARCHAR(20);
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS dt_venc_insc_provisoria VARCHAR(20);
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS data_conversao_definitiva VARCHAR(20);
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS bloqueado BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS motivo_bloqueio VARCHAR(150);
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS data_bloqueio VARCHAR(20);
@@ -484,4 +548,32 @@ ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS data_recadastramento VARCHA
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS isento_taxa_certificado BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS horario_plantao VARCHAR(50);
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS horas_tolerancia VARCHAR(20);
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS horarios_funcionamento JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS horarios_assistencia JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS carga_horaria_funcionamento_semanal INTEGER DEFAULT 0;
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS carga_horaria_assistencia_semanal INTEGER DEFAULT 0;
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS justificativa_condicao TEXT;
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS regra_assistencia_aplicada VARCHAR(150);
+
+-- ==============================================================================
+-- 11. TABELA: HISTORICO_AUDITORIA
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.historico_auditoria (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    target_id TEXT NOT NULL,
+    target_tipo VARCHAR(50) NOT NULL,
+    usuario VARCHAR(150),
+    data_formatada VARCHAR(50),
+    campo VARCHAR(150),
+    valor_anterior TEXT,
+    valor_novo TEXT,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_historico_auditoria_target ON public.historico_auditoria(target_id, target_tipo);
+
+ALTER TABLE public.historico_auditoria ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public access historico_auditoria" ON public.historico_auditoria;
+CREATE POLICY "Public access historico_auditoria" ON public.historico_auditoria FOR ALL USING (true) WITH CHECK (true);
+
 

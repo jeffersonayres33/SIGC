@@ -126,7 +126,7 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
 
   // Visualizar Cadastro Modal State
   const [selectedProfissional, setSelectedProfissional] = useState<Profissional | null>(null);
-  const [viewDetailsTab, setViewDetailsTab] = useState<'dados_gerais' | 'protocolos' | 'empresas' | 'financeiro'>('dados_gerais');
+  const [viewDetailsTab, setViewDetailsTab] = useState<'dados_gerais' | 'protocolos' | 'empresas' | 'financeiro' | 'historico_alteracoes'>('dados_gerais');
 
   // Protocol Operations Modal State within Visualizar Cadastro
   const [isNewProtocolModalOpen, setIsNewProtocolModalOpen] = useState(false);
@@ -149,7 +149,7 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
 
   // Cadastro / Edição Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalTab, setModalTab] = useState<'dados_pessoais' | 'filiacao_formacao' | 'endereco_contato' | 'empresas_rt' | 'posicao_financeira' | 'bloqueio'>('dados_pessoais');
+  const [modalTab, setModalTab] = useState<'dados_pessoais' | 'filiacao_formacao' | 'endereco_contato' | 'empresas_rt' | 'posicao_financeira' | 'bloqueio' | 'historico'>('dados_pessoais');
   const [editingProfissional, setEditingProfissional] = useState<Partial<Profissional> | null>(null);
   const [profToDelete, setProfToDelete] = useState<Profissional | null>(null);
   const [profToConvertDefinitivo, setProfToConvertDefinitivo] = useState<Profissional | null>(null);
@@ -184,21 +184,34 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
         novaInscricao: novaInscricaoProvisoria
       });
     } else if (wasProvisorio && !willBeProvisorio) {
-      // Voltando de Provisório para Definitivo (altera somente prefixo e sufixo mantendo o número atual)
       const inscricaoAtual = editingProfissional.inscricao || '';
-      const novaInscricaoDefinitiva = storageService.alternarInscricaoParaDefinitivo(inscricaoAtual, 'PF');
-      const numeroAtual = storageService.extrairNumeroInscricao(inscricaoAtual);
+      const foiDef = storageService.foiDefinitivoEmAlgumMomento(editingProfissional.id || '', 'PROFISSIONAL');
+      let novaInscricaoDefinitiva = '';
 
-      setEditingProfissional(prev => prev ? ({
-        ...prev,
-        situacao: novaSituacao as any,
-        inscricao: novaInscricaoDefinitiva
-      }) : null);
-
-      toastService.info(
-        'Inscrição Revertida para Definitiva',
-        `A numeração cronológica (${numeroAtual}) foi mantida e o prefixo/sufixo definitivo aplicado com sucesso.`
-      );
+      if (foiDef) {
+        novaInscricaoDefinitiva = storageService.alternarInscricaoParaDefinitivo(inscricaoAtual, 'PF');
+        const numeroAtual = storageService.extrairNumeroInscricao(inscricaoAtual);
+        setEditingProfissional(prev => prev ? ({
+          ...prev,
+          situacao: novaSituacao as any,
+          inscricao: novaInscricaoDefinitiva
+        }) : null);
+        toastService.info(
+          'Inscrição Revertida para Definitiva',
+          `A numeração cronológica original (${numeroAtual}) foi mantida e o prefixo/sufixo definitivo aplicado com sucesso.`
+        );
+      } else {
+        novaInscricaoDefinitiva = storageService.getNextInscricaoProfissional(true);
+        setEditingProfissional(prev => prev ? ({
+          ...prev,
+          situacao: novaSituacao as any,
+          inscricao: novaInscricaoDefinitiva
+        }) : null);
+        toastService.info(
+          'Inscrição Definitiva Gerada',
+          `Nova numeração sequencial definitiva gerada (${novaInscricaoDefinitiva}) seguindo a continuidade cronológica.`
+        );
+      }
     } else {
       setEditingProfissional(prev => prev ? ({
         ...prev,
@@ -652,6 +665,18 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
       return;
     }
 
+    const cleanCpfDigits = (editingProfissional.cpf || '').replace(/\D/g, '');
+    const duplicateProf = storageService.getProfissionais().find(p => 
+      p.id !== editingProfissional.id && (p.cpf || '').replace(/\D/g, '') === cleanCpfDigits
+    );
+    if (duplicateProf) {
+      toastService.warning(
+        'CPF Já Cadastrado',
+        `Já existe um profissional cadastrado com este CPF (${maskCPF(cleanCpfDigits)}): ${duplicateProf.nome} (Inscrição: ${duplicateProf.inscricao}).`
+      );
+      return;
+    }
+
     if (!editingProfissional.fotoUrl?.trim()) {
       toastService.warning('Foto Obrigatória', 'Por favor faça o upload da foto do profissional para prosseguir.');
       return;
@@ -667,7 +692,7 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
       id: editingProfissional.id || `prof-custom-${Date.now()}`,
       inscricao: finalInscricao,
       nome: editingProfissional.nome.trim(),
-      cpf: editingProfissional.cpf.replace(/\D/g, ''),
+      cpf: maskCPF(editingProfissional.cpf),
       rg: editingProfissional.rg || '',
       orgaoExpeditor: editingProfissional.orgaoExpeditor || 'SSP/AM',
       dataNascimento: editingProfissional.dataNascimento || '',
@@ -1544,7 +1569,7 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end space-x-1.5">
-                        {(prof.situacao === 'Provisório' || prof.situacao === 'Provisoria' || prof.inscricao?.includes('PROV') || Boolean(prof.dtVencInscProvisoria)) && (
+                        {storageService.isSituacaoProvisoria(prof.situacao) && (
                           <button
                             onClick={() => setProfToConvertDefinitivo(prof)}
                             title="EFETIVAR INSCRIÇÃO DEFINITIVA (Sequencial Cronológico Definitivo)"
@@ -1754,6 +1779,19 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                   {posicaoFin.valorTotalAberto > 0 ? `R$ ${posicaoFin.valorTotalAberto.toFixed(2)}` : 'REGULAR'}
                 </span>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setViewDetailsTab('historico_alteracoes')}
+                className={`flex items-center space-x-1.5 px-4 py-2.5 rounded-xl font-bold text-xs uppercase transition-all cursor-pointer shrink-0 ${
+                  viewDetailsTab === 'historico_alteracoes'
+                    ? 'bg-purple-600 text-white shadow-md shadow-purple-500/25'
+                    : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Clock className="w-4 h-4" />
+                <span>HISTÓRICO</span>
+              </button>
             </div>
 
             {/* CONTEÚDO DA ABA 1: DADOS GERAIS */}
@@ -1778,20 +1816,85 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                     <div><span className="text-slate-400 block text-[10px]">NOME DO PAI:</span> <span className="text-slate-800">{selectedProfissional.nomePai || 'NÃO INFORMADO'}</span></div>
                     <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-200/60">
                       <div><span className="text-slate-400 block text-[10px]">TELEFONE:</span> <span className="text-slate-800 font-mono">{selectedProfissional.telefone || '-'}</span></div>
-                      <div><span className="text-slate-400 block text-[10px]">E-MAIL:</span> <span className="text-slate-800 lowercase font-mono truncate block">{selectedProfissional.emailPessoal || '-'}</span></div>
+                      <div><span className="text-slate-400 block text-[10px]">CELULAR:</span> <span className="text-slate-800 font-mono">{selectedProfissional.celular || selectedProfissional.telefone || '-'}</span></div>
                     </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                      <div><span className="text-slate-400 block text-[10px]">E-MAIL PESSOAL:</span> <span className="text-slate-800 lowercase font-mono truncate block">{selectedProfissional.emailPessoal || '-'}</span></div>
+                      <div><span className="text-slate-400 block text-[10px]">E-MAIL COMERCIAL:</span> <span className="text-slate-800 lowercase font-mono truncate block">{selectedProfissional.emailComercial || '-'}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Dados Pessoais Complementares, Documentos & Parâmetros */}
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2 uppercase text-xs">
+                    <div className="font-bold text-purple-900 uppercase text-xs pb-2 border-b border-slate-200 flex items-center space-x-1.5">
+                      <Hash className="w-4 h-4 text-purple-600" />
+                      <span>DOCUMENTAÇÃO ADICIONAL & PARÂMETROS</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div><span className="text-slate-400 block text-[10px]">SEXO:</span> <strong className="text-slate-800">{selectedProfissional.sexo === 'M' ? 'MASCULINO' : selectedProfissional.sexo === 'F' ? 'FEMININO' : selectedProfissional.sexo || '-'}</strong></div>
+                      <div><span className="text-slate-400 block text-[10px]">ESTADO CIVIL:</span> <strong className="text-slate-800">{selectedProfissional.estadoCivil || 'SOLTEIRO'}</strong></div>
+                    </div>
+                    {selectedProfissional.nomeSocial && (
+                      <div><span className="text-slate-400 block text-[10px]">NOME SOCIAL:</span> <span className="text-slate-800 font-bold">{selectedProfissional.nomeSocial}</span></div>
+                    )}
+                    <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-200/60">
+                      <div><span className="text-slate-400 block text-[10px]">RG EXPEDIÇÃO:</span> <span className="text-slate-800 font-mono text-[10px] block">{selectedProfissional.rgDataExpedicao || '-'}</span></div>
+                      <div><span className="text-slate-400 block text-[10px]">RG VENCIMENTO:</span> <span className="text-slate-800 font-mono text-[10px] block">{selectedProfissional.rgDataVencimento || '-'}</span></div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-xs pt-1 border-t border-slate-200/60">
+                      <div><span className="text-slate-400 block text-[10px]">GRUPO SANGUÍNEO:</span> <span className="text-slate-800 font-bold">{selectedProfissional.grupoSanguineo || '-'}</span></div>
+                      <div><span className="text-slate-400 block text-[10px]">FATOR RH:</span> <span className="text-slate-800 font-bold">{selectedProfissional.fatorRH || '-'}</span></div>
+                      <div><span className="text-slate-400 block text-[10px]">DOADOR ÓRGÃOS:</span> <span className={selectedProfissional.doadorOrgaosTecidos ? 'text-emerald-700 font-bold' : 'text-slate-500 font-bold'}>{selectedProfissional.doadorOrgaosTecidos ? 'SIM' : 'NÃO'}</span></div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-200/60">
+                      <div><span className="text-slate-400 block text-[10px]">TÍTULO ELEITORAL:</span> <span className="text-slate-800 font-mono text-[10px] truncate block">{selectedProfissional.tituloEleitoral || '-'} (ZONA: {selectedProfissional.tituloZona || '-'} SEÇÃO: {selectedProfissional.tituloSecao || '-'} UF: {selectedProfissional.tituloUfExp || '-'})</span></div>
+                      <div><span className="text-slate-400 block text-[10px]">RESERVISTA:</span> <span className="text-slate-800 font-mono text-[10px] truncate block">{selectedProfissional.reservista || '-'}</span></div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-1">
+                      <div><span className="text-slate-400 block text-[10px]">CARTEIRA DE TRABALHO:</span> <span className="text-slate-800 font-mono text-[10px] block truncate">{selectedProfissional.cartTrabalho || '-'} (SÉRIE: {selectedProfissional.cartTrabalhoSerie || '-'} UF: {selectedProfissional.cartTrabalhoUfExp || '-'} DATA EXP: {selectedProfissional.cartTrabalhoDataExp || '-'})</span></div>
+                      <div><span className="text-slate-400 block text-[10px]">CURSO QUALIFARMA:</span> <span className="text-slate-800 font-bold">{selectedProfissional.participouCursoQualifarma || 'NÃO'}</span></div>
+                    </div>
+                    <div className="pt-2 border-t border-slate-200/60 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-bold text-slate-600">
+                      <div className="p-1 rounded bg-slate-100 flex flex-col justify-center">
+                        <span className="text-[8px] text-slate-400">VOTANTE?</span>
+                        <span className={selectedProfissional.eVotante !== false ? 'text-emerald-700' : 'text-rose-700'}>{selectedProfissional.eVotante !== false ? 'SIM' : 'NÃO'}</span>
+                      </div>
+                      <div className="p-1 rounded bg-slate-100 flex flex-col justify-center">
+                        <span className="text-[8px] text-slate-400">MILITAR?</span>
+                        <span className={selectedProfissional.eMilitar ? 'text-blue-700' : 'text-slate-500'}>{selectedProfissional.eMilitar ? `SIM (${selectedProfissional.dtVenctoMilitar || '-'})` : 'NÃO'}</span>
+                      </div>
+                      <div className="p-1 rounded bg-slate-100 flex flex-col justify-center">
+                        <span className="text-[8px] text-slate-400">ANUID. REDUZIDA?</span>
+                        <span className={selectedProfissional.anuidadeReduzida ? 'text-indigo-700' : 'text-slate-500'}>{selectedProfissional.anuidadeReduzida ? 'SIM' : 'NÃO'}</span>
+                      </div>
+                      <div className="p-1 rounded bg-slate-100 flex flex-col justify-center">
+                        <span className="text-[8px] text-slate-400">ISENTO ANUIDADE?</span>
+                        <span className={selectedProfissional.isentoAnuidade ? 'text-purple-700' : 'text-slate-500'}>{selectedProfissional.isentoAnuidade ? 'SIM' : 'NÃO'}</span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-200/60">
+                      <div><span className="text-slate-400 block text-[10px]">RECADASTRAMENTO:</span> <span className="text-slate-800 font-bold">{selectedProfissional.recadastrado ? `SIM (${selectedProfissional.dataRecadastramento || '-'})` : 'NÃO'}</span></div>
+                      <div><span className="text-slate-400 block text-[10px]">FORMA ENVIO BOLETO:</span> <span className="text-slate-800 font-bold">{selectedProfissional.formaEnvioBoletoParcelamento || 'NÃO CONFIGURADO'}</span></div>
+                    </div>
+                    {selectedProfissional.dataMandatoSeguranca && (
+                      <div className="p-2 bg-yellow-50 border border-yellow-200 rounded text-[10px] text-yellow-900 mt-1 font-bold">
+                        ⚠️ MANDATO DE SEGURANÇA ATIVO DESDE {selectedProfissional.dataMandatoSeguranca} ({selectedProfissional.orgaoMandatoSeguranca || 'NÃO ESPECIFICADO'})
+                        {selectedProfissional.observacaoMandato && <span className="block font-medium mt-0.5 lowercase font-mono">{selectedProfissional.observacaoMandato}</span>}
+                      </div>
+                    )}
                   </div>
 
                   {/* Formação & Registro */}
                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2 uppercase">
                     <div className="font-bold text-purple-900 uppercase text-xs pb-2 border-b border-slate-200 flex items-center space-x-1.5">
                       <GraduationCap className="w-4 h-4 text-purple-600" />
-                      <span>FORMAÇÃO & HABILITAÇÃO</span>
+                      <span>FORMAÇÃO, REGISTRO & INSCRIÇÃO</span>
                     </div>
                     <div><span className="text-slate-400 block text-[10px]">FACULDADE / INSTITUIÇÃO:</span> <strong className="text-slate-800">{selectedProfissional.faculdade || '-'}</strong></div>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="grid grid-cols-3 gap-2 text-xs">
                       <div><span className="text-slate-400 block text-[10px]">COLAÇÃO DE GRAU:</span> <span className="text-slate-800 font-mono">{selectedProfissional.dataColacaoGrau || '-'}</span></div>
                       <div><span className="text-slate-400 block text-[10px]">EXPEDIÇÃO DIPLOMA:</span> <span className="text-slate-800 font-mono">{selectedProfissional.dataExpDiploma || '-'}</span></div>
+                      <div><span className="text-slate-400 block text-[10px]">DATA INSCRIÇÃO:</span> <span className="text-slate-800 font-mono font-bold">{selectedProfissional.dataInscricao || '-'}</span></div>
                     </div>
                     <div><span className="text-slate-400 block text-[10px]">CARTEIRA PROFISSIONAL (CFF):</span> <span className="text-slate-800 font-mono font-bold">{selectedProfissional.carteiraProfissional || '-'}</span></div>
                     <div>
@@ -1810,6 +1913,19 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                     </div>
                   </div>
                 </div>
+
+                {/* Observações Gerais */}
+                {selectedProfissional.observacoes && (
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-1.5 uppercase text-xs">
+                    <div className="font-bold text-purple-900 uppercase text-xs pb-1 border-b border-slate-200 flex items-center space-x-1.5">
+                      <FileText className="w-4 h-4 text-purple-600" />
+                      <span>OBSERVAÇÕES GERAIS</span>
+                    </div>
+                    <p className="text-slate-700 normal-case font-medium leading-relaxed whitespace-pre-wrap">
+                      {selectedProfissional.observacoes}
+                    </p>
+                  </div>
+                )}
 
                 {/* Endereço Residencial */}
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2 uppercase text-xs">
@@ -2133,6 +2249,62 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                             </button>
                           )}
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* CONTEÚDO DA ABA 5: HISTÓRICO DE AUDITORIA */}
+            {viewDetailsTab === 'historico_alteracoes' && (
+              <div className="space-y-4">
+                <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <span className="font-bold text-slate-900 uppercase text-xs flex items-center space-x-1.5">
+                    <Clock className="w-4 h-4 text-purple-600" />
+                    <span>Registro Completo de Auditoria de Dados</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500 font-mono mt-0.5 block">
+                    HISTÓRICO COMPLETO DE ALTERAÇÕES REALIZADAS PELO SISTEMA E SEUS OPERADORES
+                  </span>
+                </div>
+
+                {storageService.getHistoricoAuditoriaByTarget(selectedProfissional.id, 'PROFISSIONAL').length === 0 ? (
+                  <div className="p-12 text-center text-slate-400 bg-white border border-slate-200 rounded-2xl border-dashed">
+                    <Clock className="w-10 h-10 mx-auto text-slate-300 opacity-60 mb-2.5" />
+                    <span className="font-bold uppercase text-xs block text-slate-700">Sem alterações registradas</span>
+                    <p className="text-[10px] text-slate-500 mt-1 uppercase">ESTE CADASTRO NÃO POSSUI ATUALIZAÇÕES OU O HISTÓRICO DE AUDITORIA ESTÁ LIMPO.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+                    {storageService.getHistoricoAuditoriaByTarget(selectedProfissional.id, 'PROFISSIONAL').map((audit) => (
+                      <div key={audit.id} className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-2 relative shadow-2xs hover:border-purple-300 transition-colors">
+                        <div className="flex flex-wrap items-center justify-between gap-1.5 text-[10px]">
+                          <span className="font-extrabold uppercase bg-purple-100 text-purple-800 px-2 py-0.5 rounded-md border border-purple-200">
+                            CAMPO: {audit.campo}
+                          </span>
+                          <div className="flex items-center space-x-2 text-slate-400 font-bold font-mono">
+                            <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded uppercase">OPERADOR: {audit.usuario}</span>
+                            <span>•</span>
+                            <span>{audit.dataFormatada}</span>
+                          </div>
+                        </div>
+                        {audit.campo === 'CADASTRO' ? (
+                          <div className="p-2.5 bg-purple-50/50 border border-purple-100 rounded-lg text-xs font-semibold text-purple-900 uppercase">
+                            {audit.valorNovo}
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs uppercase font-medium">
+                            <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-lg text-slate-600">
+                              <span className="text-[9px] text-slate-400 block font-bold">VALOR ANTERIOR:</span>
+                              <span className="font-mono mt-0.5 block truncate max-w-full text-ellipsis overflow-hidden">{audit.valorAnterior || <em className="text-slate-400 text-[10px]">VAZIO</em>}</span>
+                            </div>
+                            <div className="p-2.5 bg-emerald-50/40 border border-emerald-100 rounded-lg text-emerald-800">
+                              <span className="text-[9px] text-emerald-400 block font-bold">VALOR NOVO:</span>
+                              <span className="font-mono mt-0.5 block font-bold truncate max-w-full text-ellipsis overflow-hidden">{audit.valorNovo || <em className="text-emerald-400 text-[10px]">VAZIO</em>}</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -2587,7 +2759,7 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                 )}
               </div>
             ) : (
-              (storageService.isSituacaoProvisoria(editingProfissional.situacao) || editingProfissional.inscricao?.includes('PROV')) && (
+              storageService.isSituacaoProvisoria(editingProfissional.situacao) && (
                 <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div className="flex items-start sm:items-center space-x-2.5">
                     <div className="w-7 h-7 rounded-lg bg-amber-600 text-white flex items-center justify-center font-mono text-xs shrink-0">
@@ -2679,6 +2851,16 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                     BLOQUEADO
                   </span>
                 )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalTab('historico')}
+                className={`px-3 py-2 rounded-lg font-bold text-[11px] uppercase transition-all shrink-0 flex items-center space-x-1.5 cursor-pointer ${
+                  modalTab === 'historico' ? 'bg-purple-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <History className="w-3.5 h-3.5" />
+                <span>7. Histórico</span>
               </button>
             </div>
 
@@ -2780,6 +2962,73 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                   </div>
                 </div>
               )}
+
+              {/* ABA HISTÓRICO DE ALTERAÇÕES */}
+              {modalTab === 'historico' && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div className="flex items-center space-x-2 text-slate-800 font-bold uppercase text-xs mb-1">
+                      <History className="w-4 h-4 text-purple-600" />
+                      <span>Histórico de Alterações Cadastrais (Trilha de Auditoria)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 uppercase font-semibold leading-relaxed">
+                      Todas as alterações feitas nos campos deste profissional são registradas automaticamente na trilha de auditoria do conselho, identificando o usuário responsável, data/hora e valores antes/depois da alteração.
+                    </p>
+                  </div>
+
+                  <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[400px] overflow-y-auto bg-white shadow-xs">
+                    {!editingProfissional.id ? (
+                      <div className="p-8 text-center text-slate-500 text-xs">
+                        <History className="w-8 h-8 mx-auto text-slate-300 mb-2 opacity-50 animate-pulse" />
+                        <span className="text-xs uppercase font-extrabold block">Novo Cadastro</span>
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold">O histórico será gerado após salvar o profissional pela primeira vez.</span>
+                      </div>
+                    ) : storageService.getHistoricoAuditoriaByTarget(editingProfissional.id, 'PROFISSIONAL').length === 0 ? (
+                      <div className="p-8 text-center text-slate-500 text-xs">
+                        <History className="w-8 h-8 mx-auto text-slate-300 mb-2 opacity-50" />
+                        <span className="text-xs uppercase font-extrabold block">Sem Alterações</span>
+                        <span className="text-[10px] text-slate-400 uppercase font-semibold">Nenhuma alteração cadastral foi registrada para este profissional até o momento.</span>
+                      </div>
+                    ) : (
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 border-b border-slate-200 text-[10px] text-slate-700 font-extrabold uppercase">
+                            <th className="px-3.5 py-2.5">Data/Hora</th>
+                            <th className="px-3.5 py-2.5">Usuário</th>
+                            <th className="px-3.5 py-2.5">Campo Alterado</th>
+                            <th className="px-3.5 py-2.5">Valor Anterior</th>
+                            <th className="px-3.5 py-2.5">Novo Valor</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {storageService.getHistoricoAuditoriaByTarget(editingProfissional.id, 'PROFISSIONAL').map((log) => (
+                            <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                              <td className="px-3.5 py-3 font-mono font-bold text-slate-600 shrink-0 whitespace-nowrap">
+                                {log.dataFormatada}
+                              </td>
+                              <td className="px-3.5 py-3 whitespace-nowrap">
+                                <span className="px-2 py-0.5 bg-purple-50 text-purple-700 font-extrabold uppercase rounded-md text-[9px] border border-purple-100">
+                                  {log.usuario || 'SISTEMA'}
+                                </span>
+                              </td>
+                              <td className="px-3.5 py-3 font-semibold text-slate-700 uppercase">
+                                {log.campo}
+                              </td>
+                              <td className="px-3.5 py-3 text-red-600 line-through max-w-[150px] truncate" title={log.valorAnterior || ''}>
+                                {log.valorAnterior || '-'}
+                              </td>
+                              <td className="px-3.5 py-3 text-emerald-700 font-semibold max-w-[150px] truncate" title={log.valorNovo || ''}>
+                                {log.valorNovo || '-'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* ABA 1: DADOS PESSOAIS */}
               {modalTab === 'dados_pessoais' && (
                 <div className="space-y-3.5">
@@ -3146,12 +3395,12 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                       <div>
                         <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Estado Civil</label>
                         <select
-                          value={editingProfissional.estadoCivil || 'Solteiro'}
-                          onChange={(e) => setEditingProfissional(prev => ({ ...prev, estadoCivil: e.target.value }))}
+                          value={(editingProfissional.estadoCivil || 'SOLTEIRO').toUpperCase()}
+                          onChange={(e) => setEditingProfissional(prev => ({ ...prev, estadoCivil: e.target.value.toUpperCase() }))}
                           className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 uppercase font-semibold"
                         >
                           {['Solteiro', 'Casado', 'Viúvo', 'Desquitado', 'Divorciado', 'Outros'].map(ec => (
-                            <option key={ec} value={ec}>{ec.toUpperCase()}</option>
+                            <option key={ec} value={ec.toUpperCase()}>{ec.toUpperCase()}</option>
                           ))}
                         </select>
                       </div>

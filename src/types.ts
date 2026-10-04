@@ -524,3 +524,15 @@ export interface MicrosservicoStatus {
   tecnologias?: string[];
   [key: string]: any;
 }
+
+export interface HistoricoAuditoria {
+  id: string;
+  targetId: string;
+  targetTipo: 'PROFISSIONAL' | 'EMPRESA';
+  usuario: string;
+  dataAlteracao?: string;
+  dataFormatada: string;
+  campo: string;
+  valorAnterior: string | null;
+  valorNovo: string | null;
+}
