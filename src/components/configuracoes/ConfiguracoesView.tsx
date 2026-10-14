@@ -36,6 +36,7 @@ import { toastService } from '../../services/toastService';
 import { SupabaseManagerModal } from '../common/SupabaseManagerModal';
 import { AssistenciaFarmaceuticaConfig } from './AssistenciaFarmaceuticaConfig';
 import { ImpedimentosArtConfig } from './ImpedimentosArtConfig';
+import { BackupRestoreConfig } from './BackupRestoreConfig';
 import { 
   maskCNPJ, 
   validateCNPJ, 
@@ -46,8 +47,14 @@ import {
   formatInscricaoCompleta 
 } from '../../utils/documentUtils';
 
-export const ConfiguracoesView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'geral' | 'assistencia' | 'impedimentos_art'>('geral');
+export type ConfigTab = 'geral' | 'assistencia' | 'impedimentos_art' | 'backup_restore';
+
+interface ConfiguracoesViewProps {
+  initialTab?: ConfigTab;
+}
+
+export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab = 'geral' }) => {
+  const [activeTab, setActiveTab] = useState<ConfigTab>(initialTab);
   const [config, setConfig] = useState<CouncilConfig>(storageService.getCouncilConfig());
   const [hasChanges, setHasChanges] = useState(false);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
@@ -272,12 +279,30 @@ export const ConfiguracoesView: React.FC = () => {
             REGRAS DE RT
           </span>
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('backup_restore')}
+          className={`flex-1 flex items-center justify-center space-x-2 py-2.5 px-4 rounded-xl font-bold text-xs uppercase transition-all ${
+            activeTab === 'backup_restore'
+              ? 'bg-indigo-700 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          <Database className="w-4 h-4 text-indigo-300" />
+          <span>4. Backup & Restore</span>
+          <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-200 text-[10px] font-extrabold uppercase ml-1">
+            DADOS
+          </span>
+        </button>
       </div>
 
       {activeTab === 'assistencia' ? (
         <AssistenciaFarmaceuticaConfig />
       ) : activeTab === 'impedimentos_art' ? (
         <ImpedimentosArtConfig />
+      ) : activeTab === 'backup_restore' ? (
+        <BackupRestoreConfig />
       ) : (
       <form onSubmit={handleSave} className="space-y-6">
         {/* Bloco 1: Numeração Cronológica Automática de Inscrições */}

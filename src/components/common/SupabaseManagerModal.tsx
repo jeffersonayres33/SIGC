@@ -668,9 +668,10 @@ CREATE TABLE IF NOT EXISTS public.respostas_formularios (
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 9. HABILITAR ROW LEVEL SECURITY (RLS) E POLÍTICAS PÚBLICAS
+-- 9. HABILITAR ROW LEVEL SECURITY (RLS) E POLÍTICAS PÚBLICAS IDEMPOTENTES
 ALTER TABLE public.council_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cadastros_basicos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.regras_assistencia ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profissionais ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.empresas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.lancamentos_financeiros ENABLE ROW LEVEL SECURITY;
@@ -680,14 +681,20 @@ ALTER TABLE public.protocolos_processos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.formularios_dinamicos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.respostas_formularios ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Public access council_config" ON public.council_config FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public access cadastros_basicos" ON public.cadastros_basicos FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public access profissionais" ON public.profissionais FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public access empresas" ON public.empresas FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public access lancamentos_financeiros" ON public.lancamentos_financeiros FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public access processos_cobranca" ON public.processos_cobranca FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public access termos_fiscalizacao" ON public.termos_fiscalizacao FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public access protocolos_processos" ON public.protocolos_processos FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public access formularios_dinamicos" ON public.formularios_dinamicos FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Public access respostas_formularios" ON public.respostas_formularios FOR ALL USING (true) WITH CHECK (true);
+DO $$
+DECLARE
+    tbl text;
+BEGIN
+    FOR tbl IN 
+        SELECT unnest(ARRAY[
+            'council_config', 'cadastros_basicos', 'regras_assistencia', 
+            'profissionais', 'empresas', 'lancamentos_financeiros', 
+            'processos_cobranca', 'termos_fiscalizacao', 'protocolos_processos', 
+            'formularios_dinamicos', 'respostas_formularios'
+        ])
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS "Public access %I" ON public.%I;', tbl, tbl);
+        EXECUTE format('CREATE POLICY "Public access %I" ON public.%I FOR ALL USING (true) WITH CHECK (true);', tbl, tbl);
+    END LOOP;
+END $$;
 `;

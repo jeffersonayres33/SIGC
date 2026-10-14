@@ -649,205 +649,422 @@ class StorageService {
       this.isSupabaseSyncing = true;
       this.notify();
 
-      // Fetch Cadastros Basicos
-      const { data: cbData } = await supabase.from('cadastros_basicos').select('*').order('ordem', { ascending: true });
-      if (cbData && cbData.length > 0) {
-        this.cadastrosBasicos = cbData.map(c => ({
-          id: c.id,
-          categoria: c.categoria as CategoriaCadastroBasico,
-          nome: c.nome,
-          codigo: c.codigo,
-          descricao: c.descricao,
-          ativo: c.ativo,
-          ordem: c.ordem
-        }));
-        localStorage.setItem(STORAGE_KEYS.CADASTROS_BASICOS, JSON.stringify(this.cadastrosBasicos));
+      // 1. Fetch Cadastros Basicos
+      try {
+        const { data: cbData } = await supabase.from('cadastros_basicos').select('*').order('ordem', { ascending: true });
+        if (cbData && cbData.length > 0) {
+          this.cadastrosBasicos = cbData.map(c => ({
+            id: c.id,
+            categoria: c.categoria as CategoriaCadastroBasico,
+            nome: c.nome,
+            codigo: c.codigo || undefined,
+            descricao: c.descricao || undefined,
+            ativo: c.ativo,
+            ordem: c.ordem
+          }));
+          localStorage.setItem(STORAGE_KEYS.CADASTROS_BASICOS, JSON.stringify(this.cadastrosBasicos));
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar cadastros_basicos:', e);
       }
 
-      // Fetch Profissionais
-      const { data: profData } = await supabase.from('profissionais').select('*');
-      if (profData && profData.length > 0) {
-        this.customProfissionais = profData.map(p => ({
-          id: p.id,
-          inscricao: p.inscricao,
-          nome: p.nome,
-          cpf: p.cpf,
-          rg: p.rg,
-          orgaoExpeditor: p.orgao_expeditor,
-          dataNascimento: p.data_nascimento,
-          sexo: p.sexo,
-          nacionalidade: p.nacionalidade,
-          naturalidade: p.naturalidade,
-          nomeMae: p.nome_mae,
-          nomePai: p.nome_pai,
-          situacao: p.situacao,
-          motivoSituacao: p.motivo_situacao,
-          tipoAssociado: p.tipo_associado,
-          habilitacoes: p.habilitacoes || [],
-          dataInscricao: p.data_inscricao,
-          dataColacaoGrau: p.data_colacao_grau,
-          dataExpDiploma: p.data_exp_diploma,
-          faculdade: p.faculdade,
-          emailComercial: p.email_comercial,
-          emailPessoal: p.email_pessoal,
-          telefone: p.telefone,
-          celular: p.celular,
-          endereco: p.endereco,
-          complemento: p.complemento,
-          bairro: p.bairro,
-          cidade: p.cidade,
-          uf: p.uf,
-          cep: p.cep,
-          statusFinanceiro: p.status_financeiro,
-          carteiraProfissional: p.carteira_profissional,
-          fotoUrl: p.foto_url,
-          observacoes: p.observacoes,
-          inscricaoAnterior: p.inscricao_anterior || undefined,
-          dtInicioInscProvisoria: p.dt_inicio_insc_provisoria || undefined,
-          dtVencInscProvisoria: p.dt_venc_insc_provisoria || undefined,
-          dataSolicitacaoBaixa: p.data_solicitacao_baixa || undefined,
-          dataReabilitacao: p.data_reabilitacao || undefined,
-          dataConversaoDefinitiva: p.data_conversao_definitiva || undefined,
-          inscricaoDefinitivaAnterior: p.inscricao_definitiva_anterior || undefined,
-          anuidadeReduzida: Boolean(p.anuidade_reduzida),
-          isentoAnuidade: Boolean(p.isento_anuidade),
-          eVotante: p.e_votante !== undefined ? Boolean(p.e_votante) : true,
-          eMilitar: Boolean(p.e_militar),
-          estadoCivil: p.estado_civil || undefined,
-          transferidoOutroRegional: Boolean(p.transferido_outro_regional),
-          nrInscricaoRegionalOrigem: p.nr_inscricao_regional_origem || undefined,
-          anuidRefAnoInscricaoEmDia: Boolean(p.anuid_ref_ano_insc_em_dia),
-          ufRegionalOrigem: p.uf_regional_origem || undefined,
-          dtVenctoMilitar: p.dt_vencto_militar || undefined,
-          dataMandatoSeguranca: p.data_mandato_seguranca || undefined,
-          orgaoMandatoSeguranca: p.orgao_mandato_seguranca || undefined,
-          observacaoMandato: p.observacao_mandato || undefined,
-          formaEnvioBoletoParcelamento: p.forma_envio_boleto_parcelamento || undefined,
-          grupoSanguineo: p.grupo_sanguineo || undefined,
-          fatorRH: p.fator_rh || undefined,
-          doadorOrgaosTecidos: Boolean(p.doador_orgaos_tecidos),
-          participouCursoQualifarma: p.participou_curso_qualifarma || undefined,
-          rgDataExpedicao: p.rg_data_expedicao || undefined,
-          rgDataVencimento: p.rg_data_vencimento || undefined,
-          tituloEleitoral: p.titulo_eleitoral || undefined,
-          tituloZona: p.titulo_zona || undefined,
-          tituloSecao: p.titulo_secao || undefined,
-          tituloUfExp: p.titulo_uf_exp || undefined,
-          reservista: p.reservista || undefined,
-          cartTrabalho: p.cart_trabalho || undefined,
-          cartTrabalhoSerie: p.cart_trabalho_serie || undefined,
-          cartTrabalhoUfExp: p.cart_trabalho_uf_exp || undefined,
-          cartTrabalhoDataExp: p.cart_trabalho_data_exp || undefined,
-          nomeSocial: p.nome_social || undefined,
-          bloqueado: Boolean(p.bloqueado),
-          motivoBloqueio: p.motivo_bloqueio,
-          dataBloqueio: p.data_bloqueio,
-          dataDesbloqueioPrevista: p.data_desbloqueio_prevista,
-          usuarioBloqueio: p.usuario_bloqueio,
-          observacoesBloqueio: p.observacoes_bloqueio
-        }));
-        localStorage.setItem(STORAGE_KEYS.PROFISSIONAIS, JSON.stringify(this.customProfissionais));
+      // 2. Fetch Regras de Assistência Farmacêutica
+      try {
+        const { data: regrasData } = await supabase.from('regras_assistencia').select('*');
+        if (regrasData && regrasData.length > 0) {
+          this.regrasAssistencia = regrasData.map(r => ({
+            id: r.id,
+            municipio: r.municipio,
+            tipoEstabelecimento: r.tipo_estabelecimento,
+            tipoExigencia: r.tipo_exigencia as TipoExigenciaAssistencia,
+            horasMinimas: Number(r.horas_minimas) || 0,
+            descricao: r.descricao || undefined,
+            baseLegal: r.base_legal || undefined,
+            ativo: r.ativo ?? true
+          }));
+          localStorage.setItem(STORAGE_KEYS.REGRAS_ASSISTENCIA, JSON.stringify(this.regrasAssistencia));
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar regras_assistencia:', e);
       }
 
-      // Fetch Empresas
-      const { data: empData } = await supabase.from('empresas').select('*');
-      if (empData && empData.length > 0) {
-        this.empresas = empData.map(e => ({
-          id: e.id,
-          cnpj: e.cnpj,
-          razaoSocial: e.razao_social,
-          nomeFantasia: e.nome_fantasia || '',
-          inscricao: e.inscricao,
-          inscricaoAnterior: e.inscricao_anterior || undefined,
-          inscricaoEstadual: e.inscricao_estadual,
-          categoria: e.categoria || '',
-          categoriaEmpresa: e.categoria_empresa || e.categoria || '',
-          tipoEstabelecimento: e.tipo_estabelecimento,
-          naturezaAtividade: e.natureza_atividade,
-          tipoEmpresa: e.tipo_empresa,
-          condicao: e.condicao,
-          situacao: e.situacao,
-          motivoSituacao: e.motivo_situacao,
-          dtInicioInscProvisoria: e.dt_inicio_insc_provisoria || undefined,
-          dtVencInscProvisoria: e.dt_venc_insc_provisoria || undefined,
-          dataConversaoDefinitiva: e.data_conversao_definitiva || undefined,
-          inscricaoDefinitivaAnterior: e.inscricao_definitiva_anterior || undefined,
-          capitalSocial: Number(e.capital_social) || 0,
-          assistenciaPlena: e.assistencia_plena !== undefined && e.assistencia_plena !== null ? Boolean(e.assistencia_plena) : true,
-          isentoAnuidade: Boolean(e.isento_anuidade),
-          anuidadeReduzida: Boolean(e.anuidade_reduzida),
-          recadastrado: Boolean(e.recadastrado),
-          dataRecadastramento: e.data_recadastramento || undefined,
-          isentoTaxaCertificado: Boolean(e.isento_taxa_certificado),
-          horarioPlantao: e.horario_plantao || undefined,
-          horasTolerancia: e.horas_tolerancia || undefined,
-          dataInscricao: e.data_inscricao,
-          validadeCRT: e.validade_crt,
-          numeroCRT: e.numero_crt,
-          numeroProcesso: e.numero_processo,
-          endereco: e.endereco,
-          complemento: e.complemento,
-          bairro: e.bairro,
-          cidade: e.cidade,
-          uf: e.uf,
-          cep: e.cep,
-          rota: e.rota,
-          area: e.area,
-          telefone: e.telefone,
-          email: e.email,
-          statusFinanceiro: e.status_financeiro,
-          latitude: e.latitude,
-          longitude: e.longitude,
-          ultimaFiscalizacao: e.ultima_fiscalizacao,
-          resultadoUltimaFiscalizacao: e.resultado_ultima_fiscalizacao,
-          socios: e.socios || [],
-          responsaveisTecnicos: e.responsaveis_tecnicos || [],
-          horariosFuncionamento: e.horarios_funcionamento || [],
-          horariosAssistencia: e.horarios_assistencia || [],
-          cargaHorariaFuncionamentoSemanal: Number(e.carga_horaria_funcionamento_semanal) || 0,
-          cargaHorariaAssistenciaSemanal: Number(e.carga_horaria_assistencia_semanal) || 0,
-          justificativaCondicao: e.justificativa_condicao || '',
-          regraAssistenciaAplicada: e.regra_assistencia_aplicada || '',
-          bloqueado: Boolean(e.bloqueado),
-          motivoBloqueio: e.motivo_bloqueio,
-          dataBloqueio: e.data_bloqueio,
-          dataDesbloqueioPrevista: e.data_desbloqueio_prevista,
-          usuarioBloqueio: e.usuario_bloqueio,
-          observacoesBloqueio: e.observacoes_bloqueio
-        }));
-        localStorage.setItem(STORAGE_KEYS.EMPRESAS, JSON.stringify(this.empresas));
+      // 3. Fetch Profissionais
+      try {
+        const { data: profData } = await supabase.from('profissionais').select('*');
+        if (profData && profData.length > 0) {
+          this.customProfissionais = profData.map(p => ({
+            id: p.id,
+            inscricao: p.inscricao,
+            nome: p.nome,
+            cpf: p.cpf,
+            rg: p.rg || '',
+            orgaoExpeditor: p.orgao_expeditor || '',
+            dataNascimento: p.data_nascimento || '',
+            sexo: p.sexo || 'M',
+            nacionalidade: p.nacionalidade || 'BRASILEIRA',
+            naturalidade: p.naturalidade || '',
+            nomeMae: p.nome_mae || '',
+            nomePai: p.nome_pai || undefined,
+            situacao: p.situacao,
+            motivoSituacao: p.motivo_situacao || undefined,
+            tipoAssociado: p.tipo_associado,
+            habilitacoes: p.habilitacoes || [],
+            dataInscricao: p.data_inscricao || '',
+            dataColacaoGrau: p.data_colacao_grau || '',
+            dataExpDiploma: p.data_exp_diploma || '',
+            faculdade: p.faculdade || '',
+            emailComercial: p.email_comercial || '',
+            emailPessoal: p.email_pessoal || '',
+            telefone: p.telefone || '',
+            celular: p.celular || '',
+            endereco: p.endereco || '',
+            complemento: p.complemento || undefined,
+            bairro: p.bairro || '',
+            cidade: p.cidade || '',
+            uf: p.uf || 'AM',
+            cep: p.cep || '',
+            statusFinanceiro: p.status_financeiro || 'Adimplente',
+            carteiraProfissional: p.carteira_profissional || undefined,
+            fotoUrl: p.foto_url || undefined,
+            observacoes: p.observacoes || undefined,
+            inscricaoAnterior: p.inscricao_anterior || undefined,
+            dtInicioInscProvisoria: p.dt_inicio_insc_provisoria || undefined,
+            dtVencInscProvisoria: p.dt_venc_insc_provisoria || undefined,
+            dataSolicitacaoBaixa: p.data_solicitacao_baixa || undefined,
+            dataReabilitacao: p.data_reabilitacao || undefined,
+            dataConversaoDefinitiva: p.data_conversao_definitiva || undefined,
+            inscricaoDefinitivaAnterior: p.inscricao_definitiva_anterior || undefined,
+            anuidadeReduzida: Boolean(p.anuidade_reduzida),
+            isentoAnuidade: Boolean(p.isento_anuidade),
+            eVotante: p.e_votante !== undefined ? Boolean(p.e_votante) : true,
+            eMilitar: Boolean(p.e_militar),
+            recadastrado: Boolean(p.recadastrado),
+            dataRecadastramento: p.data_recadastramento || undefined,
+            estadoCivil: p.estado_civil || undefined,
+            transferidoOutroRegional: Boolean(p.transferido_outro_regional),
+            nrInscricaoRegionalOrigem: p.nr_inscricao_regional_origem || undefined,
+            anuidRefAnoInscricaoEmDia: Boolean(p.anuid_ref_ano_insc_em_dia),
+            ufRegionalOrigem: p.uf_regional_origem || undefined,
+            dtVenctoMilitar: p.dt_vencto_militar || undefined,
+            dataMandatoSeguranca: p.data_mandato_seguranca || undefined,
+            orgaoMandatoSeguranca: p.orgao_mandato_seguranca || undefined,
+            observacaoMandato: p.observacao_mandato || undefined,
+            formaEnvioBoletoParcelamento: p.forma_envio_boleto_parcelamento || undefined,
+            grupoSanguineo: p.grupo_sanguineo || undefined,
+            fatorRH: p.fator_rh || undefined,
+            doadorOrgaosTecidos: Boolean(p.doador_orgaos_tecidos),
+            participouCursoQualifarma: p.participou_curso_qualifarma || undefined,
+            rgDataExpedicao: p.rg_data_expedicao || undefined,
+            rgDataVencimento: p.rg_data_vencimento || undefined,
+            tituloEleitoral: p.titulo_eleitoral || undefined,
+            tituloZona: p.titulo_zona || undefined,
+            tituloSecao: p.titulo_secao || undefined,
+            tituloUfExp: p.titulo_uf_exp || undefined,
+            reservista: p.reservista || undefined,
+            cartTrabalho: p.cart_trabalho || undefined,
+            cartTrabalhoSerie: p.cart_trabalho_serie || undefined,
+            cartTrabalhoUfExp: p.cart_trabalho_uf_exp || undefined,
+            cartTrabalhoDataExp: p.cart_trabalho_data_exp || undefined,
+            nomeSocial: p.nome_social || undefined,
+            bloqueado: Boolean(p.bloqueado),
+            motivoBloqueio: p.motivo_bloqueio || undefined,
+            dataBloqueio: p.data_bloqueio || undefined,
+            dataDesbloqueioPrevista: p.data_desbloqueio_prevista || undefined,
+            usuarioBloqueio: p.usuario_bloqueio || undefined,
+            observacoesBloqueio: p.observacoes_bloqueio || undefined
+          }));
+          localStorage.setItem(STORAGE_KEYS.PROFISSIONAIS, JSON.stringify(this.customProfissionais));
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar profissionais:', e);
       }
 
-      // Fetch Lancamentos
-      const { data: lancData } = await supabase.from('lancamentos_financeiros').select('*');
-      if (lancData && lancData.length > 0) {
-        this.lancamentos = lancData.map(l => ({
-          id: l.id,
-          targetId: l.target_id,
-          targetTipo: l.target_tipo,
-          targetNome: l.target_nome,
-          targetDoc: l.target_doc,
-          targetInscricao: l.target_inscricao,
-          descricao: l.descricao,
-          tipo: l.tipo,
-          exercicio: l.exercicio,
-          parcela: l.parcela,
-          valorOriginal: Number(l.valor_original),
-          desconto: Number(l.desconto) || 0,
-          jurosMulta: Number(l.juros_multa) || 0,
-          valorTotal: Number(l.valor_total),
-          dataEmissao: l.data_emissao,
-          dataVencimento: l.data_vencimento,
-          dataPagamento: l.data_pagamento,
-          status: l.status,
-          codigoBarras: l.codigo_barras,
-          linhaDigitavel: l.linha_digitavel,
-          pixCopiaECola: l.pix_copia_e_cola
-        }));
-        localStorage.setItem(STORAGE_KEYS.LANCAMENTOS, JSON.stringify(this.lancamentos));
+      // 4. Fetch Empresas
+      try {
+        const { data: empData } = await supabase.from('empresas').select('*');
+        if (empData && empData.length > 0) {
+          this.empresas = empData.map(e => ({
+            id: e.id,
+            cnpj: e.cnpj,
+            razaoSocial: e.razao_social,
+            nomeFantasia: e.nome_fantasia || '',
+            inscricao: e.inscricao,
+            inscricaoAnterior: e.inscricao_anterior || undefined,
+            inscricaoDefinitivaAnterior: e.inscricao_definitiva_anterior || undefined,
+            inscricaoEstadual: e.inscricao_estadual || undefined,
+            categoria: e.categoria || '',
+            categoriaEmpresa: e.categoria_empresa || e.categoria || '',
+            tipoEstabelecimento: e.tipo_estabelecimento,
+            naturezaAtividade: e.natureza_atividade || undefined,
+            tipoEmpresa: e.tipo_empresa || 'PRIVADO',
+            condicao: e.condicao || 'Regular',
+            situacao: e.situacao || 'Definitiva',
+            motivoSituacao: e.motivo_situacao || undefined,
+            dtInicioInscProvisoria: e.dt_inicio_insc_provisoria || undefined,
+            dtVencInscProvisoria: e.dt_venc_insc_provisoria || undefined,
+            dataConversaoDefinitiva: e.data_conversao_definitiva || undefined,
+            capitalSocial: Number(e.capital_social) || 0,
+            assistenciaPlena: e.assistencia_plena !== undefined && e.assistencia_plena !== null ? Boolean(e.assistencia_plena) : true,
+            isentoAnuidade: Boolean(e.isento_anuidade),
+            anuidadeReduzida: Boolean(e.anuidade_reduzida),
+            recadastrado: Boolean(e.recadastrado),
+            dataRecadastramento: e.data_recadastramento || undefined,
+            isentoTaxaCertificado: Boolean(e.isento_taxa_certificado),
+            horarioPlantao: e.horario_plantao || undefined,
+            horasTolerancia: e.horas_tolerancia || undefined,
+            dataInscricao: e.data_inscricao || '',
+            validadeCRT: e.validade_crt || undefined,
+            numeroCRT: e.numero_crt || undefined,
+            numeroProcesso: e.numero_processo || undefined,
+            endereco: e.endereco || '',
+            complemento: e.complemento || undefined,
+            bairro: e.bairro || '',
+            cidade: e.cidade || '',
+            uf: e.uf || 'AM',
+            cep: e.cep || '',
+            rota: e.rota || undefined,
+            area: e.area || undefined,
+            telefone: e.telefone || '',
+            email: e.email || '',
+            statusFinanceiro: e.status_financeiro || 'Adimplente',
+            latitude: e.latitude ? Number(e.latitude) : undefined,
+            longitude: e.longitude ? Number(e.longitude) : undefined,
+            ultimaFiscalizacao: e.ultima_fiscalizacao || undefined,
+            resultadoUltimaFiscalizacao: e.resultado_ultima_fiscalizacao || undefined,
+            socios: e.socios || [],
+            responsaveisTecnicos: e.responsaveis_tecnicos || [],
+            horariosFuncionamento: e.horarios_funcionamento || [],
+            horariosAssistencia: e.horarios_assistencia || [],
+            cargaHorariaFuncionamentoSemanal: Number(e.carga_horaria_funcionamento_semanal) || 0,
+            cargaHorariaAssistenciaSemanal: Number(e.carga_horaria_assistencia_semanal) || 0,
+            justificativaCondicao: e.justificativa_condicao || '',
+            regraAssistenciaAplicada: e.regra_assistencia_aplicada || '',
+            bloqueado: Boolean(e.bloqueado),
+            motivoBloqueio: e.motivo_bloqueio || undefined,
+            dataBloqueio: e.data_bloqueio || undefined,
+            dataDesbloqueioPrevista: e.data_desbloqueio_prevista || undefined,
+            usuarioBloqueio: e.usuario_bloqueio || undefined,
+            observacoesBloqueio: e.observacoes_bloqueio || undefined
+          }));
+          localStorage.setItem(STORAGE_KEYS.EMPRESAS, JSON.stringify(this.empresas));
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar empresas:', e);
       }
 
-      // Fetch Historico Auditoria
+      // 5. Fetch Lancamentos Financeiros
+      try {
+        const { data: lancData } = await supabase.from('lancamentos_financeiros').select('*');
+        if (lancData && lancData.length > 0) {
+          this.lancamentos = lancData.map(l => ({
+            id: l.id,
+            targetId: l.target_id,
+            targetTipo: l.target_tipo,
+            targetNome: l.target_nome,
+            targetDoc: l.target_doc,
+            targetInscricao: l.target_inscricao,
+            descricao: l.descricao,
+            tipo: l.tipo,
+            exercicio: l.exercicio,
+            parcela: l.parcela || undefined,
+            valorOriginal: Number(l.valor_original),
+            desconto: Number(l.desconto) || 0,
+            jurosMulta: Number(l.juros_multa) || 0,
+            valorTotal: Number(l.valor_total),
+            dataEmissao: l.data_emissao,
+            dataVencimento: l.data_vencimento,
+            dataPagamento: l.data_pagamento || undefined,
+            status: l.status,
+            codigoBarras: l.codigo_barras || '',
+            linhaDigitavel: l.linha_digitavel || '',
+            pixCopiaECola: l.pix_copia_e_cola || ''
+          }));
+          localStorage.setItem(STORAGE_KEYS.LANCAMENTOS, JSON.stringify(this.lancamentos));
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar lancamentos_financeiros:', e);
+      }
+
+      // 6. Fetch Processos de Cobrança
+      try {
+        const { data: cobData } = await supabase.from('processos_cobranca').select('*');
+        if (cobData && cobData.length > 0) {
+          this.cobrancas = cobData.map(c => ({
+            id: c.id,
+            targetId: c.target_id,
+            targetTipo: c.target_tipo,
+            targetNome: c.target_nome,
+            targetDoc: c.target_doc,
+            targetInscricao: c.target_inscricao,
+            valorTotalDebito: Number(c.valor_total_debito) || 0,
+            qtdLancamentos: c.qtd_lancamentos || 1,
+            faseCobranca: c.fase_cobranca,
+            dataInicio: c.data_inicio,
+            dataUltimaNotificacao: c.data_ultima_notificacao || '',
+            dataLimiteDefesa: c.data_limite_defesa || '',
+            numeroCDA: c.numero_cda || undefined,
+            livroCDA: c.livro_cda || undefined,
+            folhaCDA: c.folha_cda || undefined,
+            dataCDA: c.data_cda || undefined,
+            statusAcordo: c.status_acordo || 'Sem Acordo',
+            parcelasAcordo: c.parcelas_acordo || undefined,
+            valorParcelaAcordo: c.valor_parcela_acordo ? Number(c.valor_parcela_acordo) : undefined,
+            historicoNotificacoes: c.historico_notificacoes || []
+          }));
+          localStorage.setItem(STORAGE_KEYS.COBRANCAS, JSON.stringify(this.cobrancas));
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar processos_cobranca:', e);
+      }
+
+      // 7. Fetch Termos de Fiscalização
+      try {
+        const { data: termoData } = await supabase.from('termos_fiscalizacao').select('*');
+        if (termoData && termoData.length > 0) {
+          this.termosFiscalizacao = termoData.map(t => ({
+            id: t.id,
+            numeroTermo: t.numero_termo,
+            numeroAutoInfracao: t.numero_auto_infracao || undefined,
+            tipoTermo: t.tipo_termo || undefined,
+            tipoVisita: t.tipo_visita || undefined,
+            empresaId: t.empresa_id,
+            empresaInscricao: t.empresa_inscricao || undefined,
+            empresaRazaoSocial: t.empresa_razao_social || undefined,
+            empresaNome: t.empresa_nome || undefined,
+            empresaCnpj: t.empresa_cnpj || undefined,
+            cnpj: t.cnpj || undefined,
+            endereco: t.endereco || undefined,
+            bairro: t.bairro || undefined,
+            cidade: t.cidade || undefined,
+            dataFiscalizacao: t.data_fiscalizacao || undefined,
+            horaFiscalizacao: t.hora_fiscalizacao || undefined,
+            dataHora: t.data_hora || undefined,
+            fiscalId: t.fiscal_id || undefined,
+            fiscalNome: t.fiscal_nome || undefined,
+            fiscalMatricula: t.fiscal_matricula || undefined,
+            matriculaFiscal: t.matricula_fiscal || undefined,
+            fiscalAssinanteNome: t.fiscal_assinante_nome || undefined,
+            fiscalAssinanteMatricula: t.fiscal_assinante_matricula || undefined,
+            latitude: Number(t.latitude) || 0,
+            longitude: Number(t.longitude) || 0,
+            enderecoGeo: t.endereco_geo || undefined,
+            presencaRT: Boolean(t.presenca_rt),
+            rtPresente: Boolean(t.rt_presente),
+            rtNomePresente: t.rt_nome_presente || undefined,
+            rtPresenteNome: t.rt_presente_nome || undefined,
+            rtCrfPresente: t.rt_crf_presente || undefined,
+            rtPresenteInscricao: t.rt_presente_inscricao || undefined,
+            motivoAusenciaRT: t.motivo_ausencia_rt || undefined,
+            documentosVerificados: t.documentos_verificados || {},
+            relatoFiscal: t.relato_fiscal || undefined,
+            irregularidadesConstatadas: t.irregularidades_constatadas || [],
+            infracoesIdentificadas: t.infracoes_identificadas || [],
+            artigosIncorridos: t.artigos_incorridos || [],
+            autoInfracaoGerado: Boolean(t.auto_infracao_gerado),
+            valorMultaPrevisto: Number(t.valor_multa_previsto) || 0,
+            orientacoesFiscais: t.orientacoes_fiscais || undefined,
+            observacoesNotificado: t.observacoes_notificado || undefined,
+            prazoRegularizacaoDias: t.prazo_regularizacao_dias || undefined,
+            notificacaoPrazoDias: t.notificacao_prazo_dias || undefined,
+            status: t.status || 'Concluído e Assinado',
+            statusSincronizacao: t.status_sincronizacao || 'Sincronizado',
+            assinaturaFiscal: t.assinatura_fiscal || undefined,
+            assinaturaFiscalDataHora: t.assinatura_fiscal_data_hora || undefined,
+            assinaturaResponsavel: t.assinatura_responsavel || undefined,
+            assinaturaNotificado: t.assinatura_notificado || undefined,
+            assinaturaNotificadoDataHora: t.assinatura_notificado_data_hora || undefined,
+            recusaAssinatura: Boolean(t.recusa_assinatura),
+            motivoRecusa: t.motivo_recusa || undefined,
+            tipoSignatarioNotificado: t.tipo_signatario_notificado || undefined,
+            nomeSignatarioNotificado: t.nome_signatario_notificado || undefined,
+            documentoSignatarioNotificado: t.documento_signatario_notificado || undefined,
+            inscricaoSignatarioNotificado: t.inscricao_signatario_notificado || undefined,
+            cargoSignatarioNotificado: t.cargo_signatario_notificado || undefined,
+            motivoAssinaturaTerceiro: t.motivo_assinatura_terceiro || undefined,
+            hashValidacaoDigital: t.hash_validacao_digital || undefined,
+            fotosComprovantes: t.fotos_comprovantes || [],
+            fotoEvidencias: t.foto_evidencias || [],
+            sincronizado: Boolean(t.sincronizado)
+          }));
+          localStorage.setItem(STORAGE_KEYS.TERMOS_FISCALIZACAO, JSON.stringify(this.termosFiscalizacao));
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar termos_fiscalizacao:', e);
+      }
+
+      // 8. Fetch Protocolos
+      try {
+        const { data: protData } = await supabase.from('protocolos_processos').select('*');
+        if (protData && protData.length > 0) {
+          this.protocolos = protData.map(p => ({
+            id: p.id,
+            numeroProtocolo: p.numero_protocolo,
+            tipo: p.tipo,
+            interessado: p.interessado,
+            documentoInteressado: p.documento_interessado,
+            dataInscricao: p.data_inscricao || '',
+            dataAbertura: p.data_abertura,
+            dataUltimaAtualizacao: p.data_ultima_atualizacao || '',
+            prazoResposta: p.prazo_resposta || '',
+            status: p.status || 'Em Análise',
+            setorAtual: p.setor_atual || 'Secretaria Geral',
+            conselheiroRelator: p.conselheiro_relator || undefined,
+            parecerRelator: p.parecer_relator || undefined,
+            decisaoPlenario: p.decisao_plenario || undefined,
+            anexos: p.anexos || [],
+            historico: p.historico || []
+          }));
+          localStorage.setItem(STORAGE_KEYS.PROTOCOLOS, JSON.stringify(this.protocolos));
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar protocolos_processos:', e);
+      }
+
+      // 9. Fetch Formulários Dinâmicos
+      try {
+        const { data: formData } = await supabase.from('formularios_dinamicos').select('*');
+        if (formData && formData.length > 0) {
+          this.formularios = formData.map(f => ({
+            id: f.id,
+            titulo: f.titulo,
+            categoria: f.categoria,
+            descricao: f.descricao || '',
+            publicoAlvo: f.publico_alvo || 'Ambos',
+            versao: f.versao || '1.0',
+            ativo: f.ativo ?? true,
+            campos: f.campos || [],
+            respostasRecebidas: f.respostas_recebidas || 0,
+            dataCriacao: f.data_criacao || ''
+          }));
+          localStorage.setItem(STORAGE_KEYS.FORMULARIOS, JSON.stringify(this.formularios));
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar formularios_dinamicos:', e);
+      }
+
+      // 10. Fetch Respostas de Formulários
+      try {
+        const { data: respData } = await supabase.from('respostas_formularios').select('*');
+        if (respData && respData.length > 0) {
+          this.respostasForms = respData.map(r => ({
+            id: r.id,
+            formularioId: r.formulario_id,
+            formularioTitulo: r.formulario_titulo,
+            autorNome: r.autor_nome,
+            autorDocumento: r.autor_documento,
+            protocoloGerado: r.protocolo_gerado,
+            dataEnvio: r.data_envio,
+            respostas: r.respostas || {},
+            dadosCampos: r.dados_campos || {},
+            status: r.status || 'Em Análise'
+          }));
+          localStorage.setItem(STORAGE_KEYS.RESPOSTAS_FORMS, JSON.stringify(this.respostasForms));
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar respostas_formularios:', e);
+      }
+
+      // 11. Fetch Historico Auditoria
       try {
         const { data: auditData } = await supabase.from('historico_auditoria').select('*').order('created_at', { ascending: false });
         if (auditData && auditData.length > 0) {
@@ -867,56 +1084,60 @@ class StorageService {
         console.warn('Erro ao carregar historico_auditoria do Supabase:', ae);
       }
 
-      // Fetch Council Config
-      const { data: cfgData } = await supabase.from('council_config').select('*').limit(1).maybeSingle();
-      if (cfgData) {
-        this.councilConfig = {
-          ...this.councilConfig,
-          sigla: cfgData.sigla || this.councilConfig.sigla,
-          nomeCompleto: cfgData.nome_completo || this.councilConfig.nomeCompleto,
-          jurisdicao: cfgData.jurisdicao || this.councilConfig.jurisdicao,
-          cidadeSede: cfgData.cidade_sede || this.councilConfig.cidadeSede,
-          uf: cfgData.uf || this.councilConfig.uf,
-          cnpj: cfgData.cnpj || this.councilConfig.cnpj,
-          endereco: cfgData.endereco || this.councilConfig.endereco,
-          bairro: cfgData.bairro || this.councilConfig.bairro,
-          cep: cfgData.cep || this.councilConfig.cep,
-          telefone: cfgData.telefone || this.councilConfig.telefone,
-          email: cfgData.email || this.councilConfig.email,
-          site: cfgData.site || this.councilConfig.site,
-          presidente: cfgData.presidente || this.councilConfig.presidente,
-          tesoureiro: cfgData.tesoureiro || this.councilConfig.tesoureiro,
-          secretarioGeral: cfgData.secretario_geral || this.councilConfig.secretarioGeral,
-          resolucaoAnuidade: cfgData.resolucao_anuidade || this.councilConfig.resolucaoAnuidade,
-          valorAnuidadePF: Number(cfgData.valor_anuidade_pf) || this.councilConfig.valorAnuidadePF,
-          valorAnuidadePJ: Number(cfgData.valor_anuidade_pj) || this.councilConfig.valorAnuidadePJ,
-          chavePix: cfgData.chave_pix || this.councilConfig.chavePix,
-          totalProfissionaisRegistrados: cfgData.total_profissionais_registrados ?? this.councilConfig.totalProfissionaisRegistrados,
-          totalEmpresasRegistradas: cfgData.total_empresas_registradas ?? this.councilConfig.totalEmpresasRegistradas,
-          proximoNumeroInscricaoProfissional: cfgData.proximo_numero_inscricao_profissional ?? this.councilConfig.proximoNumeroInscricaoProfissional,
-          prefixoInscricaoProfissional: cfgData.prefixo_inscricao_profissional ?? this.councilConfig.prefixoInscricaoProfissional,
-          sufixoInscricaoProfissional: cfgData.sufixo_inscricao_profissional ?? this.councilConfig.sufixoInscricaoProfissional,
-          digitosMinimosInscricaoProfissional: cfgData.digitos_minimos_inscricao_profissional ?? this.councilConfig.digitosMinimosInscricaoProfissional,
-          proximoNumeroInscricaoEmpresa: cfgData.proximo_numero_inscricao_empresa ?? this.councilConfig.proximoNumeroInscricaoEmpresa,
-          prefixoInscricaoEmpresa: cfgData.prefixo_inscricao_empresa ?? this.councilConfig.prefixoInscricaoEmpresa,
-          sufixoInscricaoEmpresa: cfgData.sufixo_inscricao_empresa ?? this.councilConfig.sufixoInscricaoEmpresa,
-          digitosMinimosInscricaoEmpresa: cfgData.digitos_minimos_inscricao_empresa ?? this.councilConfig.digitosMinimosInscricaoEmpresa,
-          proximoNumeroInscricaoProvisoriaProfissional: cfgData.proximo_numero_inscricao_provisoria_profissional ?? this.councilConfig.proximoNumeroInscricaoProvisoriaProfissional,
-          prefixoInscricaoProvisoriaProfissional: cfgData.prefixo_inscricao_provisoria_profissional ?? this.councilConfig.prefixoInscricaoProvisoriaProfissional,
-          sufixoInscricaoProvisoriaProfissional: cfgData.sufixo_inscricao_provisoria_profissional ?? this.councilConfig.sufixoInscricaoProvisoriaProfissional,
-          digitosMinimosInscricaoProvisoriaProfissional: cfgData.digitos_minimos_inscricao_provisoria_profissional ?? this.councilConfig.digitosMinimosInscricaoProvisoriaProfissional,
-          proximoNumeroInscricaoProvisoriaEmpresa: cfgData.proximo_numero_inscricao_provisoria_empresa ?? this.councilConfig.proximoNumeroInscricaoProvisoriaEmpresa,
-          prefixoInscricaoProvisoriaEmpresa: cfgData.prefixo_inscricao_provisoria_empresa ?? this.councilConfig.prefixoInscricaoProvisoriaEmpresa,
-          sufixoInscricaoProvisoriaEmpresa: cfgData.sufixo_inscricao_provisoria_empresa ?? this.councilConfig.sufixoInscricaoProvisoriaEmpresa,
-          digitosMinimosInscricaoProvisoriaEmpresa: cfgData.digitos_minimos_inscricao_provisoria_empresa ?? this.councilConfig.digitosMinimosInscricaoProvisoriaEmpresa,
-          validadeProvisoriaMesesProfissional: cfgData.validade_provisoria_meses_profissional ?? this.councilConfig.validadeProvisoriaMesesProfissional ?? 12,
-          validadeProvisoriaMesesEmpresa: cfgData.validade_provisoria_meses_empresa ?? this.councilConfig.validadeProvisoriaMesesEmpresa ?? 12,
-          validarCPF: cfgData.validar_cpf ?? this.councilConfig.validarCPF,
-          validarCNPJ: cfgData.validar_cnpj ?? this.councilConfig.validarCNPJ,
-          validarCEP: cfgData.validar_cep ?? this.councilConfig.validarCEP,
-          autoPreencherEnderecoCEP: cfgData.auto_preencher_endereco_cep ?? this.councilConfig.autoPreencherEnderecoCEP
-        };
-        localStorage.setItem(STORAGE_KEYS.COUNCIL_CONFIG, JSON.stringify(this.councilConfig));
+      // 12. Fetch Council Config
+      try {
+        const { data: cfgData } = await supabase.from('council_config').select('*').limit(1).maybeSingle();
+        if (cfgData) {
+          this.councilConfig = {
+            ...this.councilConfig,
+            sigla: cfgData.sigla || this.councilConfig.sigla,
+            nomeCompleto: cfgData.nome_completo || this.councilConfig.nomeCompleto,
+            jurisdicao: cfgData.jurisdicao || this.councilConfig.jurisdicao,
+            cidadeSede: cfgData.cidade_sede || this.councilConfig.cidadeSede,
+            uf: cfgData.uf || this.councilConfig.uf,
+            cnpj: cfgData.cnpj || this.councilConfig.cnpj,
+            endereco: cfgData.endereco || this.councilConfig.endereco,
+            bairro: cfgData.bairro || this.councilConfig.bairro,
+            cep: cfgData.cep || this.councilConfig.cep,
+            telefone: cfgData.telefone || this.councilConfig.telefone,
+            email: cfgData.email || this.councilConfig.email,
+            site: cfgData.site || this.councilConfig.site,
+            presidente: cfgData.presidente || this.councilConfig.presidente,
+            tesoureiro: cfgData.tesoureiro || this.councilConfig.tesoureiro,
+            secretarioGeral: cfgData.secretario_geral || this.councilConfig.secretarioGeral,
+            resolucaoAnuidade: cfgData.resolucao_anuidade || this.councilConfig.resolucaoAnuidade,
+            valorAnuidadePF: Number(cfgData.valor_anuidade_pf) || this.councilConfig.valorAnuidadePF,
+            valorAnuidadePJ: Number(cfgData.valor_anuidade_pj) || this.councilConfig.valorAnuidadePJ,
+            chavePix: cfgData.chave_pix || this.councilConfig.chavePix,
+            totalProfissionaisRegistrados: cfgData.total_profissionais_registrados ?? this.councilConfig.totalProfissionaisRegistrados,
+            totalEmpresasRegistradas: cfgData.total_empresas_registradas ?? this.councilConfig.totalEmpresasRegistradas,
+            proximoNumeroInscricaoProfissional: cfgData.proximo_numero_inscricao_profissional ?? this.councilConfig.proximoNumeroInscricaoProfissional,
+            prefixoInscricaoProfissional: cfgData.prefixo_inscricao_profissional ?? this.councilConfig.prefixoInscricaoProfissional,
+            sufixoInscricaoProfissional: cfgData.sufixo_inscricao_profissional ?? this.councilConfig.sufixoInscricaoProfissional,
+            digitosMinimosInscricaoProfissional: cfgData.digitos_minimos_inscricao_profissional ?? this.councilConfig.digitosMinimosInscricaoProfissional,
+            proximoNumeroInscricaoEmpresa: cfgData.proximo_numero_inscricao_empresa ?? this.councilConfig.proximoNumeroInscricaoEmpresa,
+            prefixoInscricaoEmpresa: cfgData.prefixo_inscricao_empresa ?? this.councilConfig.prefixoInscricaoEmpresa,
+            sufixoInscricaoEmpresa: cfgData.sufixo_inscricao_empresa ?? this.councilConfig.sufixoInscricaoEmpresa,
+            digitosMinimosInscricaoEmpresa: cfgData.digitos_minimos_inscricao_empresa ?? this.councilConfig.digitosMinimosInscricaoEmpresa,
+            proximoNumeroInscricaoProvisoriaProfissional: cfgData.proximo_numero_inscricao_provisoria_profissional ?? this.councilConfig.proximoNumeroInscricaoProvisoriaProfissional,
+            prefixoInscricaoProvisoriaProfissional: cfgData.prefixo_inscricao_provisoria_profissional ?? this.councilConfig.prefixoInscricaoProvisoriaProfissional,
+            sufixoInscricaoProvisoriaProfissional: cfgData.sufixo_inscricao_provisoria_profissional ?? this.councilConfig.sufixoInscricaoProvisoriaProfissional,
+            digitosMinimosInscricaoProvisoriaProfissional: cfgData.digitos_minimos_inscricao_provisoria_profissional ?? this.councilConfig.digitosMinimosInscricaoProvisoriaProfissional,
+            proximoNumeroInscricaoProvisoriaEmpresa: cfgData.proximo_numero_inscricao_provisoria_empresa ?? this.councilConfig.proximoNumeroInscricaoProvisoriaEmpresa,
+            prefixoInscricaoProvisoriaEmpresa: cfgData.prefixo_inscricao_provisoria_empresa ?? this.councilConfig.prefixoInscricaoProvisoriaEmpresa,
+            sufixoInscricaoProvisoriaEmpresa: cfgData.sufixo_inscricao_provisoria_empresa ?? this.councilConfig.sufixoInscricaoProvisoriaEmpresa,
+            digitosMinimosInscricaoProvisoriaEmpresa: cfgData.digitos_minimos_inscricao_provisoria_empresa ?? this.councilConfig.digitosMinimosInscricaoProvisoriaEmpresa,
+            validadeProvisoriaMesesProfissional: cfgData.validade_provisoria_meses_profissional ?? this.councilConfig.validadeProvisoriaMesesProfissional ?? 12,
+            validadeProvisoriaMesesEmpresa: cfgData.validade_provisoria_meses_empresa ?? this.councilConfig.validadeProvisoriaMesesEmpresa ?? 12,
+            validarCPF: cfgData.validar_cpf ?? this.councilConfig.validarCPF,
+            validarCNPJ: cfgData.validar_cnpj ?? this.councilConfig.validarCNPJ,
+            validarCEP: cfgData.validar_cep ?? this.councilConfig.validarCEP,
+            autoPreencherEnderecoCEP: cfgData.auto_preencher_endereco_cep ?? this.councilConfig.autoPreencherEnderecoCEP
+          };
+          localStorage.setItem(STORAGE_KEYS.COUNCIL_CONFIG, JSON.stringify(this.councilConfig));
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar council_config:', e);
       }
     } catch (err) {
       console.warn('Supabase fetch failed, continuing with local dataset', err);
@@ -995,12 +1216,30 @@ class StorageService {
         if (cbErr) throw new Error(`Falha ao migrar Cadastros Básicos: ${cbErr.message}`);
       }
 
-      // 3. Profissionais
+      // 3. Regras de Assistência Farmacêutica
+      const regraRows = this.regrasAssistencia.map(r => ({
+        id: r.id,
+        municipio: r.municipio,
+        tipo_estabelecimento: r.tipoEstabelecimento,
+        tipo_exigencia: r.tipoExigencia,
+        horas_minimas: r.horasMinimas || 0,
+        descricao: r.descricao || null,
+        base_legal: r.baseLegal || null,
+        ativo: r.ativo ?? true
+      }));
+      if (regraRows.length > 0) {
+        const { error: rErr } = await supabase.from('regras_assistencia').upsert(regraRows, { onConflict: 'id' });
+        if (rErr) throw new Error(`Falha ao migrar Regras de Assistência: ${rErr.message}`);
+      }
+
+      // 4. Profissionais (com todos os campos completos)
       const allProfs = [...this.customProfissionais, ...INITIAL_PROFISSIONAIS];
-      const uniqueProfs = Array.from(new Map(allProfs.map(p => [p.cpf, p])).values());
+      const uniqueProfs = Array.from(new Map(allProfs.map(p => [p.cpf?.replace(/\D/g, '') || p.id, p])).values());
       const profRows = uniqueProfs.map(p => ({
         id: p.id,
         inscricao: p.inscricao,
+        inscricao_anterior: p.inscricaoAnterior || null,
+        inscricao_definitiva_anterior: p.inscricaoDefinitivaAnterior || null,
         nome: p.nome,
         cpf: p.cpf,
         rg: p.rg || '',
@@ -1013,6 +1252,43 @@ class StorageService {
         nome_pai: p.nomePai || null,
         situacao: p.situacao,
         motivo_situacao: p.motivoSituacao || null,
+        dt_inicio_insc_provisoria: p.dtInicioInscProvisoria || null,
+        dt_venc_insc_provisoria: p.dtVencInscProvisoria || null,
+        data_solicitacao_baixa: p.dataSolicitacaoBaixa || null,
+        data_reabilitacao: p.dataReabilitacao || null,
+        data_conversao_definitiva: p.dataConversaoDefinitiva || null,
+        anuidade_reduzida: p.anuidadeReduzida ?? false,
+        isento_anuidade: p.isentoAnuidade ?? false,
+        e_votante: p.eVotante ?? true,
+        e_militar: p.eMilitar ?? false,
+        recadastrado: p.recadastrado ?? false,
+        data_recadastramento: p.dataRecadastramento || null,
+        estado_civil: p.estadoCivil || null,
+        transferido_outro_regional: p.transferidoOutroRegional ?? false,
+        nr_inscricao_regional_origem: p.nrInscricaoRegionalOrigem || null,
+        anuid_ref_ano_insc_em_dia: p.anuidRefAnoInscricaoEmDia ?? false,
+        uf_regional_origem: p.ufRegionalOrigem || null,
+        dt_vencto_militar: p.dtVenctoMilitar || null,
+        data_mandato_seguranca: p.dataMandatoSeguranca || null,
+        orgao_mandato_seguranca: p.orgaoMandatoSeguranca || null,
+        observacao_mandato: p.observacaoMandato || null,
+        forma_envio_boleto_parcelamento: p.formaEnvioBoletoParcelamento || null,
+        grupo_sanguineo: p.grupoSanguineo || null,
+        fator_rh: p.fatorRH || null,
+        doador_orgaos_tecidos: p.doadorOrgaosTecidos ?? false,
+        participou_curso_qualifarma: p.participouCursoQualifarma || null,
+        rg_data_expedicao: p.rgDataExpedicao || null,
+        rg_data_vencimento: p.rgDataVencimento || null,
+        titulo_eleitoral: p.tituloEleitoral || null,
+        titulo_zona: p.tituloZona || null,
+        titulo_secao: p.tituloSecao || null,
+        titulo_uf_exp: p.tituloUfExp || null,
+        reservista: p.reservista || null,
+        cart_trabalho: p.cartTrabalho || null,
+        cart_trabalho_serie: p.cartTrabalhoSerie || null,
+        cart_trabalho_uf_exp: p.cartTrabalhoUfExp || null,
+        cart_trabalho_data_exp: p.cartTrabalhoDataExp || null,
+        nome_social: p.nomeSocial || null,
         tipo_associado: p.tipoAssociado,
         habilitacoes: p.habilitacoes || [],
         data_inscricao: p.dataInscricao || '',
@@ -1046,23 +1322,36 @@ class StorageService {
         if (pErr) throw new Error(`Falha ao migrar Profissionais: ${pErr.message}`);
       }
 
-      // 4. Empresas
+      // 5. Empresas (com todos os campos completos)
       const empRows = this.empresas.map(e => ({
         id: e.id,
         cnpj: e.cnpj,
         razao_social: e.razaoSocial,
         nome_fantasia: e.nomeFantasia || '',
         inscricao: e.inscricao,
+        inscricao_anterior: e.inscricaoAnterior || null,
+        inscricao_definitiva_anterior: e.inscricaoDefinitivaAnterior || null,
         inscricao_estadual: e.inscricaoEstadual || null,
         categoria: e.categoria || '',
+        categoria_empresa: e.categoriaEmpresa || e.categoria || '',
         tipo_estabelecimento: e.tipoEstabelecimento,
         natureza_atividade: e.naturezaAtividade || null,
         tipo_empresa: e.tipoEmpresa || 'PRIVADO',
         condicao: e.condicao || 'Regular',
         situacao: e.situacao || 'Definitiva',
         motivo_situacao: e.motivoSituacao || null,
+        dt_inicio_insc_provisoria: e.dtInicioInscProvisoria || null,
+        dt_venc_insc_provisoria: e.dtVencInscProvisoria || null,
+        data_conversao_definitiva: e.dataConversaoDefinitiva || null,
         capital_social: e.capitalSocial || 0,
         assistencia_plena: e.assistenciaPlena ?? true,
+        isento_anuidade: e.isentoAnuidade ?? false,
+        anuidade_reduzida: e.anuidadeReduzida ?? false,
+        recadastrado: e.recadastrado ?? false,
+        data_recadastramento: e.dataRecadastramento || null,
+        isento_taxa_certificado: e.isentoTaxaCertificado ?? false,
+        horario_plantao: e.horarioPlantao || null,
+        horas_tolerancia: e.horasTolerancia ? String(e.horasTolerancia) : null,
         data_inscricao: e.dataInscricao || '',
         validade_crt: e.validadeCRT || null,
         numero_crt: e.numeroCRT || null,
@@ -1084,6 +1373,12 @@ class StorageService {
         resultado_ultima_fiscalizacao: e.resultadoUltimaFiscalizacao || null,
         socios: e.socios || [],
         responsaveis_tecnicos: e.responsaveisTecnicos || [],
+        horarios_funcionamento: e.horariosFuncionamento || [],
+        horarios_assistencia: e.horariosAssistencia || [],
+        carga_horaria_funcionamento_semanal: e.cargaHorariaFuncionamentoSemanal || 0,
+        carga_horaria_assistencia_semanal: e.cargaHorariaAssistenciaSemanal || 0,
+        justificativa_condicao: e.justificativaCondicao || null,
+        regra_assistencia_aplicada: e.regraAssistenciaAplicada || null,
         bloqueado: e.bloqueado ?? false,
         motivo_bloqueio: e.motivoBloqueio || null,
         data_bloqueio: e.dataBloqueio || null,
@@ -1097,7 +1392,7 @@ class StorageService {
         if (eErr) throw new Error(`Falha ao migrar Empresas: ${eErr.message}`);
       }
 
-      // 5. Lancamentos Financeiros
+      // 6. Lancamentos Financeiros
       const lancRows = this.lancamentos.map(l => ({
         id: l.id,
         target_id: l.targetId,
@@ -1127,7 +1422,35 @@ class StorageService {
         if (lErr) throw new Error(`Falha ao migrar Lançamentos: ${lErr.message}`);
       }
 
-      // 6. Termos Fiscalização
+      // 7. Processos de Cobrança
+      const cobRows = this.cobrancas.map(c => ({
+        id: c.id,
+        target_id: c.targetId,
+        target_tipo: c.targetTipo,
+        target_nome: c.targetNome,
+        target_doc: c.targetDoc,
+        target_inscricao: c.targetInscricao,
+        valor_total_debito: c.valorTotalDebito,
+        qtd_lancamentos: c.qtdLancamentos,
+        fase_cobranca: c.faseCobranca,
+        data_inicio: c.dataInicio,
+        data_ultima_notificacao: c.dataUltimaNotificacao || null,
+        data_limite_defesa: c.dataLimiteDefesa || null,
+        numero_cda: c.numeroCDA || null,
+        livro_cda: c.livroCDA || null,
+        folha_cda: c.folhaCDA || null,
+        data_cda: c.dataCDA || null,
+        status_acordo: c.statusAcordo,
+        parcelas_acordo: c.parcelasAcordo || null,
+        valor_parcela_acordo: c.valorParcelaAcordo || null,
+        historico_notificacoes: c.historicoNotificacoes || []
+      }));
+      if (cobRows.length > 0) {
+        const { error: cErr } = await supabase.from('processos_cobranca').upsert(cobRows, { onConflict: 'id' });
+        if (cErr) throw new Error(`Falha ao migrar Cobrança: ${cErr.message}`);
+      }
+
+      // 8. Termos Fiscalização
       const termoRows = this.termosFiscalizacao.map(t => ({
         id: t.id,
         numero_termo: t.numeroTermo,
@@ -1197,6 +1520,48 @@ class StorageService {
       if (termoRows.length > 0) {
         const { error: tErr } = await supabase.from('termos_fiscalizacao').upsert(termoRows, { onConflict: 'id' });
         if (tErr) throw new Error(`Falha ao migrar Fiscalização: ${tErr.message}`);
+      }
+
+      // 9. Protocolos
+      const protRows = this.protocolos.map(p => ({
+        id: p.id,
+        numero_protocolo: p.numeroProtocolo,
+        tipo: p.tipo,
+        interessado: p.interessado,
+        documento_interessado: p.documentoInteressado,
+        data_inscricao: p.dataInscricao || null,
+        data_abertura: p.dataAbertura,
+        data_ultima_atualizacao: p.dataUltimaAtualizacao || null,
+        prazo_resposta: p.prazoResposta || null,
+        status: p.status || 'Em Análise',
+        setor_atual: p.setorAtual || 'Secretaria Geral',
+        conselheiro_relator: p.conselheiroRelator || null,
+        parecer_relator: p.parecerRelator || null,
+        decisao_plenario: p.decisaoPlenario || null,
+        anexos: p.anexos || [],
+        historico: p.historico || []
+      }));
+      if (protRows.length > 0) {
+        const { error: prErr } = await supabase.from('protocolos_processos').upsert(protRows, { onConflict: 'id' });
+        if (prErr) throw new Error(`Falha ao migrar Protocolos: ${prErr.message}`);
+      }
+
+      // 10. Formulários Dinâmicos
+      const formRows = this.formularios.map(f => ({
+        id: f.id,
+        titulo: f.titulo,
+        categoria: f.categoria,
+        descricao: f.descricao || null,
+        publico_alvo: f.publicoAlvo || 'Ambos',
+        versao: String(f.versao || '1.0'),
+        ativo: f.ativo ?? true,
+        campos: f.campos || [],
+        respostas_recebidas: f.respostasRecebidas || 0,
+        data_criacao: f.dataCriacao || null
+      }));
+      if (formRows.length > 0) {
+        const { error: fErr } = await supabase.from('formularios_dinamicos').upsert(formRows, { onConflict: 'id' });
+        if (fErr) throw new Error(`Falha ao migrar Formulários: ${fErr.message}`);
       }
 
       this.isSupabaseConnected = true;
@@ -1594,6 +1959,20 @@ class StorageService {
 
     try {
       localStorage.setItem(STORAGE_KEYS.REGRAS_ASSISTENCIA, JSON.stringify(this.regrasAssistencia));
+      if (this.isOnline) {
+        runBackgroundSupabase(
+          supabase.from('regras_assistencia').upsert({
+            id: sanitized.id,
+            municipio: sanitized.municipio,
+            tipo_estabelecimento: sanitized.tipoEstabelecimento,
+            tipo_exigencia: sanitized.tipoExigencia,
+            horas_minimas: sanitized.horasMinimas || 0,
+            descricao: sanitized.descricao || null,
+            base_legal: sanitized.baseLegal || null,
+            ativo: sanitized.ativo ?? true
+          }, { onConflict: 'id' })
+        );
+      }
     } catch (e) {}
     this.notify();
   }
@@ -1602,6 +1981,11 @@ class StorageService {
     this.regrasAssistencia = this.regrasAssistencia.filter(r => r.id !== id);
     try {
       localStorage.setItem(STORAGE_KEYS.REGRAS_ASSISTENCIA, JSON.stringify(this.regrasAssistencia));
+      if (this.isOnline) {
+        runBackgroundSupabase(
+          supabase.from('regras_assistencia').delete().eq('id', id)
+        );
+      }
     } catch (e) {}
     this.notify();
   }
@@ -2543,9 +2927,40 @@ class StorageService {
     try {
       localStorage.setItem(STORAGE_KEYS.PROFISSIONAIS, JSON.stringify(this.customProfissionais));
       if (this.isOnline) {
-        runBackgroundSupabase(
-          supabase.from('profissionais').upsert({
-            id: sanitized.id,
+        runBackgroundSupabase((async () => {
+          let targetId = sanitized.id;
+          try {
+            const rawCpf = sanitized.cpf ? sanitized.cpf.replace(/\D/g, '') : '';
+            const maskedCpf = rawCpf.length === 11 ? maskCPF(rawCpf) : sanitized.cpf;
+            const insc = sanitized.inscricao?.trim();
+
+            // Buscar se já existe registro remoto com este CPF ou Inscrição
+            const { data: existingRemote } = await supabase
+              .from('profissionais')
+              .select('id, cpf, inscricao')
+              .or(`cpf.eq."${maskedCpf}",cpf.eq."${rawCpf}",inscricao.eq."${insc}"`)
+              .limit(1);
+
+            if (existingRemote && existingRemote.length > 0) {
+              targetId = existingRemote[0].id;
+              sanitized.id = targetId;
+              const localIdx = this.customProfissionais.findIndex(p => 
+                (p.cpf && cleanCpf(p.cpf) === rawCpf) || 
+                (p.inscricao && cleanInsc(p.inscricao) === cleanInsc(insc))
+              );
+              if (localIdx >= 0) {
+                this.customProfissionais[localIdx].id = targetId;
+                try {
+                  localStorage.setItem(STORAGE_KEYS.PROFISSIONAIS, JSON.stringify(this.customProfissionais));
+                } catch (e) {}
+              }
+            }
+          } catch (lookupErr) {
+            // Continua com targetId existente se busca falhar
+          }
+
+          const { error } = await supabase.from('profissionais').upsert({
+            id: targetId,
             inscricao: sanitized.inscricao,
             inscricao_anterior: sanitized.inscricaoAnterior || null,
             inscricao_definitiva_anterior: sanitized.inscricaoDefinitivaAnterior || null,
@@ -2570,6 +2985,8 @@ class StorageService {
             isento_anuidade: sanitized.isentoAnuidade ?? false,
             e_votante: sanitized.eVotante ?? true,
             e_militar: sanitized.eMilitar ?? false,
+            recadastrado: sanitized.recadastrado ?? false,
+            data_recadastramento: sanitized.dataRecadastramento || null,
             estado_civil: sanitized.estadoCivil || null,
             transferido_outro_regional: sanitized.transferidoOutroRegional ?? false,
             nr_inscricao_regional_origem: sanitized.nrInscricaoRegionalOrigem || null,
@@ -2622,18 +3039,26 @@ class StorageService {
             data_desbloqueio_prevista: sanitized.dataDesbloqueioPrevista || null,
             usuario_bloqueio: sanitized.usuarioBloqueio || null,
             observacoes_bloqueio: sanitized.observacoesBloqueio || null
-          }, { onConflict: 'id' }).then(({ error }) => {
-            if (error) {
-              console.warn('Supabase professional upsert failed:', error);
-              this.addSyncError(
-                'PROFISSIONAL',
-                sanitized.nome,
-                `Erro de banco de dados (Código ${error.code}): ${error.message}`,
-                error.details || undefined
-              );
+          }, { onConflict: 'id' });
+
+          if (error) {
+            console.warn('Supabase professional upsert failed:', error);
+            let msg = `Erro de banco de dados (Código ${error.code}): ${error.message}`;
+            if (error.code === '23505') {
+              if (error.message.includes('cpf')) {
+                msg = `Conflito de duplicidade (Código 23505): O CPF ${sanitized.cpf} já está registrado no banco de dados.`;
+              } else if (error.message.includes('inscricao')) {
+                msg = `Conflito de duplicidade (Código 23505): O número de inscrição ${sanitized.inscricao} já está cadastrado no banco de dados.`;
+              }
             }
-          })
-        );
+            this.addSyncError(
+              'PROFISSIONAL',
+              sanitized.nome,
+              msg,
+              error.details || undefined
+            );
+          }
+        })());
       }
     } catch (e: any) {
       this.addSyncError(
@@ -2887,9 +3312,40 @@ class StorageService {
     try {
       localStorage.setItem(STORAGE_KEYS.EMPRESAS, JSON.stringify(this.empresas));
       if (this.isOnline) {
-        runBackgroundSupabase(
-          supabase.from('empresas').upsert({
-            id: sanitized.id,
+        runBackgroundSupabase((async () => {
+          let targetId = sanitized.id;
+          try {
+            const rawCnpj = sanitized.cnpj ? sanitized.cnpj.replace(/\D/g, '') : '';
+            const maskedCnpj = rawCnpj.length === 14 ? maskCNPJ(rawCnpj) : sanitized.cnpj;
+            const insc = sanitized.inscricao?.trim();
+
+            // Buscar se já existe registro remoto com este CNPJ ou Inscrição
+            const { data: existingRemote } = await supabase
+              .from('empresas')
+              .select('id, cnpj, inscricao')
+              .or(`cnpj.eq."${maskedCnpj}",cnpj.eq."${rawCnpj}",inscricao.eq."${insc}"`)
+              .limit(1);
+
+            if (existingRemote && existingRemote.length > 0) {
+              targetId = existingRemote[0].id;
+              sanitized.id = targetId;
+              const localIdx = this.empresas.findIndex(e => 
+                (e.cnpj && cleanCnpj(e.cnpj) === rawCnpj) || 
+                (e.inscricao && cleanInsc(e.inscricao) === cleanInsc(insc))
+              );
+              if (localIdx >= 0) {
+                this.empresas[localIdx].id = targetId;
+                try {
+                  localStorage.setItem(STORAGE_KEYS.EMPRESAS, JSON.stringify(this.empresas));
+                } catch (e) {}
+              }
+            }
+          } catch (lookupErr) {
+            // Continua com targetId
+          }
+
+          const { error } = await supabase.from('empresas').upsert({
+            id: targetId,
             cnpj: sanitized.cnpj,
             razao_social: sanitized.razaoSocial,
             nome_fantasia: sanitized.nomeFantasia || '',
@@ -2950,18 +3406,26 @@ class StorageService {
             data_desbloqueio_prevista: sanitized.dataDesbloqueioPrevista || null,
             usuario_bloqueio: sanitized.usuarioBloqueio || null,
             observacoes_bloqueio: sanitized.observacoesBloqueio || null
-          }, { onConflict: 'id' }).then(({ error }) => {
-            if (error) {
-              console.warn('Supabase empresa upsert failed:', error);
-              this.addSyncError(
-                'EMPRESA',
-                sanitized.razaoSocial,
-                `Erro de banco de dados (Código ${error.code}): ${error.message}`,
-                error.details || undefined
-              );
+          }, { onConflict: 'id' });
+
+          if (error) {
+            console.warn('Supabase empresa upsert failed:', error);
+            let msg = `Erro de banco de dados (Código ${error.code}): ${error.message}`;
+            if (error.code === '23505') {
+              if (error.message.includes('cnpj')) {
+                msg = `Conflito de duplicidade (Código 23505): O CNPJ ${sanitized.cnpj} já está cadastrado no banco de dados.`;
+              } else if (error.message.includes('inscricao')) {
+                msg = `Conflito de duplicidade (Código 23505): O número de inscrição PJ ${sanitized.inscricao} já está cadastrado no banco de dados.`;
+              }
             }
-          })
-        );
+            this.addSyncError(
+              'EMPRESA',
+              sanitized.razaoSocial,
+              msg,
+              error.details || undefined
+            );
+          }
+        })());
       }
     } catch (e: any) {
       this.addSyncError(
@@ -3638,6 +4102,478 @@ class StorageService {
       numeroProcesso: 'Número do Processo'
     };
     return map[field] || field;
+  }
+
+  // ==============================================================================
+  // BACKUP & RESTORE SERVICE ENGINE
+  // ==============================================================================
+
+  public getRespostasFormularios(): RespostaFormulario[] {
+    return [...this.respostasForms];
+  }
+
+  public getHistoricoAuditoria(): HistoricoAuditoria[] {
+    return [...this.historicoAuditoria];
+  }
+
+  public getTableCounts(): Record<string, number> {
+    return {
+      profissionais: this.getProfissionais().length,
+      empresas: this.empresas.length,
+      cadastros_basicos: this.cadastrosBasicos.length,
+      regras_assistencia: this.regrasAssistencia.length,
+      lancamentos_financeiros: this.lancamentos.length,
+      processos_cobranca: this.cobrancas.length,
+      termos_fiscalizacao: this.termosFiscalizacao.length,
+      protocolos_processos: this.protocolos.length,
+      formularios_dinamicos: this.formularios.length,
+      respostas_formularios: this.respostasForms.length,
+      council_config: 1,
+      historico_auditoria: this.historicoAuditoria.length
+    };
+  }
+
+  public getBackupData(selectedTables?: string[]) {
+    const allCounts = this.getTableCounts();
+    const tablesToExport = (selectedTables && selectedTables.length > 0)
+      ? selectedTables
+      : Object.keys(allCounts);
+
+    const tablesData: Record<string, any> = {};
+    let totalRecords = 0;
+
+    if (tablesToExport.includes('profissionais')) {
+      tablesData.profissionais = this.getProfissionais();
+      totalRecords += tablesData.profissionais.length;
+    }
+    if (tablesToExport.includes('empresas')) {
+      tablesData.empresas = this.empresas;
+      totalRecords += tablesData.empresas.length;
+    }
+    if (tablesToExport.includes('cadastros_basicos')) {
+      tablesData.cadastros_basicos = this.cadastrosBasicos;
+      totalRecords += tablesData.cadastros_basicos.length;
+    }
+    if (tablesToExport.includes('regras_assistencia')) {
+      tablesData.regras_assistencia = this.regrasAssistencia;
+      totalRecords += tablesData.regras_assistencia.length;
+    }
+    if (tablesToExport.includes('lancamentos_financeiros')) {
+      tablesData.lancamentos_financeiros = this.lancamentos;
+      totalRecords += tablesData.lancamentos_financeiros.length;
+    }
+    if (tablesToExport.includes('processos_cobranca')) {
+      tablesData.processos_cobranca = this.cobrancas;
+      totalRecords += tablesData.processos_cobranca.length;
+    }
+    if (tablesToExport.includes('termos_fiscalizacao')) {
+      tablesData.termos_fiscalizacao = this.termosFiscalizacao;
+      totalRecords += tablesData.termos_fiscalizacao.length;
+    }
+    if (tablesToExport.includes('protocolos_processos')) {
+      tablesData.protocolos_processos = this.protocolos;
+      totalRecords += tablesData.protocolos_processos.length;
+    }
+    if (tablesToExport.includes('formularios_dinamicos')) {
+      tablesData.formularios_dinamicos = this.formularios;
+      totalRecords += tablesData.formularios_dinamicos.length;
+    }
+    if (tablesToExport.includes('respostas_formularios')) {
+      tablesData.respostas_formularios = this.respostasForms;
+      totalRecords += tablesData.respostas_formularios.length;
+    }
+    if (tablesToExport.includes('council_config')) {
+      tablesData.council_config = this.councilConfig;
+      totalRecords += 1;
+    }
+    if (tablesToExport.includes('historico_auditoria')) {
+      tablesData.historico_auditoria = this.historicoAuditoria;
+      totalRecords += tablesData.historico_auditoria.length;
+    }
+
+    return {
+      siscon_backup: true,
+      sistema: 'SISCON',
+      versao: '2.5',
+      exportadoEm: new Date().toISOString(),
+      conselho: this.councilConfig.sigla || 'CRF',
+      tabelasExportadas: tablesToExport,
+      totalRegistros: totalRecords,
+      dados: tablesData
+    };
+  }
+
+  public generateSqlBackup(selectedTables?: string[]): string {
+    const backup = this.getBackupData(selectedTables);
+    const sqlLines: string[] = [
+      '--',
+      '-- SISCON - DUMP DE BACKUP E RESTAURAÇÃO SQL',
+      `-- Gerado em: ${new Date().toLocaleString('pt-BR')}`,
+      `-- Autarquia: ${this.councilConfig.sigla} (${this.councilConfig.nomeCompleto})`,
+      `-- Total de Registros: ${backup.totalRegistros}`,
+      '--',
+      'BEGIN;',
+      ''
+    ];
+
+    const escapeSql = (val: any): string => {
+      if (val === null || val === undefined) return 'NULL';
+      if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
+      if (typeof val === 'number') return String(val);
+      if (Array.isArray(val) || typeof val === 'object') {
+        return `'${JSON.stringify(val).replace(/'/g, "''")}'::jsonb`;
+      }
+      return `'${String(val).replace(/'/g, "''")}'`;
+    };
+
+    // 1. Cadastros Basicos
+    if (backup.dados.cadastros_basicos && backup.dados.cadastros_basicos.length > 0) {
+      sqlLines.push('-- TABELA: cadastros_basicos');
+      for (const item of backup.dados.cadastros_basicos) {
+        sqlLines.push(
+          `INSERT INTO public.cadastros_basicos (id, categoria, nome, codigo, descricao, ativo, ordem) ` +
+          `VALUES (${escapeSql(item.id)}, ${escapeSql(item.categoria)}, ${escapeSql(item.nome)}, ` +
+          `${escapeSql(item.codigo)}, ${escapeSql(item.descricao)}, ${escapeSql(item.ativo)}, ${escapeSql(item.ordem)}) ` +
+          `ON CONFLICT (id) DO UPDATE SET nome = EXCLUDED.nome, ativo = EXCLUDED.ativo;`
+        );
+      }
+      sqlLines.push('');
+    }
+
+    // 2. Regras Assistencia
+    if (backup.dados.regras_assistencia && backup.dados.regras_assistencia.length > 0) {
+      sqlLines.push('-- TABELA: regras_assistencia');
+      for (const item of backup.dados.regras_assistencia) {
+        sqlLines.push(
+          `INSERT INTO public.regras_assistencia (id, municipio, tipo_estabelecimento, horas_minimas, dias_semana, ativo, observacoes) ` +
+          `VALUES (${escapeSql(item.id)}, ${escapeSql(item.municipio)}, ${escapeSql(item.tipoEstabelecimento)}, ` +
+          `${escapeSql(item.horasMinimas)}, ${escapeSql(item.diasSemana || [])}, ${escapeSql(item.ativo)}, ${escapeSql(item.observacoes)}) ` +
+          `ON CONFLICT (id) DO UPDATE SET horas_minimas = EXCLUDED.horas_minimas, ativo = EXCLUDED.ativo;`
+        );
+      }
+      sqlLines.push('');
+    }
+
+    // 3. Profissionais
+    if (backup.dados.profissionais && backup.dados.profissionais.length > 0) {
+      sqlLines.push('-- TABELA: profissionais');
+      for (const p of backup.dados.profissionais) {
+        sqlLines.push(
+          `INSERT INTO public.profissionais (id, inscricao, nome, cpf, rg, categoria, especialidade, situacao, status, telefone, celular, email, cidade, uf, dt_inicio_insc, recadastrado, data_recadastramento) ` +
+          `VALUES (${escapeSql(p.id)}, ${escapeSql(p.inscricao)}, ${escapeSql(p.nome)}, ${escapeSql(p.cpf)}, ` +
+          `${escapeSql(p.rg)}, ${escapeSql(p.tipoAssociado || 'Farmacêutico')}, ${escapeSql(p.habilitacoes?.[0] || null)}, ` +
+          `${escapeSql(p.situacao || 'Definitivo')}, ${escapeSql(p.situacao || 'Ativo')}, ${escapeSql(p.telefone)}, ${escapeSql(p.celular)}, ` +
+          `${escapeSql(p.emailPessoal || p.emailComercial)}, ${escapeSql(p.cidade)}, ${escapeSql(p.uf || 'AM')}, ` +
+          `${escapeSql(p.dataInscricao)}, ${escapeSql(p.recadastrado ?? false)}, ${escapeSql(p.dataRecadastramento)}) ` +
+          `ON CONFLICT (id) DO UPDATE SET nome = EXCLUDED.nome, recadastrado = EXCLUDED.recadastrado;`
+        );
+      }
+      sqlLines.push('');
+    }
+
+    // 4. Empresas
+    if (backup.dados.empresas && backup.dados.empresas.length > 0) {
+      sqlLines.push('-- TABELA: empresas');
+      for (const e of backup.dados.empresas) {
+        sqlLines.push(
+          `INSERT INTO public.empresas (id, cnpj, razao_social, nome_fantasia, inscricao, tipo, condicao, situacao, status, telefone, email, cidade, uf, recadastrado, data_recadastramento) ` +
+          `VALUES (${escapeSql(e.id)}, ${escapeSql(e.cnpj)}, ${escapeSql(e.razaoSocial)}, ${escapeSql(e.nomeFantasia)}, ` +
+          `${escapeSql(e.inscricao)}, ${escapeSql(e.tipoEstabelecimento)}, ${escapeSql(e.condicao || 'Regular')}, ` +
+          `${escapeSql(e.situacao || 'Definitiva')}, ${escapeSql(e.condicao || 'Regular')}, ${escapeSql(e.telefone)}, ` +
+          `${escapeSql(e.email)}, ${escapeSql(e.cidade)}, ${escapeSql(e.uf || 'AM')}, ` +
+          `${escapeSql(e.recadastrado ?? false)}, ${escapeSql(e.dataRecadastramento)}) ` +
+          `ON CONFLICT (id) DO UPDATE SET razao_social = EXCLUDED.razao_social, condicao = EXCLUDED.condicao;`
+        );
+      }
+      sqlLines.push('');
+    }
+
+    // 5. Lancamentos Financeiros
+    if (backup.dados.lancamentos_financeiros && backup.dados.lancamentos_financeiros.length > 0) {
+      sqlLines.push('-- TABELA: lancamentos_financeiros');
+      for (const l of backup.dados.lancamentos_financeiros) {
+        sqlLines.push(
+          `INSERT INTO public.lancamentos_financeiros (id, tipo_documento, numero_documento, cpf_cnpj, nome_sacado, tipo_sacado, exercicio, valor_nominal, valor_pago, data_emissao, data_vencimento, status) ` +
+          `VALUES (${escapeSql(l.id)}, ${escapeSql(l.tipoDocumento)}, ${escapeSql(l.numeroDocumento)}, ${escapeSql(l.cpfCnpj)}, ` +
+          `${escapeSql(l.nomeSacado)}, ${escapeSql(l.tipoSacado)}, ${escapeSql(l.exercicio)}, ${escapeSql(l.valorNominal)}, ` +
+          `${escapeSql(l.valorPago || 0)}, ${escapeSql(l.dataEmissao)}, ${escapeSql(l.dataVencimento)}, ${escapeSql(l.status || 'Pendente')}) ` +
+          `ON CONFLICT (id) DO UPDATE SET valor_pago = EXCLUDED.valor_pago, status = EXCLUDED.status;`
+        );
+      }
+      sqlLines.push('');
+    }
+
+    // 6. Council Config
+    if (backup.dados.council_config) {
+      const cfg = backup.dados.council_config;
+      sqlLines.push('-- TABELA: council_config');
+      sqlLines.push(
+        `INSERT INTO public.council_config (id, sigla, nome_completo, cnpj, uf, telefone, email, site, endereco) ` +
+        `VALUES ('default', ${escapeSql(cfg.sigla)}, ${escapeSql(cfg.nomeCompleto)}, ${escapeSql(cfg.cnpj)}, ` +
+        `${escapeSql(cfg.uf)}, ${escapeSql(cfg.telefone)}, ${escapeSql(cfg.email)}, ${escapeSql(cfg.site)}, ${escapeSql(cfg.endereco)}) ` +
+        `ON CONFLICT (id) DO UPDATE SET sigla = EXCLUDED.sigla, nome_completo = EXCLUDED.nome_completo;`
+      );
+      sqlLines.push('');
+    }
+
+    sqlLines.push('COMMIT;');
+    return sqlLines.join('\n');
+  }
+
+  public async restoreBackup(
+    backupPayload: any,
+    options: { mode: 'merge' | 'replace'; syncSupabase?: boolean } = { mode: 'merge', syncSupabase: false }
+  ): Promise<{ success: boolean; details: Record<string, number>; errors: string[] }> {
+    const details: Record<string, number> = {};
+    const errors: string[] = [];
+
+    if (!backupPayload || typeof backupPayload !== 'object') {
+      return { success: false, details, errors: ['Arquivo de backup inválido ou vazio.'] };
+    }
+
+    // Suporta tanto formato empacotado { dados: { ... } } quanto direto { profissionais: [ ... ] }
+    const sourceData = backupPayload.dados || backupPayload.tables || backupPayload;
+
+    try {
+      // 1. Cadastros Basicos
+      if (Array.isArray(sourceData.cadastros_basicos)) {
+        if (options.mode === 'replace') {
+          this.cadastrosBasicos = [...sourceData.cadastros_basicos];
+        } else {
+          for (const item of sourceData.cadastros_basicos) {
+            const idx = this.cadastrosBasicos.findIndex(c => c.id === item.id);
+            if (idx >= 0) this.cadastrosBasicos[idx] = { ...this.cadastrosBasicos[idx], ...item };
+            else this.cadastrosBasicos.push(item);
+          }
+        }
+        localStorage.setItem(STORAGE_KEYS.CADASTROS_BASICOS, JSON.stringify(this.cadastrosBasicos));
+        details['cadastros_basicos'] = sourceData.cadastros_basicos.length;
+      }
+
+      // 2. Regras Assistencia
+      if (Array.isArray(sourceData.regras_assistencia)) {
+        if (options.mode === 'replace') {
+          this.regrasAssistencia = [...sourceData.regras_assistencia];
+        } else {
+          for (const item of sourceData.regras_assistencia) {
+            const idx = this.regrasAssistencia.findIndex(r => r.id === item.id);
+            if (idx >= 0) this.regrasAssistencia[idx] = { ...this.regrasAssistencia[idx], ...item };
+            else this.regrasAssistencia.push(item);
+          }
+        }
+        localStorage.setItem(STORAGE_KEYS.REGRAS_ASSISTENCIA, JSON.stringify(this.regrasAssistencia));
+        details['regras_assistencia'] = sourceData.regras_assistencia.length;
+      }
+
+      // 3. Profissionais
+      if (Array.isArray(sourceData.profissionais)) {
+        if (options.mode === 'replace') {
+          this.customProfissionais = [...sourceData.profissionais];
+        } else {
+          for (const item of sourceData.profissionais) {
+            const idx = this.customProfissionais.findIndex(p => p.id === item.id || (p.cpf && p.cpf === item.cpf));
+            if (idx >= 0) this.customProfissionais[idx] = { ...this.customProfissionais[idx], ...item };
+            else this.customProfissionais.push(item);
+          }
+        }
+        localStorage.setItem(STORAGE_KEYS.PROFISSIONAIS, JSON.stringify(this.customProfissionais));
+        details['profissionais'] = sourceData.profissionais.length;
+      }
+
+      // 4. Empresas
+      if (Array.isArray(sourceData.empresas)) {
+        if (options.mode === 'replace') {
+          this.empresas = [...sourceData.empresas];
+        } else {
+          for (const item of sourceData.empresas) {
+            const idx = this.empresas.findIndex(e => e.id === item.id || (e.cnpj && e.cnpj === item.cnpj));
+            if (idx >= 0) this.empresas[idx] = { ...this.empresas[idx], ...item };
+            else this.empresas.push(item);
+          }
+        }
+        localStorage.setItem(STORAGE_KEYS.EMPRESAS, JSON.stringify(this.empresas));
+        details['empresas'] = sourceData.empresas.length;
+      }
+
+      // 5. Lancamentos Financeiros
+      if (Array.isArray(sourceData.lancamentos_financeiros || sourceData.lancamentos)) {
+        const rows = sourceData.lancamentos_financeiros || sourceData.lancamentos;
+        if (options.mode === 'replace') {
+          this.lancamentos = [...rows];
+        } else {
+          for (const item of rows) {
+            const idx = this.lancamentos.findIndex(l => l.id === item.id);
+            if (idx >= 0) this.lancamentos[idx] = { ...this.lancamentos[idx], ...item };
+            else this.lancamentos.push(item);
+          }
+        }
+        localStorage.setItem(STORAGE_KEYS.LANCAMENTOS, JSON.stringify(this.lancamentos));
+        details['lancamentos_financeiros'] = rows.length;
+      }
+
+      // 6. Processos Cobranca
+      if (Array.isArray(sourceData.processos_cobranca || sourceData.cobrancas)) {
+        const rows = sourceData.processos_cobranca || sourceData.cobrancas;
+        if (options.mode === 'replace') {
+          this.cobrancas = [...rows];
+        } else {
+          for (const item of rows) {
+            const idx = this.cobrancas.findIndex(c => c.id === item.id);
+            if (idx >= 0) this.cobrancas[idx] = { ...this.cobrancas[idx], ...item };
+            else this.cobrancas.push(item);
+          }
+        }
+        localStorage.setItem(STORAGE_KEYS.COBRANCAS, JSON.stringify(this.cobrancas));
+        details['processos_cobranca'] = rows.length;
+      }
+
+      // 7. Termos Fiscalizacao
+      if (Array.isArray(sourceData.termos_fiscalizacao || sourceData.termos)) {
+        const rows = sourceData.termos_fiscalizacao || sourceData.termos;
+        if (options.mode === 'replace') {
+          this.termosFiscalizacao = [...rows];
+        } else {
+          for (const item of rows) {
+            const idx = this.termosFiscalizacao.findIndex(t => t.id === item.id);
+            if (idx >= 0) this.termosFiscalizacao[idx] = { ...this.termosFiscalizacao[idx], ...item };
+            else this.termosFiscalizacao.push(item);
+          }
+        }
+        localStorage.setItem(STORAGE_KEYS.TERMOS_FISCALIZACAO, JSON.stringify(this.termosFiscalizacao));
+        details['termos_fiscalizacao'] = rows.length;
+      }
+
+      // 8. Protocolos
+      if (Array.isArray(sourceData.protocolos_processos || sourceData.protocolos)) {
+        const rows = sourceData.protocolos_processos || sourceData.protocolos;
+        if (options.mode === 'replace') {
+          this.protocolos = [...rows];
+        } else {
+          for (const item of rows) {
+            const idx = this.protocolos.findIndex(p => p.id === item.id);
+            if (idx >= 0) this.protocolos[idx] = { ...this.protocolos[idx], ...item };
+            else this.protocolos.push(item);
+          }
+        }
+        localStorage.setItem(STORAGE_KEYS.PROTOCOLOS, JSON.stringify(this.protocolos));
+        details['protocolos_processos'] = rows.length;
+      }
+
+      // 9. Formularios
+      if (Array.isArray(sourceData.formularios_dinamicos || sourceData.formularios)) {
+        const rows = sourceData.formularios_dinamicos || sourceData.formularios;
+        if (options.mode === 'replace') {
+          this.formularios = [...rows];
+        } else {
+          for (const item of rows) {
+            const idx = this.formularios.findIndex(f => f.id === item.id);
+            if (idx >= 0) this.formularios[idx] = { ...this.formularios[idx], ...item };
+            else this.formularios.push(item);
+          }
+        }
+        localStorage.setItem(STORAGE_KEYS.FORMULARIOS, JSON.stringify(this.formularios));
+        details['formularios_dinamicos'] = rows.length;
+      }
+
+      // 10. Respostas de Formularios
+      if (Array.isArray(sourceData.respostas_formularios || sourceData.respostasForms)) {
+        const rows = sourceData.respostas_formularios || sourceData.respostasForms;
+        if (options.mode === 'replace') {
+          this.respostasForms = [...rows];
+        } else {
+          for (const item of rows) {
+            const idx = this.respostasForms.findIndex(r => r.id === item.id);
+            if (idx >= 0) this.respostasForms[idx] = { ...this.respostasForms[idx], ...item };
+            else this.respostasForms.push(item);
+          }
+        }
+        localStorage.setItem(STORAGE_KEYS.RESPOSTAS_FORMS, JSON.stringify(this.respostasForms));
+        details['respostas_formularios'] = rows.length;
+      }
+
+      // 11. Council Config
+      if (sourceData.council_config && typeof sourceData.council_config === 'object') {
+        this.councilConfig = { ...this.councilConfig, ...sourceData.council_config };
+        localStorage.setItem(STORAGE_KEYS.COUNCIL_CONFIG, JSON.stringify(this.councilConfig));
+        details['council_config'] = 1;
+      }
+
+      // 12. Historico Auditoria
+      if (Array.isArray(sourceData.historico_auditoria)) {
+        if (options.mode === 'replace') {
+          this.historicoAuditoria = [...sourceData.historico_auditoria];
+        } else {
+          for (const item of sourceData.historico_auditoria) {
+            const idx = this.historicoAuditoria.findIndex(a => a.id === item.id);
+            if (idx >= 0) this.historicoAuditoria[idx] = { ...this.historicoAuditoria[idx], ...item };
+            else this.historicoAuditoria.push(item);
+          }
+        }
+        localStorage.setItem(STORAGE_KEYS.HISTORICO_AUDITORIA, JSON.stringify(this.historicoAuditoria));
+        details['historico_auditoria'] = sourceData.historico_auditoria.length;
+      }
+
+      // Sincronização opcional com Supabase
+      if (options.syncSupabase && this.isOnline) {
+        this.migrateAllToSupabase().catch(err => {
+          console.warn('Erro ao sincronizar dados restaurados com Supabase:', err);
+        });
+      }
+
+      this.notify();
+      return { success: true, details, errors };
+    } catch (err: any) {
+      console.error('Falha ao restaurar backup:', err);
+      return { success: false, details, errors: [err?.message || 'Erro inesperado na restauração'] };
+    }
+  }
+
+  // Snapshots Locais (Ponto de Restauração em 1 Clique)
+  public getLocalSnapshots(): any[] {
+    try {
+      const raw = localStorage.getItem('siscon_local_snapshots_v1');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  public createLocalSnapshot(label?: string): any {
+    const snapshots = this.getLocalSnapshots();
+    const counts = this.getTableCounts();
+    const totalRecords = Object.values(counts).reduce((a, b) => a + b, 0);
+
+    const snapshot = {
+      id: `snap_${Date.now()}`,
+      nome: label || `Snapshot Automático - ${new Date().toLocaleTimeString('pt-BR')}`,
+      criadoEm: new Date().toISOString(),
+      counts,
+      totalRecords,
+      payload: this.getBackupData()
+    };
+
+    // Mantém no máximo os últimos 5 snapshots para não estourar localStorage
+    const updated = [snapshot, ...snapshots].slice(0, 5);
+    try {
+      localStorage.setItem('siscon_local_snapshots_v1', JSON.stringify(updated));
+    } catch (e) {
+      // Se estourar cota, guarda apenas o snapshot mais recente
+      localStorage.setItem('siscon_local_snapshots_v1', JSON.stringify([snapshot]));
+    }
+    return snapshot;
+  }
+
+  public deleteLocalSnapshot(id: string): void {
+    const snapshots = this.getLocalSnapshots().filter(s => s.id !== id);
+    localStorage.setItem('siscon_local_snapshots_v1', JSON.stringify(snapshots));
+  }
+
+  public async restoreLocalSnapshot(id: string): Promise<boolean> {
+    const snapshots = this.getLocalSnapshots();
+    const target = snapshots.find(s => s.id === id);
+    if (!target || !target.payload) return false;
+    const res = await this.restoreBackup(target.payload, { mode: 'replace', syncSupabase: false });
+    return res.success;
   }
 }
 

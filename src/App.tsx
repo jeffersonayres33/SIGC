@@ -13,7 +13,7 @@ import { FormulariosView } from './components/formularios/FormulariosView';
 import { ProtocolosView } from './components/protocolos/ProtocolosView';
 import { PortalView } from './components/portal/PortalView';
 import { MicrosservicosView } from './components/arquitetura/MicrosservicosView';
-import { ConfiguracoesView } from './components/configuracoes/ConfiguracoesView';
+import { ConfiguracoesView, ConfigTab } from './components/configuracoes/ConfiguracoesView';
 import { ToastContainer } from './components/common/ToastContainer';
 
 import { CrtModal } from './components/modals/CrtModal';
@@ -28,6 +28,7 @@ import { toastService } from './services/toastService';
 
 export default function App() {
   const [activeSection, setActiveSection] = useState<MainSection>('dashboard');
+  const [configTab, setConfigTab] = useState<ConfigTab>('geral');
   const [currentUserRole, setCurrentUserRole] = useState<UserRole>('DIRETORIA');
   const [networkStatus, setNetworkStatus] = useState(storageService.getNetworkStatus());
   const [councilConfig, setCouncilConfig] = useState(storageService.getCouncilConfig());
@@ -97,8 +98,12 @@ export default function App() {
         {/* Collapsible Sidebar Drawer */}
         <Sidebar
           activeSection={activeSection}
-          onSelectSection={(section) => {
+          activeSubTab={configTab}
+          onSelectSection={(section, subTab) => {
             setActiveSection(section);
+            if (section === 'configuracoes' && subTab) {
+              setConfigTab(subTab as ConfigTab);
+            }
             setIsSidebarOpen(false);
           }}
           currentRole={currentUserRole}
@@ -158,7 +163,7 @@ export default function App() {
             )}
 
             {activeSection === 'configuracoes' && (
-              <ConfiguracoesView />
+              <ConfiguracoesView key={configTab} initialTab={configTab} />
             )}
 
             {activeSection === 'microsservicos' && (

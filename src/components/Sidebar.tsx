@@ -18,7 +18,9 @@ import {
   X,
   Building,
   ShieldCheck,
-  FolderTree
+  FolderTree,
+  Database,
+  ShieldAlert
 } from 'lucide-react';
 import { UserRole } from '../types';
 import { CouncilConfig } from '../services/storageService';
@@ -40,7 +42,8 @@ export type MainSection =
 
 interface SidebarProps {
   activeSection: MainSection;
-  onSelectSection: (section: MainSection) => void;
+  activeSubTab?: string;
+  onSelectSection: (section: MainSection, subTab?: string) => void;
   currentRole: UserRole;
   isOpen: boolean;
   onClose: () => void;
@@ -49,6 +52,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({
   activeSection,
+  activeSubTab,
   onSelectSection,
   currentRole,
   isOpen,
@@ -60,15 +64,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     financeiro: true,
     fiscalizacao: true,
     juridico: true,
-    relatorios: true
+    relatorios: true,
+    configuracoes: true
   });
 
   const toggleGroup = (key: string) => {
     setOpenGroups(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleSelect = (section: MainSection) => {
-    onSelectSection(section);
+  const handleSelect = (section: MainSection, subTab?: string) => {
+    onSelectSection(section, subTab);
     onClose();
   };
 
@@ -337,18 +342,84 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </span>
           </div>
 
-          {/* Configurações do Conselho */}
-          <button
-            onClick={() => handleSelect('configuracoes')}
-            className={`w-full flex items-center space-x-2.5 px-3 py-2.5 rounded-xl text-xs font-bold transition-all ${
-              activeSection === 'configuracoes'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                : 'text-slate-800 hover:bg-blue-50 hover:text-blue-700'
-            }`}
-          >
-            <Settings className={`w-4 h-4 ${activeSection === 'configuracoes' ? 'text-white' : 'text-blue-600'}`} />
-            <span>Configurações do Conselho</span>
-          </button>
+          {/* Configurações do Conselho & Submenus */}
+          <div>
+            <button
+              onClick={() => toggleGroup('configuracoes')}
+              className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-bold transition-all ${
+                activeSection === 'configuracoes'
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                  : 'text-slate-800 hover:bg-blue-50 hover:text-blue-700'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <Settings className={`w-4 h-4 ${activeSection === 'configuracoes' ? 'text-white' : 'text-blue-600'}`} />
+                <span>Configurações do Conselho</span>
+              </div>
+              {openGroups.configuracoes ? (
+                <ChevronDown className={`w-3.5 h-3.5 ${activeSection === 'configuracoes' ? 'text-white/80' : 'text-slate-400'}`} />
+              ) : (
+                <ChevronRight className={`w-3.5 h-3.5 ${activeSection === 'configuracoes' ? 'text-white/80' : 'text-slate-400'}`} />
+              )}
+            </button>
+
+            {openGroups.configuracoes && (
+              <div className="ml-3 pl-2.5 border-l-2 border-slate-100 space-y-1 mt-1">
+                <button
+                  onClick={() => handleSelect('configuracoes', 'geral')}
+                  className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    activeSection === 'configuracoes' && (activeSubTab === 'geral' || !activeSubTab)
+                      ? 'bg-blue-50 text-blue-700 font-bold border-l-2 border-blue-600'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <Building className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Dados & Numeração</span>
+                </button>
+
+                <button
+                  onClick={() => handleSelect('configuracoes', 'assistencia')}
+                  className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    activeSection === 'configuracoes' && activeSubTab === 'assistencia'
+                      ? 'bg-teal-50 text-teal-700 font-bold border-l-2 border-teal-600'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <Scale className="w-3.5 h-3.5 text-teal-600" />
+                  <span>Assistência Farmacêutica</span>
+                </button>
+
+                <button
+                  onClick={() => handleSelect('configuracoes', 'impedimentos_art')}
+                  className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    activeSection === 'configuracoes' && activeSubTab === 'impedimentos_art'
+                      ? 'bg-rose-50 text-rose-700 font-bold border-l-2 border-rose-600'
+                      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  }`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Impedimentos de ART</span>
+                </button>
+
+                <button
+                  onClick={() => handleSelect('configuracoes', 'backup_restore')}
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    activeSection === 'configuracoes' && activeSubTab === 'backup_restore'
+                      ? 'bg-indigo-50 text-indigo-800 font-extrabold border-l-2 border-indigo-600 shadow-xs'
+                      : 'text-indigo-600 hover:bg-indigo-50/70 hover:text-indigo-800'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2">
+                    <Database className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Backup e Restore</span>
+                  </div>
+                  <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-indigo-100 text-indigo-700 uppercase font-bold">
+                    DADOS
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Microsserviços & Arquitetura */}
           <button
