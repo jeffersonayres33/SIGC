@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FolderTree, 
   Plus, 
@@ -33,7 +33,24 @@ import { toastService } from '../../services/toastService';
 import { sanitizeToUpper } from '../../utils/documentUtils';
 import { exportToCSV, exportToPDF } from '../../services/exportService';
 
-type MainGroup = 'PROFISSIONAIS' | 'EMPRESAS' | 'PROTOCOLOS';
+export type MainGroup = 'PROFISSIONAIS' | 'EMPRESAS' | 'PROTOCOLOS' | 'FUNCIONARIOS' | 'ADMIN';
+
+const LISTA_MODULOS_SISTEMA: { id: string; nome: string }[] = [
+  { id: 'dashboard', nome: 'Painel Executivo / Dashboard' },
+  { id: 'profissionais', nome: 'Profissionais (Pessoa Física)' },
+  { id: 'empresas', nome: 'Empresas (Pessoa Jurídica)' },
+  { id: 'cadastros_basicos', nome: 'Cadastros Básicos & Auxiliares' },
+  { id: 'funcionarios', nome: 'Gestão de Funcionários' },
+  { id: 'financeiro', nome: 'Financeiro & Anuidades' },
+  { id: 'cobranca_juridico', nome: 'Jurídico & Dívida Ativa' },
+  { id: 'fiscalizacao', nome: 'Fiscalização de Campo' },
+  { id: 'protocolos', nome: 'Protocolos & Requerimentos' },
+  { id: 'relatorios', nome: 'Relatórios & BI Diretoria' },
+  { id: 'formularios', nome: 'Formulários Dinâmicos' },
+  { id: 'portal_inscrito', nome: 'Portal do Inscrito (PF/PJ)' },
+  { id: 'configuracoes', nome: 'Painel Admin / Configurações' },
+  { id: 'microsservicos', nome: 'Microsserviços & Cloud' },
+];
 
 interface SubGroupConfig {
   key: CategoriaCadastroBasico;
@@ -171,8 +188,58 @@ const SUBGROUPS_PROTOCOLOS: SubGroupConfig[] = [
   }
 ];
 
-export const CadastrosBasicosView: React.FC = () => {
-  const [activeMainGroup, setActiveMainGroup] = useState<MainGroup>('PROFISSIONAIS');
+const SUBGROUPS_FUNCIONARIOS: SubGroupConfig[] = [
+  {
+    key: 'CARGO_FUNCIONARIO',
+    label: 'Cargos de Funcionários',
+    icon: Briefcase,
+    singular: 'Cargo',
+    description: 'Cargos e funções exercidas pelos colaboradores do conselho (ex: Fiscal de Farmácia, Procurador Jurídico, Analista Financeiro).',
+    linkInfo: 'Vinculado diretamente ao Cadastro de Funcionários.',
+    badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  },
+  {
+    key: 'SETOR_LOTACAO',
+    label: 'Setores de Lotação',
+    icon: Network,
+    singular: 'Setor de Lotação',
+    description: 'Departamentos e setores internos do conselho onde os funcionários são lotados (ex: DEFIS, Jurídico, Financeiro, Diretoria).',
+    linkInfo: 'Utilizado na lotação de colaboradores e tramitação de processos.',
+    badgeColor: 'bg-blue-50 text-blue-700 border-blue-200'
+  },
+  {
+    key: 'GRUPO_ACESSO_FUNCIONARIO',
+    label: 'Níveis de Acesso & Permissões',
+    icon: ShieldCheck,
+    singular: 'Nível de Acesso',
+    description: 'Grupos de acesso e definição dos módulos da plataforma permitidos para cada perfil de colaborador.',
+    linkInfo: 'Vinculado ao nível de acesso do cadastro de funcionários.',
+    badgeColor: 'bg-purple-50 text-purple-700 border-purple-200'
+  }
+];
+
+const SUBGROUPS_ADMIN: SubGroupConfig[] = [
+  {
+    key: 'ADMIN_PARAMETRO',
+    label: 'Parâmetros Administrativos & Segurança',
+    icon: ShieldAlert,
+    singular: 'Parâmetro Administrativo',
+    description: 'Políticas de auditoria, exigência de troca de senha no 1º acesso e diretrizes gerais de governança.',
+    linkInfo: 'Configurações de governança corporativa e segurança da informação.',
+    badgeColor: 'bg-rose-50 text-rose-700 border-rose-200'
+  }
+];
+
+interface CadastrosBasicosViewProps {
+  initialGroup?: MainGroup;
+  onNavigateToFuncionarios?: () => void;
+}
+
+export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({ 
+  initialGroup = 'PROFISSIONAIS',
+  onNavigateToFuncionarios 
+}) => {
+  const [activeMainGroup, setActiveMainGroup] = useState<MainGroup>(initialGroup);
   const [selectedCategory, setSelectedCategory] = useState<CategoriaCadastroBasico>('TIPO_PROFISSIONAL');
   const [searchTerm, setSearchTerm] = useState('');
   
@@ -183,6 +250,12 @@ export const CadastrosBasicosView: React.FC = () => {
 
   const allItems = storageService.getCadastrosBasicos();
 
+  useEffect(() => {
+    if (initialGroup) {
+      handleSelectMainGroup(initialGroup);
+    }
+  }, [initialGroup]);
+
   // Switch main group helper
   const handleSelectMainGroup = (group: MainGroup) => {
     setActiveMainGroup(group);
@@ -190,8 +263,12 @@ export const CadastrosBasicosView: React.FC = () => {
       setSelectedCategory('TIPO_PROFISSIONAL');
     } else if (group === 'EMPRESAS') {
       setSelectedCategory('TIPO_EMPRESA');
-    } else {
+    } else if (group === 'PROTOCOLOS') {
       setSelectedCategory('TIPO_REQUERIMENTO_PROTOCOLO');
+    } else if (group === 'FUNCIONARIOS') {
+      setSelectedCategory('CARGO_FUNCIONARIO');
+    } else if (group === 'ADMIN') {
+      setSelectedCategory('ADMIN_PARAMETRO');
     }
   };
 
@@ -203,11 +280,83 @@ export const CadastrosBasicosView: React.FC = () => {
         return SUBGROUPS_EMPRESAS;
       case 'PROTOCOLOS':
         return SUBGROUPS_PROTOCOLOS;
+      case 'FUNCIONARIOS':
+        return SUBGROUPS_FUNCIONARIOS;
+      case 'ADMIN':
+        return SUBGROUPS_ADMIN;
+      default:
+        return SUBGROUPS_PROFISSIONAIS;
+    }
+  };
+
+  const getGroupInfo = (group: MainGroup) => {
+    switch (group) {
+      case 'PROFISSIONAIS':
+        return {
+          title: 'Cadastros Básicos • Profissionais (PF)',
+          subtitle: 'Tabelas auxiliares: tipos de profissionais, habilitações, situações cadastrais e motivos.',
+          icon: Users,
+          color: 'blue',
+          headerBg: 'from-blue-700 via-blue-800 to-slate-900',
+          badgeText: 'PROFISSIONAIS (PESSOA FÍSICA)',
+          badgeColor: 'bg-blue-50 text-blue-700 border-blue-200'
+        };
+      case 'EMPRESAS':
+        return {
+          title: 'Cadastros Básicos • Empresas (PJ)',
+          subtitle: 'Tabelas auxiliares: tipos de empresas, naturezas de atividade, vínculos, situações e municípios.',
+          icon: Building2,
+          color: 'emerald',
+          headerBg: 'from-emerald-700 via-teal-800 to-slate-900',
+          badgeText: 'EMPRESAS (PESSOA JURÍDICA)',
+          badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+        };
+      case 'PROTOCOLOS':
+        return {
+          title: 'Cadastros Básicos • Protocolo e Processo',
+          subtitle: 'Tabelas auxiliares: tipos de requerimento, setores de tramitação e status do processo.',
+          icon: FileText,
+          color: 'indigo',
+          headerBg: 'from-indigo-700 via-purple-800 to-slate-900',
+          badgeText: 'PROTOCOLO E PROCESSO',
+          badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200'
+        };
+      case 'FUNCIONARIOS':
+        return {
+          title: 'Cadastros Básicos • Funcionários',
+          subtitle: 'Tabelas auxiliares: cargos de funcionários, setores de lotação e níveis de acesso & permissões.',
+          icon: Briefcase,
+          color: 'purple',
+          headerBg: 'from-purple-700 via-indigo-800 to-slate-900',
+          badgeText: 'FUNCIONÁRIOS',
+          badgeColor: 'bg-purple-50 text-purple-700 border-purple-200'
+        };
+      case 'ADMIN':
+        return {
+          title: 'Cadastros Básicos • Governança & Segurança',
+          subtitle: 'Políticas de auditoria, segurança e diretrizes gerais de governança corporativa.',
+          icon: ShieldAlert,
+          color: 'rose',
+          headerBg: 'from-rose-700 via-slate-800 to-slate-900',
+          badgeText: 'GOVERNANÇA & SEGURANÇA',
+          badgeColor: 'bg-rose-50 text-rose-700 border-rose-200'
+        };
+      default:
+        return {
+          title: 'Cadastros Básicos',
+          subtitle: 'Padronização e parametrizações do conselho.',
+          icon: FolderTree,
+          color: 'blue',
+          headerBg: 'from-blue-700 via-blue-800 to-slate-900',
+          badgeText: 'CADASTROS BÁSICOS',
+          badgeColor: 'bg-blue-50 text-blue-700 border-blue-200'
+        };
     }
   };
 
   const activeSubgroups = getSubgroupsForCurrentGroup();
   const currentSubgroupConfig = activeSubgroups.find(s => s.key === selectedCategory) || activeSubgroups[0];
+  const currentGroupInfo = getGroupInfo(activeMainGroup);
 
   const filteredItems = allItems.filter(item => {
     if (item.categoria !== selectedCategory) return false;
@@ -225,12 +374,17 @@ export const CadastrosBasicosView: React.FC = () => {
   const countProfissionais = allItems.filter(i => 
     i.categoria === 'TIPO_PROFISSIONAL' || 
     i.categoria === 'HABILITACAO' || 
-    i.categoria === 'SITUACAO_PROFISSIONAL'
+    i.categoria === 'SITUACAO_PROFISSIONAL' ||
+    i.categoria === 'MOTIVO_SITUACAO_PROFISSIONAL'
   ).length;
 
   const countEmpresas = allItems.filter(i => 
     i.categoria === 'TIPO_EMPRESA' || 
-    i.categoria === 'SITUACAO_EMPRESA'
+    i.categoria === 'NATUREZA_ATIVIDADE' ||
+    i.categoria === 'SITUACAO_VINCULO' ||
+    i.categoria === 'SITUACAO_EMPRESA' ||
+    i.categoria === 'MOTIVO_SITUACAO_EMPRESA' ||
+    i.categoria === 'MUNICIPIO'
   ).length;
 
   const countProtocolos = allItems.filter(i => 
@@ -239,21 +393,45 @@ export const CadastrosBasicosView: React.FC = () => {
     i.categoria === 'STATUS_PROTOCOLO'
   ).length;
 
+  const countFuncionarios = allItems.filter(i => 
+    i.categoria === 'CARGO_FUNCIONARIO' || 
+    i.categoria === 'SETOR_LOTACAO' || 
+    i.categoria === 'GRUPO_ACESSO_FUNCIONARIO'
+  ).length;
+
   const handleOpenNew = () => {
+    const subList = getSubgroupsForCurrentGroup();
+    const defaultCat = subList.some(s => s.key === selectedCategory) 
+      ? selectedCategory 
+      : subList[0].key;
+
+    const defaultCargo = allItems.find(i => i.categoria === 'CARGO_FUNCIONARIO' && i.ativo);
+    const defaultSetor = allItems.find(i => i.categoria === 'SETOR_LOTACAO' && i.ativo);
+
     setEditingItem({
       id: '',
       nome: '',
       codigo: '',
       descricao: '',
-      categoria: selectedCategory,
+      categoria: defaultCat,
       ativo: true,
-      ordem: filteredItems.length + 1
+      ordem: filteredItems.length + 1,
+      cargoId: defaultCat === 'GRUPO_ACESSO_FUNCIONARIO' ? defaultCargo?.id : undefined,
+      cargoNome: defaultCat === 'GRUPO_ACESSO_FUNCIONARIO' ? defaultCargo?.nome : undefined,
+      setorId: defaultCat === 'GRUPO_ACESSO_FUNCIONARIO' ? defaultSetor?.id : undefined,
+      setorNome: defaultCat === 'GRUPO_ACESSO_FUNCIONARIO' ? defaultSetor?.nome : undefined,
+      modulosPermitidos: defaultCat === 'GRUPO_ACESSO_FUNCIONARIO' ? ['dashboard', 'fiscalizacao', 'protocolos', 'empresas'] : undefined
     });
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (item: ItemCadastroBasico) => {
-    setEditingItem({ ...item });
+    setEditingItem({ 
+      ...item,
+      modulosPermitidos: item.modulosPermitidos 
+        ? item.modulosPermitidos.map(m => String(m).toLowerCase().trim()) 
+        : undefined
+    });
     setIsModalOpen(true);
   };
 
@@ -284,10 +462,17 @@ export const CadastrosBasicosView: React.FC = () => {
       descricao: editingItem.descricao?.trim() || '',
       categoria: cat,
       ativo: editingItem.ativo ?? true,
-      ordem: editingItem.ordem || 1
+      ordem: editingItem.ordem || 1,
+      modulosPermitidos: editingItem.modulosPermitidos 
+        ? editingItem.modulosPermitidos.map(m => String(m).toLowerCase().trim()) 
+        : (cat === 'GRUPO_ACESSO_FUNCIONARIO' ? ['dashboard', 'protocolos', 'profissionais'] : undefined),
+      cargoId: editingItem.cargoId || undefined,
+      cargoNome: editingItem.cargoNome || undefined,
+      setorId: editingItem.setorId || undefined,
+      setorNome: editingItem.setorNome || undefined
     };
 
-    const finalItem = sanitizeToUpper(rawItem, ['id']);
+    const finalItem = sanitizeToUpper(rawItem, ['id', 'cargoId', 'setorId', 'modulosPermitidos']);
     const res = storageService.saveCadastroBasico(finalItem);
     
     if (!res.success) {
@@ -379,28 +564,54 @@ export const CadastrosBasicosView: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* 1. Header Principal */}
+      {/* 1. Header Dedicado do Grupo Ativo (Acesso Exclusivo via Menu de Navegação) */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
         <div className="flex items-center space-x-3.5">
-          <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shadow-xs shrink-0">
-            <FolderTree className="w-6 h-6" />
+          <div className={`w-12 h-12 rounded-xl border flex items-center justify-center shadow-xs shrink-0 ${
+            activeMainGroup === 'PROFISSIONAIS'
+              ? 'bg-blue-50 border-blue-100 text-blue-600'
+              : activeMainGroup === 'EMPRESAS'
+              ? 'bg-emerald-50 border-emerald-100 text-emerald-600'
+              : activeMainGroup === 'PROTOCOLOS'
+              ? 'bg-indigo-50 border-indigo-100 text-indigo-600'
+              : activeMainGroup === 'FUNCIONARIOS'
+              ? 'bg-purple-50 border-purple-100 text-purple-600'
+              : 'bg-rose-50 border-rose-100 text-rose-600'
+          }`}>
+            <currentGroupInfo.icon className="w-6 h-6" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-                CADASTROS BÁSICOS
-              </h1>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 font-semibold border border-blue-200">
-                {allItems.length} ITENS CADASTRADOS
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                Menu de Navegação • 4. Cadastros Básicos
+              </span>
+              <span className="text-slate-300">•</span>
+              <span className={`text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase border ${currentGroupInfo.badgeColor}`}>
+                {currentGroupInfo.badgeText}
               </span>
             </div>
+            <h1 className="text-xl font-extrabold text-slate-900 tracking-tight mt-0.5">
+              {currentGroupInfo.title}
+            </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Padronização e parametrização dos grupos de Profissionais (PF), Empresas (PJ) e Protocolos/Processos.
+              {currentGroupInfo.subtitle}
             </p>
           </div>
         </div>
 
         <div className="flex items-center flex-wrap gap-2">
+          {activeMainGroup === 'FUNCIONARIOS' && onNavigateToFuncionarios && (
+            <button
+              type="button"
+              onClick={onNavigateToFuncionarios}
+              className="flex items-center space-x-1.5 px-3 py-2.5 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 font-bold text-xs transition-all uppercase shadow-2xs cursor-pointer"
+              title="Acessar o Cadastro de Funcionários completo"
+            >
+              <Users className="w-4 h-4 text-purple-600" />
+              <span>Ver Fichas de Funcionários</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
           <button
             onClick={handleExportCSV}
             className="flex items-center space-x-1.5 px-3 py-2.5 rounded-xl bg-white border border-slate-300 hover:bg-emerald-50 hover:border-emerald-300 text-slate-700 hover:text-emerald-800 font-bold text-xs transition-all uppercase shadow-2xs cursor-pointer"
@@ -419,180 +630,22 @@ export const CadastrosBasicosView: React.FC = () => {
           </button>
           <button
             onClick={handleOpenNew}
-            className="flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all uppercase shrink-0 cursor-pointer"
+            className={`flex items-center justify-center space-x-2 px-4 py-2.5 rounded-xl text-white font-bold text-xs shadow-md transition-all uppercase shrink-0 cursor-pointer ${
+              activeMainGroup === 'PROFISSIONAIS'
+                ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
+                : activeMainGroup === 'EMPRESAS'
+                ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
+                : activeMainGroup === 'PROTOCOLOS'
+                ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/20'
+                : activeMainGroup === 'FUNCIONARIOS'
+                ? 'bg-purple-600 hover:bg-purple-700 shadow-purple-500/20'
+                : 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/20'
+            }`}
           >
             <Plus className="w-4 h-4" />
             <span>INSERIR NOVO ITEM</span>
           </button>
         </div>
-      </div>
-
-      {/* 2. Seleção dos 3 Grupos Principais */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Card Grupo 1: Profissionais */}
-        <button
-          type="button"
-          onClick={() => handleSelectMainGroup('PROFISSIONAIS')}
-          className={`p-5 rounded-2xl border-2 text-left transition-all relative overflow-hidden flex flex-col justify-between cursor-pointer ${
-            activeMainGroup === 'PROFISSIONAIS'
-              ? 'bg-linear-to-br from-blue-500/10 via-white to-blue-500/5 border-blue-600 shadow-md ring-2 ring-blue-600/20'
-              : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 shadow-xs'
-          }`}
-        >
-          <div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                  activeMainGroup === 'PROFISSIONAIS' ? 'bg-blue-600 text-white shadow-sm' : 'bg-blue-50 text-blue-600'
-                }`}>
-                  <Users className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-sm text-slate-900 tracking-tight flex items-center gap-2">
-                    PROFISSIONAIS
-                    {activeMainGroup === 'PROFISSIONAIS' && (
-                      <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-                    )}
-                  </h3>
-                  <p className="text-[11px] text-slate-500 font-medium">Pessoa Física (PF)</p>
-                </div>
-              </div>
-
-              <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-lg border ${
-                activeMainGroup === 'PROFISSIONAIS'
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-slate-100 text-slate-600 border-slate-200'
-              }`}>
-                {countProfissionais} itens
-              </span>
-            </div>
-
-            <p className="text-xs text-slate-600 mt-3">
-              Tipos de profissionais, especialidades/habilitações averbadas e situações cadastrais.
-            </p>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-semibold">
-            <div className="flex items-center gap-1.5 text-slate-500">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-              <span>3 Subgrupos</span>
-            </div>
-            <span className={`flex items-center gap-1 ${activeMainGroup === 'PROFISSIONAIS' ? 'text-blue-600 font-bold' : 'text-slate-400'}`}>
-              {activeMainGroup === 'PROFISSIONAIS' ? 'Selecionado' : 'Selecionar'}
-              <ArrowRight className="w-3.5 h-3.5" />
-            </span>
-          </div>
-        </button>
-
-        {/* Card Grupo 2: Empresas */}
-        <button
-          type="button"
-          onClick={() => handleSelectMainGroup('EMPRESAS')}
-          className={`p-5 rounded-2xl border-2 text-left transition-all relative overflow-hidden flex flex-col justify-between cursor-pointer ${
-            activeMainGroup === 'EMPRESAS'
-              ? 'bg-linear-to-br from-emerald-500/10 via-white to-emerald-500/5 border-emerald-600 shadow-md ring-2 ring-emerald-600/20'
-              : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 shadow-xs'
-          }`}
-        >
-          <div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                  activeMainGroup === 'EMPRESAS' ? 'bg-emerald-600 text-white shadow-sm' : 'bg-emerald-50 text-emerald-600'
-                }`}>
-                  <Building2 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-sm text-slate-900 tracking-tight flex items-center gap-2">
-                    EMPRESAS
-                    {activeMainGroup === 'EMPRESAS' && (
-                      <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
-                    )}
-                  </h3>
-                  <p className="text-[11px] text-slate-500 font-medium">Pessoa Jurídica (PJ)</p>
-                </div>
-              </div>
-
-              <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-lg border ${
-                activeMainGroup === 'EMPRESAS'
-                  ? 'bg-emerald-600 text-white border-emerald-600'
-                  : 'bg-slate-100 text-slate-600 border-slate-200'
-              }`}>
-                {countEmpresas} itens
-              </span>
-            </div>
-
-            <p className="text-xs text-slate-600 mt-3">
-              Tipos de estabelecimentos (drogarias, manipulação, laboratórios) e situações de empresas.
-            </p>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-semibold">
-            <div className="flex items-center gap-1.5 text-slate-500">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-              <span>2 Subgrupos</span>
-            </div>
-            <span className={`flex items-center gap-1 ${activeMainGroup === 'EMPRESAS' ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
-              {activeMainGroup === 'EMPRESAS' ? 'Selecionado' : 'Selecionar'}
-              <ArrowRight className="w-3.5 h-3.5" />
-            </span>
-          </div>
-        </button>
-
-        {/* Card Grupo 3: Protocolos */}
-        <button
-          type="button"
-          onClick={() => handleSelectMainGroup('PROTOCOLOS')}
-          className={`p-5 rounded-2xl border-2 text-left transition-all relative overflow-hidden flex flex-col justify-between cursor-pointer ${
-            activeMainGroup === 'PROTOCOLOS'
-              ? 'bg-linear-to-br from-indigo-500/10 via-white to-indigo-500/5 border-indigo-600 shadow-md ring-2 ring-indigo-600/20'
-              : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 shadow-xs'
-          }`}
-        >
-          <div>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                  activeMainGroup === 'PROTOCOLOS' ? 'bg-indigo-600 text-white shadow-sm' : 'bg-indigo-50 text-indigo-600'
-                }`}>
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-sm text-slate-900 tracking-tight flex items-center gap-2">
-                    PROTOCOLOS
-                    {activeMainGroup === 'PROTOCOLOS' && (
-                      <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse" />
-                    )}
-                  </h3>
-                  <p className="text-[11px] text-slate-500 font-medium">Processos & Requerimentos</p>
-                </div>
-              </div>
-
-              <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-lg border ${
-                activeMainGroup === 'PROTOCOLOS'
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-slate-100 text-slate-600 border-slate-200'
-              }`}>
-                {countProtocolos} itens
-              </span>
-            </div>
-
-            <p className="text-xs text-slate-600 mt-3">
-              Tipos de requerimento, setores de tramitação e status de acompanhamento processual.
-            </p>
-          </div>
-
-          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] font-semibold">
-            <div className="flex items-center gap-1.5 text-slate-500">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-              <span>3 Subgrupos</span>
-            </div>
-            <span className={`flex items-center gap-1 ${activeMainGroup === 'PROTOCOLOS' ? 'text-indigo-600 font-bold' : 'text-slate-400'}`}>
-              {activeMainGroup === 'PROTOCOLOS' ? 'Selecionado' : 'Selecionar'}
-              <ArrowRight className="w-3.5 h-3.5" />
-            </span>
-          </div>
-        </button>
       </div>
 
       {/* 3. Barra de Subgrupos do Grupo Ativo */}
@@ -610,11 +663,15 @@ export const CadastrosBasicosView: React.FC = () => {
                 className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl font-bold text-xs uppercase transition-all cursor-pointer ${
                   isSelected
                     ? activeMainGroup === 'PROFISSIONAIS'
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25'
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/25 ring-2 ring-blue-500/20'
                       : activeMainGroup === 'EMPRESAS'
-                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/25'
-                      : 'bg-indigo-600 text-white shadow-md shadow-indigo-500/25'
-                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-500/25 ring-2 ring-emerald-500/20'
+                      : activeMainGroup === 'PROTOCOLOS'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/25 ring-2 ring-indigo-500/20'
+                      : activeMainGroup === 'FUNCIONARIOS'
+                      ? 'bg-purple-600 text-white shadow-md shadow-purple-500/25 ring-2 ring-purple-500/20'
+                      : 'bg-rose-600 text-white shadow-md shadow-rose-500/25 ring-2 ring-rose-500/20'
+                    : 'text-slate-700 bg-slate-50 hover:bg-slate-100 hover:text-slate-900 border border-slate-200/80'
                 }`}
               >
                 <Icon className="w-4 h-4 shrink-0" />
@@ -638,7 +695,11 @@ export const CadastrosBasicosView: React.FC = () => {
               ? 'bg-blue-50 text-blue-600 border border-blue-200' 
               : activeMainGroup === 'EMPRESAS'
               ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
-              : 'bg-indigo-50 text-indigo-600 border border-indigo-200'
+              : activeMainGroup === 'PROTOCOLOS'
+              ? 'bg-indigo-50 text-indigo-600 border border-indigo-200'
+              : activeMainGroup === 'FUNCIONARIOS'
+              ? 'bg-purple-50 text-purple-600 border border-purple-200'
+              : 'bg-rose-50 text-rose-600 border border-rose-200'
           }`}>
             {React.createElement(currentSubgroupConfig.icon, { className: 'w-5 h-5' })}
           </div>
@@ -720,6 +781,35 @@ export const CadastrosBasicosView: React.FC = () => {
                       <td className="py-3.5 px-4">
                         <div className="font-bold text-slate-900 uppercase">{item.nome}</div>
                         <div className="text-[10px] text-slate-400 font-mono mt-0.5">ID: {item.id}</div>
+                        {item.categoria === 'GRUPO_ACESSO_FUNCIONARIO' && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            {item.cargoNome ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 font-semibold">
+                                <Briefcase className="w-3 h-3" />
+                                <span>Cargo: {item.cargoNome}</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">
+                                Qualquer Cargo
+                              </span>
+                            )}
+                            {item.setorNome ? (
+                              <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
+                                <Building2 className="w-3 h-3" />
+                                <span>Setor: {item.setorNome}</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium">
+                                Qualquer Setor
+                              </span>
+                            )}
+                            {item.modulosPermitidos && (
+                              <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold">
+                                {item.modulosPermitidos.length} módulos
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="py-3.5 px-4">
                         <div className="text-slate-600 uppercase max-w-md line-clamp-2">
@@ -771,25 +861,25 @@ export const CadastrosBasicosView: React.FC = () => {
         </div>
       </div>
 
-      {/* 6. Modal de Criação / Edição */}
+      {/* 6. Modal de Criação / Edição Responsivo */}
       {isModalOpen && editingItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-150">
-            {/* Modal Header */}
-            <div className={`px-6 py-4.5 text-white flex items-center justify-between ${
-              activeMainGroup === 'PROFISSIONAIS'
-                ? 'bg-linear-to-r from-blue-700 via-blue-800 to-slate-900'
-                : activeMainGroup === 'EMPRESAS'
-                ? 'bg-linear-to-r from-emerald-700 via-teal-800 to-slate-900'
-                : 'bg-linear-to-r from-indigo-700 via-purple-800 to-slate-900'
-            }`}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full my-auto flex flex-col max-h-[92vh] overflow-hidden border border-slate-200 animate-in fade-in zoom-in duration-150">
+            {/* Modal Header Fixo */}
+            <div className={`px-6 py-4 text-white flex items-center justify-between bg-linear-to-r shrink-0 ${currentGroupInfo.headerBg}`}>
               <div className="flex items-center space-x-2.5">
                 <FolderTree className="w-5 h-5 text-white" />
-                <h3 className="font-bold text-sm uppercase tracking-wide">
-                  {editingItem.id ? 'EDITAR CADASTRO BÁSICO' : 'NOVO CADASTRO BÁSICO'}
-                </h3>
+                <div>
+                  <h3 className="font-bold text-sm uppercase tracking-wide">
+                    {editingItem.id ? 'EDITAR CADASTRO BÁSICO' : 'NOVO CADASTRO BÁSICO'}
+                  </h3>
+                  <p className="text-[10px] text-white/80 font-bold uppercase tracking-wider">
+                    Grupo: {currentGroupInfo.badgeText}
+                  </p>
+                </div>
               </div>
               <button
+                type="button"
                 onClick={() => {
                   setIsModalOpen(false);
                   setEditingItem(null);
@@ -800,115 +890,261 @@ export const CadastrosBasicosView: React.FC = () => {
               </button>
             </div>
 
-            {/* Modal Form */}
-            <form onSubmit={handleSaveItem} className="p-6 space-y-4 text-xs">
-              <div>
-                <label className="block text-slate-700 font-bold mb-1 uppercase">
-                  Grupo & Subgrupo
-                </label>
-                <select
-                  value={editingItem.categoria}
-                  onChange={(e) => setEditingItem({ ...editingItem, categoria: e.target.value as CategoriaCadastroBasico })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-bold uppercase focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
-                >
-                  <optgroup label="1. PROFISSIONAIS (PESSOA FÍSICA)">
-                    {SUBGROUPS_PROFISSIONAIS.map(s => (
-                      <option key={s.key} value={s.key}>{s.label}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="2. EMPRESAS (PESSOA JURÍDICA)">
-                    {SUBGROUPS_EMPRESAS.map(s => (
-                      <option key={s.key} value={s.key}>{s.label}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="3. PROTOCOLOS & PROCESSOS">
-                    {SUBGROUPS_PROTOCOLOS.map(s => (
-                      <option key={s.key} value={s.key}>{s.label}</option>
-                    ))}
-                  </optgroup>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-slate-700 font-bold mb-1 uppercase">
-                  Nome / Título do Registro <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="EX: FARMACÊUTICO HOSPITALAR OU REQUERIMENTO..."
-                  value={editingItem.nome || ''}
-                  onChange={(e) => setEditingItem({ ...editingItem, nome: e.target.value.toUpperCase() })}
-                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-slate-900 font-semibold uppercase focus:bg-white focus:ring-2 transition-all ${
-                    editingItem.nome?.trim() && storageService.checkCadastroBasicoDuplicity(editingItem.categoria || selectedCategory, editingItem.nome.trim(), editingItem.id)
-                      ? 'border-rose-400 focus:ring-rose-500/20 focus:border-rose-600 bg-rose-50/30'
-                      : 'border-slate-300 focus:ring-blue-500/20 focus:border-blue-600'
-                  }`}
-                />
-                {editingItem.nome?.trim() && storageService.checkCadastroBasicoDuplicity(editingItem.categoria || selectedCategory, editingItem.nome.trim(), editingItem.id) && (
-                  <div className="mt-1.5 flex items-center gap-1.5 text-rose-600 text-[11px] font-bold uppercase">
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                    <span>Atenção: Já existe um registro com este nome nesta categoria. Duplicidade bloqueada.</span>
+            {/* Modal Form com Corpo Rolável e Ações Fixas no Rodapé */}
+            <form onSubmit={handleSaveItem} className="flex flex-col flex-1 overflow-hidden">
+              <div className="p-5 sm:p-6 space-y-4 text-xs overflow-y-auto flex-1">
+                {/* Grupo e Subgrupo - Grupo pré-selecionado pelo sistema e Subgrupo exclusivo da tela atual */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* 1. Grupo Correspondente selecionado pelo sistema */}
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1 uppercase text-[11px]">
+                      Grupo (Definido pela Tela Atual)
+                    </label>
+                    <div className="flex items-center justify-between px-3 py-2 bg-slate-100 border border-slate-300 rounded-xl text-slate-800 font-bold uppercase text-xs">
+                      <div className="flex items-center space-x-2 truncate">
+                        <currentGroupInfo.icon className="w-4 h-4 text-blue-600 shrink-0" />
+                        <span className="truncate">{currentGroupInfo.badgeText}</span>
+                      </div>
+                      <span className="text-[9px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-mono font-bold shrink-0">
+                        FIXO
+                      </span>
+                    </div>
                   </div>
-                )}
-              </div>
 
-              <div className="grid grid-cols-2 gap-3">
+                  {/* 2. Subgrupo exclusivo deste grupo selecionado */}
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1 uppercase text-[11px]">
+                      Subgrupo <span className="text-rose-500">*</span>
+                    </label>
+                    <select
+                      value={editingItem.categoria}
+                      onChange={(e) => setEditingItem({ ...editingItem, categoria: e.target.value as CategoriaCadastroBasico })}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 font-bold uppercase text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 cursor-pointer"
+                    >
+                      {activeSubgroups.map(s => (
+                        <option key={s.key} value={s.key}>{s.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-slate-700 font-bold mb-1 uppercase">
-                    Código / Sigla (Opcional)
+                    Nome / Título do Registro <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
-                    placeholder="EX: FARM-HOSP / REQ-01"
-                    value={editingItem.codigo || ''}
-                    onChange={(e) => setEditingItem({ ...editingItem, codigo: e.target.value.toUpperCase() })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-mono font-bold uppercase focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                    required
+                    placeholder="EX: FARMACÊUTICO HOSPITALAR OU FISCAL DE CAMPO..."
+                    value={editingItem.nome || ''}
+                    onChange={(e) => setEditingItem({ ...editingItem, nome: e.target.value.toUpperCase() })}
+                    className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-slate-900 font-semibold uppercase focus:bg-white focus:ring-2 transition-all ${
+                      editingItem.nome?.trim() && storageService.checkCadastroBasicoDuplicity(editingItem.categoria || selectedCategory, editingItem.nome.trim(), editingItem.id)
+                        ? 'border-rose-400 focus:ring-rose-500/20 focus:border-rose-600 bg-rose-50/30'
+                        : 'border-slate-300 focus:ring-blue-500/20 focus:border-blue-600'
+                    }`}
                   />
+                  {editingItem.nome?.trim() && storageService.checkCadastroBasicoDuplicity(editingItem.categoria || selectedCategory, editingItem.nome.trim(), editingItem.id) && (
+                    <div className="mt-1.5 flex items-center gap-1.5 text-rose-600 text-[11px] font-bold uppercase">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Atenção: Já existe um registro com este nome nesta categoria. Duplicidade bloqueada.</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1 uppercase">
+                      Código / Sigla (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="EX: FARM-HOSP / CARGO_FISC"
+                      value={editingItem.codigo || ''}
+                      onChange={(e) => setEditingItem({ ...editingItem, codigo: e.target.value.toUpperCase() })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-mono font-bold uppercase focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1 uppercase">
+                      Ordem de Exibição
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={editingItem.ordem || 1}
+                      onChange={(e) => setEditingItem({ ...editingItem, ordem: parseInt(e.target.value, 10) || 1 })}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-mono font-bold focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                    />
+                  </div>
                 </div>
 
                 <div>
                   <label className="block text-slate-700 font-bold mb-1 uppercase">
-                    Ordem de Exibição
+                    Detalhamento Técnico / Observações
                   </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={editingItem.ordem || 1}
-                    onChange={(e) => setEditingItem({ ...editingItem, ordem: parseInt(e.target.value, 10) || 1 })}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-mono font-bold focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                  <textarea
+                    rows={2}
+                    placeholder="Descreva a finalidade ou fundamentação legal desta opção..."
+                    value={editingItem.descricao || ''}
+                    onChange={(e) => setEditingItem({ ...editingItem, descricao: e.target.value.toUpperCase() })}
+                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 uppercase focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
                   />
+                </div>
+
+                {/* Seleção de Nível, Cargo, Setor e Módulos para GRUPO_ACESSO_FUNCIONARIO */}
+                {editingItem.categoria === 'GRUPO_ACESSO_FUNCIONARIO' && (
+                  <div className="p-4 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-3.5">
+                    <div className="flex items-center justify-between border-b border-purple-200/70 pb-2">
+                      <span className="font-bold text-xs text-purple-900 uppercase flex items-center space-x-1.5">
+                        <ShieldCheck className="w-4 h-4 text-purple-600" />
+                        <span>Configuração de Nível de Acesso & Módulos da Plataforma</span>
+                      </span>
+                      <span className="text-[10px] text-purple-700 bg-purple-100 px-2 py-0.5 rounded font-bold">
+                        VÍNCULO: CARGO + SETOR
+                      </span>
+                    </div>
+
+                    {/* Vínculo de Cargo e Setor de Lotação */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px] flex items-center gap-1">
+                          <Briefcase className="w-3.5 h-3.5 text-purple-600" />
+                          <span>Cargo de Funcionário Vinculado</span>
+                        </label>
+                        <select
+                          value={editingItem.cargoId || ''}
+                          onChange={(e) => {
+                            const cid = e.target.value;
+                            const cObj = allItems.find(i => i.id === cid);
+                            const newCargoNome = cObj ? cObj.nome : '';
+                            const autoNome = newCargoNome && editingItem.setorNome 
+                              ? `${newCargoNome} - ${editingItem.setorNome}` 
+                              : (!editingItem.nome ? newCargoNome : editingItem.nome);
+                            setEditingItem({
+                              ...editingItem,
+                              cargoId: cid,
+                              cargoNome: newCargoNome,
+                              nome: autoNome
+                            });
+                          }}
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 text-xs font-semibold uppercase focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 cursor-pointer"
+                        >
+                          <option value="">Qualquer Cargo / Todos os Cargos</option>
+                          {allItems.filter(i => i.categoria === 'CARGO_FUNCIONARIO' && i.ativo).map(c => (
+                            <option key={c.id} value={c.id}>{c.nome}</option>
+                          ))}
+                        </select>
+                        <p className="text-[10px] text-slate-500 mt-0.5">
+                          Ex: Fiscal de Farmácia, Assistente Administrativo...
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px] flex items-center gap-1">
+                          <Building2 className="w-3.5 h-3.5 text-purple-600" />
+                          <span>Setor de Lotação Vinculado</span>
+                        </label>
+                        <select
+                          value={editingItem.setorId || ''}
+                          onChange={(e) => {
+                            const sid = e.target.value;
+                            const sObj = allItems.find(i => i.id === sid);
+                            const newSetorNome = sObj ? sObj.nome : '';
+                            const autoNome = editingItem.cargoNome && newSetorNome 
+                              ? `${editingItem.cargoNome} - ${newSetorNome}` 
+                              : (!editingItem.nome ? newSetorNome : editingItem.nome);
+                            setEditingItem({
+                              ...editingItem,
+                              setorId: sid,
+                              setorNome: newSetorNome,
+                              nome: autoNome
+                            });
+                          }}
+                          className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 text-xs font-semibold uppercase focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 cursor-pointer"
+                        >
+                          <option value="">Qualquer Setor / Todos os Setores</option>
+                          {allItems.filter(i => i.categoria === 'SETOR_LOTACAO' && i.ativo).map(s => (
+                            <option key={s.id} value={s.id}>{s.nome}</option>
+                          ))}
+                        </select>
+                        <p className="text-[10px] text-slate-500 mt-0.5">
+                          Ex: DEFIS (Fiscalização), Jurídico, Financeiro...
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Módulos Permitidos na Plataforma */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="text-slate-700 font-bold uppercase text-[10px]">
+                          Módulos Permitidos na Plataforma ({editingItem.modulosPermitidos?.length || 0} de {LISTA_MODULOS_SISTEMA.length}):
+                        </label>
+                        <div className="flex items-center space-x-2 text-[10px]">
+                          <button
+                            type="button"
+                            onClick={() => setEditingItem({ ...editingItem, modulosPermitidos: LISTA_MODULOS_SISTEMA.map(m => m.id) })}
+                            className="font-bold text-purple-700 hover:underline cursor-pointer"
+                          >
+                            Marcar Todos
+                          </button>
+                          <span className="text-slate-300">|</span>
+                          <button
+                            type="button"
+                            onClick={() => setEditingItem({ ...editingItem, modulosPermitidos: ['dashboard'] })}
+                            className="font-bold text-slate-500 hover:underline cursor-pointer"
+                          >
+                            Desmarcar
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2.5 bg-white border border-purple-200 rounded-xl">
+                        {LISTA_MODULOS_SISTEMA.map((mod) => {
+                          const currentMods = (editingItem.modulosPermitidos || []).map(m => String(m).toLowerCase().trim());
+                          const isChecked = currentMods.includes(mod.id.toLowerCase());
+
+                          return (
+                            <label key={mod.id} className={`flex items-center space-x-2 text-xs p-1.5 rounded-lg border cursor-pointer transition-colors ${
+                              isChecked ? 'bg-purple-50/70 border-purple-200 text-purple-900 font-medium' : 'border-transparent text-slate-700 hover:bg-slate-50'
+                            }`}>
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={(e) => {
+                                  const modNorm = mod.id.toLowerCase().trim();
+                                  const newMods = e.target.checked
+                                    ? [...currentMods.filter(m => m !== modNorm), modNorm]
+                                    : currentMods.filter(m => m !== modNorm);
+                                  setEditingItem({ ...editingItem, modulosPermitidos: newMods });
+                                }}
+                                className="w-3.5 h-3.5 rounded text-purple-600 focus:ring-purple-500 border-slate-300 cursor-pointer"
+                              />
+                              <span className="text-[11px] select-none truncate">{mod.nome}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center space-x-2 pt-1">
+                  <input
+                    type="checkbox"
+                    id="ativoCheckbox"
+                    checked={editingItem.ativo ?? true}
+                    onChange={(e) => setEditingItem({ ...editingItem, ativo: e.target.checked })}
+                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
+                  />
+                  <label htmlFor="ativoCheckbox" className="text-slate-800 font-bold select-none cursor-pointer">
+                    Item Ativo (Disponível nos formulários de cadastro do sistema)
+                  </label>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-slate-700 font-bold mb-1 uppercase">
-                  Detalhamento Técnico / Observações
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="Descreva a finalidade ou fundamentação legal desta opção..."
-                  value={editingItem.descricao || ''}
-                  onChange={(e) => setEditingItem({ ...editingItem, descricao: e.target.value.toUpperCase() })}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 uppercase focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
-                />
-              </div>
-
-              <div className="flex items-center space-x-2 pt-1">
-                <input
-                  type="checkbox"
-                  id="ativoCheckbox"
-                  checked={editingItem.ativo ?? true}
-                  onChange={(e) => setEditingItem({ ...editingItem, ativo: e.target.checked })}
-                  className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
-                />
-                <label htmlFor="ativoCheckbox" className="text-slate-800 font-bold select-none cursor-pointer">
-                  Item Ativo (Disponível nos formulários de cadastro do sistema)
-                </label>
-              </div>
-
-              {/* Modal Actions */}
-              <div className="flex justify-end space-x-2.5 pt-4 border-t border-slate-100">
+              {/* Modal Actions Fixo no Rodapé */}
+              <div className="flex items-center justify-end space-x-2.5 p-4 sm:px-6 bg-slate-50 border-t border-slate-200 shrink-0">
                 <button
                   type="button"
                   onClick={() => {

@@ -22,6 +22,7 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
+  User,
   UserCheck,
   Hash,
   Sparkles,
@@ -43,7 +44,10 @@ import {
   ArrowRight,
   Activity,
   FileSpreadsheet,
-  ShieldAlert
+  ShieldAlert,
+  Key,
+  RotateCcw,
+  Lock
 } from 'lucide-react';
 import { Profissional, SituacaoProfissional, TipoAssociado, Empresa, ProtocoloProcesso } from '../../types';
 import { storageService } from '../../services/storageService';
@@ -149,7 +153,7 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
 
   // Cadastro / Edição Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalTab, setModalTab] = useState<'dados_pessoais' | 'filiacao_formacao' | 'endereco_contato' | 'empresas_rt' | 'posicao_financeira' | 'bloqueio' | 'historico'>('dados_pessoais');
+  const [modalTab, setModalTab] = useState<'dados_pessoais' | 'filiacao_formacao' | 'endereco_contato' | 'empresas_rt' | 'posicao_financeira' | 'bloqueio' | 'historico' | 'login_acesso'>('dados_pessoais');
   const [editingProfissional, setEditingProfissional] = useState<Partial<Profissional> | null>(null);
   const [profToDelete, setProfToDelete] = useState<Profissional | null>(null);
   const [profToConvertDefinitivo, setProfToConvertDefinitivo] = useState<Profissional | null>(null);
@@ -2862,6 +2866,21 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                 <History className="w-3.5 h-3.5" />
                 <span>7. Histórico</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setModalTab('login_acesso')}
+                className={`px-3 py-2 rounded-lg font-bold text-[11px] uppercase transition-all shrink-0 flex items-center space-x-1.5 cursor-pointer ${
+                  modalTab === 'login_acesso' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Key className="w-3.5 h-3.5" />
+                <span>8. Login & Acesso</span>
+                {(editingProfissional.primeiroAcessoPendente || editingProfissional.zerarSenhaPendente) && (
+                  <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase bg-amber-100 text-amber-800 ml-1">
+                    PENDENTE
+                  </span>
+                )}
+              </button>
             </div>
 
             <form onSubmit={handleSaveProfissional} className="space-y-4">
@@ -3025,6 +3044,138 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                         </tbody>
                       </table>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* ABA 8: LOGIN & ACESSO WEB (DEFINIDO AUTOMATICAMENTE PELO CPF) */}
+              {modalTab === 'login_acesso' && (
+                <div className="space-y-4 p-5 bg-indigo-50/40 border border-indigo-200 rounded-2xl">
+                  <div className="flex items-center justify-between border-b border-indigo-100 pb-3">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                        <Key className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                          Credenciais de Acesso Web do Profissional
+                        </h3>
+                        <p className="text-[11px] text-slate-500">
+                          Usuário definido automaticamente como o CPF do profissional cadastrado.
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 font-extrabold text-[10px] uppercase">
+                      PORTAL DO INSCRITO (PF)
+                    </span>
+                  </div>
+
+                  {/* Usuário Definido Automaticamente */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-4 bg-white border border-indigo-200 rounded-xl space-y-1 shadow-2xs">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                        Usuário de Acesso (Automático pelo Sistema)
+                      </span>
+                      <div className="flex items-center space-x-2">
+                        <User className="w-4 h-4 text-indigo-600" />
+                        <span className="font-mono font-extrabold text-base text-slate-900">
+                          {editingProfissional.cpf || 'CPF NÃO INFORMADO'}
+                        </span>
+                        <span className="text-[9px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded uppercase">
+                          CPF
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        O profissional utilizará exatamente este CPF para realizar login na plataforma.
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-white border border-indigo-200 rounded-xl space-y-1 shadow-2xs">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                        Data do Último Acesso na Plataforma
+                      </span>
+                      <div className="flex items-center space-x-2">
+                        <Clock className="w-4 h-4 text-slate-400" />
+                        <span className="font-semibold text-xs text-slate-800">
+                          {editingProfissional.ultimoAcesso || 'Nunca acessou a plataforma'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        Registro cronológico auditado em cada autenticação bem-sucedida.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Informações de Governança & 1º Acesso Obrigatório */}
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start space-x-3 text-xs text-amber-900">
+                    <Sparkles className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <div className="font-bold uppercase text-[11px]">
+                        Regra de Primeiro Acesso Obrigatório
+                      </div>
+                      <p className="leading-relaxed">
+                        Quando o profissional realizar o primeiro acesso ao sistema com o seu CPF, ele deverá 
+                        <strong> obrigatoriamente cadastrar uma nova senha pessoal</strong> antes de visualizar seus dados.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Status da Senha e Ações de Administração */}
+                  <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-3 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                          Situação Atual da Credencial
+                        </span>
+                        <div className="text-xs font-bold mt-0.5">
+                          {editingProfissional.zerarSenhaPendente ? (
+                            <span className="text-amber-700 bg-amber-100 px-2 py-0.5 rounded font-extrabold uppercase">
+                              🟠 Senha Zerada (Exigirá Nova Senha no Próximo Login)
+                            </span>
+                          ) : editingProfissional.primeiroAcessoPendente || !editingProfissional.senhaHash ? (
+                            <span className="text-blue-700 bg-blue-100 px-2 py-0.5 rounded font-extrabold uppercase">
+                              🟡 Primeiro Acesso Pendente
+                            </span>
+                          ) : (
+                            <span className="text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded font-extrabold uppercase">
+                              🟢 Senha Cadastrada & Acesso Ativo
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Botão Zerar Senha */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!editingProfissional.id) {
+                            toastService.warning('Salve o Cadastro', 'Salve o profissional antes de zerar a senha.');
+                            return;
+                          }
+                          const ok = storageService.zerarSenha('PROFISSIONAL', editingProfissional.id);
+                          if (ok) {
+                            setEditingProfissional(prev => prev ? ({
+                              ...prev,
+                              senhaHash: '',
+                              primeiroAcessoPendente: true,
+                              zerarSenhaPendente: true
+                            }) : null);
+                            toastService.success(
+                              'Senha Zerada com Sucesso!',
+                              'No próximo login, o profissional deverá obrigatoriamente cadastrar uma nova senha.'
+                            );
+                          }
+                        }}
+                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase rounded-xl shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all shrink-0"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Zerar Senha</span>
+                      </button>
+                    </div>
+
+                    <div className="text-[11px] text-slate-500 border-t border-slate-100 pt-2">
+                      A opção <strong>"Zerar Senha"</strong> invalida qualquer senha anterior e força a tela de definição de nova senha no momento em que o profissional digitar seu CPF na tela de login.
+                    </div>
                   </div>
                 </div>
               )}

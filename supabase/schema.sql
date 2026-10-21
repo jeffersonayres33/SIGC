@@ -562,10 +562,79 @@ BEGIN
             'council_config', 'cadastros_basicos', 'regras_assistencia', 
             'profissionais', 'empresas', 'lancamentos_financeiros', 
             'processos_cobranca', 'termos_fiscalizacao', 'protocolos_processos', 
-            'formularios_dinamicos', 'respostas_formularios', 'historico_auditoria'
+            'formularios_dinamicos', 'respostas_formularios', 'historico_auditoria', 'funcionarios'
         ])
     LOOP
         EXECUTE format('DROP POLICY IF EXISTS "Public access %I" ON public.%I;', tbl, tbl);
         EXECUTE format('CREATE POLICY "Public access %I" ON public.%I FOR ALL USING (true) WITH CHECK (true);', tbl, tbl);
     END LOOP;
 END $$;
+
+-- ------------------------------------------------------------------------------
+-- TABELA DE FUNCIONÁRIOS E USUÁRIO DESENVOLVEDOR MASTER
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.funcionarios (
+    id VARCHAR(100) PRIMARY KEY,
+    nome VARCHAR(250) NOT NULL,
+    cpf VARCHAR(14) NOT NULL UNIQUE,
+    rg VARCHAR(50),
+    matricula VARCHAR(50) NOT NULL UNIQUE,
+    email VARCHAR(150) NOT NULL,
+    telefone VARCHAR(50),
+    celular VARCHAR(50),
+    foto_url TEXT,
+    cargo_id VARCHAR(50),
+    cargo_nome VARCHAR(150),
+    setor_id VARCHAR(50),
+    setor_nome VARCHAR(150),
+    permissoes_modulos TEXT[] DEFAULT '{}',
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    data_admissao VARCHAR(20),
+    senha_hash VARCHAR(255),
+    primeiro_acesso_pendente BOOLEAN NOT NULL DEFAULT TRUE,
+    zerar_senha_pendente BOOLEAN NOT NULL DEFAULT FALSE,
+    ultimo_acesso VARCHAR(50),
+    observacoes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.funcionarios ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public access funcionarios" ON public.funcionarios;
+CREATE POLICY "Public access funcionarios" ON public.funcionarios FOR ALL USING (true) WITH CHECK (true);
+
+-- Usuário Desenvolvedor Supremo: Jefferson Ayres (CPF: 934.135.302-59)
+INSERT INTO public.funcionarios (
+    id, nome, cpf, rg, matricula, email, telefone, celular, foto_url,
+    cargo_id, cargo_nome, setor_id, setor_nome,
+    permissoes_modulos, ativo, data_admissao, senha_hash,
+    primeiro_acesso_pendente, zerar_senha_pendente, ultimo_acesso, observacoes
+) VALUES (
+    '00000000-0000-4000-a000-000000000001',
+    'Jefferson Ayres (Desenvolvedor)',
+    '934.135.302-59',
+    'DEV-SYSTEM-MASTER',
+    'DEV-001',
+    'jeffersonayresjefferson@gmail.com',
+    '(92) 99999-9999',
+    '(92) 99999-9999',
+    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=256',
+    'crg-dev',
+    'Desenvolvedor Master / Arquiteto de Software',
+    'setlot-7',
+    'Tecnologia da Informação e Engenharia de Software',
+    ARRAY['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'],
+    TRUE,
+    '2020-01-01',
+    NULL,
+    TRUE,
+    FALSE,
+    'Aguardando primeiro acesso',
+    'Desenvolvedor Master com autoridade máxima acima do Administrador.'
+)
+ON CONFLICT (cpf) DO UPDATE SET
+    nome = EXCLUDED.nome,
+    cargo_nome = EXCLUDED.cargo_nome,
+    permissoes_modulos = EXCLUDED.permissoes_modulos,
+    ativo = TRUE;
+

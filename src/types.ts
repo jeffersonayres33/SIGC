@@ -1,4 +1,5 @@
 export type UserRole = 
+  | 'DEVELOPER'
   | 'ADMIN'
   | 'FISCAL'
   | 'JURIDICO'
@@ -77,7 +78,11 @@ export type CategoriaCadastroBasico =
   | 'SETOR_PROTOCOLO'
   | 'STATUS_PROTOCOLO'
   | 'MOTIVO_SITUACAO_EMPRESA'
-  | 'MOTIVO_SITUACAO_PROFISSIONAL';
+  | 'MOTIVO_SITUACAO_PROFISSIONAL'
+  | 'CARGO_FUNCIONARIO'
+  | 'SETOR_LOTACAO'
+  | 'GRUPO_ACESSO_FUNCIONARIO'
+  | 'ADMIN_PARAMETRO';
 
 export interface ItemCadastroBasico {
   id: string;
@@ -87,6 +92,11 @@ export interface ItemCadastroBasico {
   descricao?: string;
   ativo: boolean;
   ordem?: number;
+  modulosPermitidos?: string[];
+  cargoId?: string;
+  cargoNome?: string;
+  setorId?: string;
+  setorNome?: string;
 }
 
 export type TipoExigenciaAssistencia = 'ASSISTENCIA_PLENA' | 'HORAS_DIARIAS' | 'HORAS_SEMANAIS' | 'SEM_HORA_DEFINIDA';
@@ -234,6 +244,10 @@ export interface Profissional {
   dataDesbloqueioPrevista?: string;
   usuarioBloqueio?: string;
   observacoesBloqueio?: string;
+  senhaHash?: string;
+  primeiroAcessoPendente?: boolean;
+  zerarSenhaPendente?: boolean;
+  ultimoAcesso?: string;
 }
 
 export interface Empresa {
@@ -298,6 +312,10 @@ export interface Empresa {
   dataDesbloqueioPrevista?: string;
   usuarioBloqueio?: string;
   observacoesBloqueio?: string;
+  senhaHash?: string;
+  primeiroAcessoPendente?: boolean;
+  zerarSenhaPendente?: boolean;
+  ultimoAcesso?: string;
 }
 
 export interface LancamentoFinanceiro {
@@ -535,4 +553,43 @@ export interface HistoricoAuditoria {
   campo: string;
   valorAnterior: string | null;
   valorNovo: string | null;
+}
+
+export interface Funcionario {
+  id: string;
+  nome: string;
+  cpf: string;
+  rg?: string;
+  matricula: string;
+  email: string;
+  telefone?: string;
+  celular?: string;
+  fotoUrl?: string;
+  cargoId: string;
+  cargoNome: string;
+  setorId: string;
+  setorNome: string;
+  permissoesModulos: string[];
+  ativo: boolean;
+  dataAdmissao: string;
+  senhaHash?: string;
+  primeiroAcessoPendente?: boolean;
+  zerarSenhaPendente?: boolean;
+  ultimoAcesso?: string;
+  observacoes?: string;
+}
+
+export interface AuthUser {
+  id: string;
+  tipo: 'FUNCIONARIO' | 'PROFISSIONAL' | 'EMPRESA' | 'ADMIN';
+  nome: string;
+  documento: string; // CPF ou CNPJ formatado
+  documentoLimpo: string; // apenas dígitos
+  email?: string;
+  cargoOuTitulo?: string;
+  role: UserRole;
+  fotoUrl?: string;
+  permissoes?: string[];
+  precisaTrocarSenha?: boolean;
+  ultimoAcesso?: string;
 }

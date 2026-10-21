@@ -39,7 +39,10 @@ import {
   Scale,
   FileSpreadsheet,
   ShieldAlert,
-  History
+  History,
+  Key,
+  RotateCcw,
+  User
 } from 'lucide-react';
 import { Empresa, CondicaoFirma, Socio, ResponsavelTecnico, Profissional, HorarioFuncionamentoItem, HorarioAssistenciaItem } from '../../types';
 import { storageService, DEFAULT_HORARIOS_FUNCIONAMENTO, DEFAULT_HORARIOS_ASSISTENCIA, calculateIntervalHours, calculateDayTotalHours } from '../../services/storageService';
@@ -120,7 +123,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
 
   const [selectedEmpresa, setSelectedEmpresa] = useState<Empresa | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalTab, setModalTab] = useState<'dados_pj' | 'horarios' | 'responsaveis_rt' | 'socios_qsa' | 'endereco' | 'posicao_financeira' | 'bloqueio' | 'historico'>('dados_pj');
+  const [modalTab, setModalTab] = useState<'dados_pj' | 'horarios' | 'responsaveis_rt' | 'socios_qsa' | 'endereco' | 'posicao_financeira' | 'bloqueio' | 'historico' | 'login_acesso'>('dados_pj');
   const [editingEmpresa, setEditingEmpresa] = useState<Partial<Empresa> | null>(null);
   const [empresaToDelete, setEmpresaToDelete] = useState<Empresa | null>(null);
   const [empresaToConvertDefinitiva, setEmpresaToConvertDefinitiva] = useState<Empresa | null>(null);
@@ -1845,6 +1848,21 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                 <History className="w-3.5 h-3.5" />
                 <span>8. Histórico</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setModalTab('login_acesso')}
+                className={`px-3 py-2 rounded-lg font-bold text-[11px] uppercase transition-all shrink-0 flex items-center space-x-1.5 cursor-pointer ${
+                  modalTab === 'login_acesso' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                <Key className="w-3.5 h-3.5" />
+                <span>9. Login & Acesso</span>
+                {(editingEmpresa.primeiroAcessoPendente || editingEmpresa.zerarSenhaPendente) && (
+                  <span className="text-[9px] font-extrabold px-1.5 py-0.2 rounded-full uppercase bg-amber-100 text-amber-800 ml-1">
+                    PENDENTE
+                  </span>
+                )}
+              </button>
             </div>
 
             <form onSubmit={handleSaveEmpresa} className="space-y-4">
@@ -2008,6 +2026,138 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                         </tbody>
                       </table>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* ABA 9: LOGIN & ACESSO WEB DO ESTABELECIMENTO (CNPJ AUTOMÁTICO) */}
+              {modalTab === 'login_acesso' && (
+                <div className="space-y-4 p-5 bg-indigo-50/40 border border-indigo-200 rounded-2xl">
+                  <div className="flex items-center justify-between border-b border-indigo-100 pb-3">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                        <Key className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
+                          Credenciais de Acesso Web da Empresa / Estabelecimento
+                        </h3>
+                        <p className="text-[11px] text-slate-500">
+                          Usuário definido automaticamente pelo sistema como o CNPJ do estabelecimento.
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 font-extrabold text-[10px] uppercase">
+                      PORTAL DA EMPRESA (PJ)
+                    </span>
+                  </div>
+
+                  {/* Usuário Definido Automaticamente */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="p-4 bg-white border border-indigo-200 rounded-xl space-y-1 shadow-2xs">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                        Usuário de Acesso (CNPJ Automático pelo Sistema)
+                      </span>
+                      <div className="flex items-center space-x-2">
+                        <Building2 className="w-4 h-4 text-indigo-600" />
+                        <span className="font-mono font-extrabold text-base text-slate-900">
+                          {editingEmpresa.cnpj || 'CNPJ NÃO INFORMADO'}
+                        </span>
+                        <span className="text-[9px] bg-slate-100 text-slate-600 font-bold px-1.5 py-0.5 rounded uppercase">
+                          CNPJ
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        O representante legal da empresa utilizará este CNPJ para acessar o portal de autoatendimento.
+                      </p>
+                    </div>
+
+                    <div className="p-4 bg-white border border-indigo-200 rounded-xl space-y-1 shadow-2xs">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                        Data do Último Acesso na Plataforma
+                      </span>
+                      <div className="flex items-center space-x-2">
+                        <Clock className="w-4 h-4 text-slate-400" />
+                        <span className="font-semibold text-xs text-slate-800">
+                          {editingEmpresa.ultimoAcesso || 'Nunca acessou a plataforma'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        Histórico cronológico de sessões e emissões de certidão de regularidade (CRT).
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Regra de Primeiro Acesso Obrigatório */}
+                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start space-x-3 text-xs text-amber-900">
+                    <Sparkles className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="space-y-1">
+                      <div className="font-bold uppercase text-[11px]">
+                        Regra de Primeiro Acesso Obrigatório (PJ)
+                      </div>
+                      <p className="leading-relaxed">
+                        Quando a empresa fizer o primeiro acesso à plataforma com o CNPJ, deverá 
+                        <strong> obrigatoriamente cadastrar uma senha de acesso</strong> para visualizar suas certidões e débitos.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Status da Senha e Ações de Administração */}
+                  <div className="p-4 bg-white border border-slate-200 rounded-xl space-y-3 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                          Situação Atual da Credencial
+                        </span>
+                        <div className="text-xs font-bold mt-0.5">
+                          {editingEmpresa.zerarSenhaPendente ? (
+                            <span className="text-amber-700 bg-amber-100 px-2 py-0.5 rounded font-extrabold uppercase">
+                              🟠 Senha Zerada (Exigirá Nova Senha no Próximo Login)
+                            </span>
+                          ) : editingEmpresa.primeiroAcessoPendente || !editingEmpresa.senhaHash ? (
+                            <span className="text-blue-700 bg-blue-100 px-2 py-0.5 rounded font-extrabold uppercase">
+                              🟡 Primeiro Acesso Pendente
+                            </span>
+                          ) : (
+                            <span className="text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded font-extrabold uppercase">
+                              🟢 Senha Cadastrada & Acesso Ativo
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Botão Zerar Senha */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!editingEmpresa.id) {
+                            toastService.warning('Salve o Cadastro', 'Salve o estabelecimento antes de zerar a senha.');
+                            return;
+                          }
+                          const ok = storageService.zerarSenha('EMPRESA', editingEmpresa.id);
+                          if (ok) {
+                            setEditingEmpresa(prev => prev ? ({
+                              ...prev,
+                              senhaHash: '',
+                              primeiroAcessoPendente: true,
+                              zerarSenhaPendente: true
+                            }) : null);
+                            toastService.success(
+                              'Senha Zerada com Sucesso!',
+                              'No próximo login com o CNPJ, a empresa deverá obrigatoriamente cadastrar uma nova senha.'
+                            );
+                          }
+                        }}
+                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase rounded-xl shadow-xs flex items-center space-x-1.5 cursor-pointer transition-all shrink-0"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Zerar Senha</span>
+                      </button>
+                    </div>
+
+                    <div className="text-[11px] text-slate-500 border-t border-slate-100 pt-2">
+                      A opção <strong>"Zerar Senha"</strong> permite que o conselho redefina a segurança de qualquer drogaria, farmácia ou distribuidora, exigindo o cadastramento de uma nova senha pessoal no próximo login.
+                    </div>
                   </div>
                 </div>
               )}

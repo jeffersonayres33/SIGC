@@ -59,6 +59,14 @@ const AVAILABLE_TABLES: TableDef[] = [
     description: 'Farmácias, drogarias, distribuidoras, sócios, RTs e horários de assistência.'
   },
   {
+    id: 'funcionarios',
+    name: 'Funcionários & Colaboradores do Conselho',
+    techName: 'public.funcionarios',
+    category: 'cadastros',
+    icon: Users,
+    description: 'Colaboradores, fiscais, assessores jurídicos, setores de lotação e permissões de acesso.'
+  },
+  {
     id: 'cadastros_basicos',
     name: 'Tabelas Auxiliares & Cadastros Básicos',
     techName: 'public.cadastros_basicos',

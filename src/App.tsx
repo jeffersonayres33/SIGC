@@ -14,6 +14,9 @@ import { ProtocolosView } from './components/protocolos/ProtocolosView';
 import { PortalView } from './components/portal/PortalView';
 import { MicrosservicosView } from './components/arquitetura/MicrosservicosView';
 import { ConfiguracoesView, ConfigTab } from './components/configuracoes/ConfiguracoesView';
+import { BackupRestoreConfig } from './components/configuracoes/BackupRestoreConfig';
+import { FuncionariosView } from './components/cadastros/FuncionariosView';
+import { LoginView } from './components/auth/LoginView';
 import { ToastContainer } from './components/common/ToastContainer';
 
 import { CrtModal } from './components/modals/CrtModal';
@@ -22,14 +25,19 @@ import { CdaModal } from './components/modals/CdaModal';
 import { SupabaseManagerModal } from './components/common/SupabaseManagerModal';
 import { SyncErrorModal } from './components/common/SyncErrorModal';
 
-import { UserRole, Empresa, LancamentoFinanceiro, ProcessoCobranca } from './types';
+import { UserRole, Empresa, LancamentoFinanceiro, ProcessoCobranca, AuthUser } from './types';
 import { storageService } from './services/storageService';
 import { toastService } from './services/toastService';
 
 export default function App() {
+  const [authUser, setAuthUser] = useState<AuthUser | null>(() => storageService.getCurrentAuthUser());
   const [activeSection, setActiveSection] = useState<MainSection>('dashboard');
   const [configTab, setConfigTab] = useState<ConfigTab>('geral');
-  const [currentUserRole, setCurrentUserRole] = useState<UserRole>('DIRETORIA');
+  const [cadastrosBasicosGroup, setCadastrosBasicosGroup] = useState<'PROFISSIONAIS' | 'EMPRESAS' | 'PROTOCOLOS' | 'FUNCIONARIOS' | 'ADMIN'>('PROFISSIONAIS');
+  const [currentUserRole, setCurrentUserRole] = useState<UserRole>(() => {
+    const saved = storageService.getCurrentAuthUser();
+    return saved ? saved.role : 'ADMIN';
+  });
   const [networkStatus, setNetworkStatus] = useState(storageService.getNetworkStatus());
   const [councilConfig, setCouncilConfig] = useState(storageService.getCouncilConfig());
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -75,6 +83,27 @@ export default function App() {
     }
   };
 
+  // Se não houver usuário autenticado, renderiza a tela de login unificada
+  if (!authUser) {
+    return (
+      <div className="min-h-screen bg-slate-900 font-sans selection:bg-blue-600 selection:text-white">
+        <LoginView
+          councilConfig={councilConfig}
+          onLoginSuccess={(user) => {
+            setAuthUser(user);
+            setCurrentUserRole(user.role);
+            if (user.role === 'PORTAL_PROFISSIONAL' || user.role === 'PORTAL_EMPRESA') {
+              setActiveSection('portal_inscrito');
+            } else {
+              setActiveSection('dashboard');
+            }
+          }}
+        />
+        <ToastContainer />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
       {/* Top Navigation */}
@@ -88,9 +117,16 @@ export default function App() {
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         onOpenSettings={() => {
           setActiveSection('configuracoes');
+          setConfigTab('geral');
           setIsSidebarOpen(false);
         }}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+        authUser={authUser}
+        onLogout={() => {
+          storageService.logout();
+          setAuthUser(null);
+          toastService.info('Sessão Encerrada', 'Você saiu do sistema com segurança.');
+        }}
       />
 
       {/* Main Workspace Body */}
@@ -98,11 +134,14 @@ export default function App() {
         {/* Collapsible Sidebar Drawer */}
         <Sidebar
           activeSection={activeSection}
-          activeSubTab={configTab}
+          activeSubTab={activeSection === 'configuracoes' ? configTab : cadastrosBasicosGroup}
           onSelectSection={(section, subTab) => {
             setActiveSection(section);
             if (section === 'configuracoes' && subTab) {
               setConfigTab(subTab as ConfigTab);
+            }
+            if (section === 'cadastros_basicos' && subTab) {
+              setCadastrosBasicosGroup(subTab as any);
             }
             setIsSidebarOpen(false);
           }}
@@ -110,6 +149,7 @@ export default function App() {
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
           councilConfig={councilConfig}
+          onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         />
 
         {/* Content Area */}
@@ -128,7 +168,11 @@ export default function App() {
             )}
 
             {activeSection === 'cadastros_basicos' && (
-              <CadastrosBasicosView />
+              <CadastrosBasicosView 
+                key={cadastrosBasicosGroup} 
+                initialGroup={cadastrosBasicosGroup}
+                onNavigateToFuncionarios={() => setActiveSection('funcionarios')}
+              />
             )}
 
             {activeSection === 'financeiro' && (
@@ -164,6 +208,26 @@ export default function App() {
 
             {activeSection === 'configuracoes' && (
               <ConfiguracoesView key={configTab} initialTab={configTab} />
+            )}
+
+            {activeSection === 'backup_restore' && (
+              <BackupRestoreConfig />
+            )}
+
+            {activeSection === 'funcionarios' && (
+              <FuncionariosView 
+                onNavigateToCadastrosBasicos={() => {
+                  setActiveSection('cadastros_basicos');
+                  setCadastrosBasicosGroup('FUNCIONARIOS');
+                }}
+              />
+            )}
+
+            {activeSection === 'admin' && (
+              <CadastrosBasicosView 
+                key="admin-view" 
+                initialGroup="ADMIN"
+              />
             )}
 
             {activeSection === 'microsservicos' && (

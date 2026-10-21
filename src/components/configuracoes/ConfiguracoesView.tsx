@@ -233,68 +233,23 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
         )}
       </div>
 
-      {/* Navegação de Módulos de Configuração */}
-      <div className="flex flex-col sm:flex-row border-b border-slate-200 bg-white p-1.5 rounded-2xl border gap-2 shadow-xs">
-        <button
-          type="button"
-          onClick={() => setActiveTab('geral')}
-          className={`flex-1 flex items-center justify-center space-x-2 py-2.5 px-4 rounded-xl font-bold text-xs uppercase transition-all ${
-            activeTab === 'geral'
-              ? 'bg-blue-600 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Building2 className="w-4 h-4" />
-          <span>1. Dados do Conselho, Numeração & Validações</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('assistencia')}
-          className={`flex-1 flex items-center justify-center space-x-2 py-2.5 px-4 rounded-xl font-bold text-xs uppercase transition-all ${
-            activeTab === 'assistencia'
-              ? 'bg-teal-700 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Scale className="w-4 h-4 text-teal-300" />
-          <span>2. Assistência Farmacêutica por Município</span>
-          <span className="px-2 py-0.5 rounded-md bg-teal-500/20 text-teal-200 text-[10px] font-extrabold uppercase ml-1">
-            MUNICÍPIOS
+      {/* Indicador do Módulo Selecionado via Menu de Navegação */}
+      <div className="flex items-center justify-between bg-slate-100/80 px-4 py-2.5 rounded-xl border border-slate-200 text-xs">
+        <div className="flex items-center space-x-2">
+          <span className="font-semibold text-slate-500">Painel do Administrador</span>
+          <span className="text-slate-300">/</span>
+          <span className="font-semibold text-slate-500">Configurações</span>
+          <span className="text-slate-300">/</span>
+          <span className="font-bold text-blue-700 uppercase">
+            {activeTab === 'geral' && '1. Dados do Conselho, Numeração & Validações'}
+            {activeTab === 'assistencia' && '2. Assistência Farmacêutica por Município'}
+            {activeTab === 'impedimentos_art' && '3. Impedimentos de ART / RT'}
+            {activeTab === 'backup_restore' && '4. Backup & Restore de Dados'}
           </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('impedimentos_art')}
-          className={`flex-1 flex items-center justify-center space-x-2 py-2.5 px-4 rounded-xl font-bold text-xs uppercase transition-all ${
-            activeTab === 'impedimentos_art'
-              ? 'bg-rose-700 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <ShieldAlert className="w-4 h-4 text-rose-300" />
-          <span>3. Impedimentos de ART / RT</span>
-          <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-200 text-[10px] font-extrabold uppercase ml-1">
-            REGRAS DE RT
-          </span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab('backup_restore')}
-          className={`flex-1 flex items-center justify-center space-x-2 py-2.5 px-4 rounded-xl font-bold text-xs uppercase transition-all ${
-            activeTab === 'backup_restore'
-              ? 'bg-indigo-700 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-        >
-          <Database className="w-4 h-4 text-indigo-300" />
-          <span>4. Backup & Restore</span>
-          <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-200 text-[10px] font-extrabold uppercase ml-1">
-            DADOS
-          </span>
-        </button>
+        </div>
+        <span className="text-[11px] text-slate-400 hidden sm:inline">
+          Acesso gerenciado pelo Menu Lateral
+        </span>
       </div>
 
       {activeTab === 'assistencia' ? (

@@ -249,7 +249,24 @@ export function toUpperString(val: any): string {
 /**
  * Transforma campos textuais de um objeto para CAIXA ALTA preservando campos numéricos, booleanos e de IDs
  */
-export function sanitizeToUpper<T extends Record<string, any>>(obj: T, ignoreKeys: string[] = ['id', 'fotoUrl', 'assinaturaFiscal', 'assinaturaNotificado']): T {
+export function sanitizeToUpper<T extends Record<string, any>>(
+  obj: T, 
+  ignoreKeys: string[] = [
+    'id', 
+    'fotoUrl', 
+    'assinaturaFiscal', 
+    'assinaturaNotificado',
+    'modulosPermitidos',
+    'permissoesModulos',
+    'modulos',
+    'permissoes',
+    'cargoId',
+    'setorId',
+    'email',
+    'emailPessoal',
+    'emailComercial'
+  ]
+): T {
   const result: any = Array.isArray(obj) ? [] : {};
 
   for (const [key, val] of Object.entries(obj)) {
