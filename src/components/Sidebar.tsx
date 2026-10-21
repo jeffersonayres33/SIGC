@@ -79,6 +79,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     configuracoes: true
   });
 
+  const checkPerm = (sec: string) => hasModulePermission(authUser, sec, currentRole);
+
   const toggleGroup = (key: string) => {
     setOpenGroups(prev => ({ ...prev, [key]: !prev[key] }));
   };
@@ -103,8 +105,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Sliding Sidebar Drawer */}
       <aside 
-        className={`fixed top-0 left-0 bottom-0 z-50 w-72 bg-white border-r border-slate-200 text-slate-700 flex flex-col shadow-2xl transition-transform duration-300 ease-out transform ${
-          isOpen ? 'translate-x-0' : '-translate-x-full'
+        className={`fixed top-0 left-0 bottom-0 z-50 w-72 bg-white border-r border-slate-200 text-slate-700 flex flex-col shadow-2xl transition-transform duration-300 ease-out transform lg:translate-x-0 ${
+          isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
         {/* Sidebar Header */}
@@ -136,7 +138,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         {/* Executive Dashboard Shortcut */}
-        {hasModulePermission(authUser, 'dashboard') && (
+        {checkPerm( 'dashboard') && (
           <div className="p-3 border-b border-slate-100">
             <button
               onClick={() => handleSelect('dashboard')}
@@ -155,7 +157,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Scrollable Navigation List */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto text-xs">
           {/* 1. Profissionais (PF) */}
-          {hasModulePermission(authUser, 'profissionais') && (
+          {checkPerm( 'profissionais') && (
             <button
               onClick={() => handleSelect('profissionais')}
               className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
@@ -170,7 +172,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {/* 2. Empresas (PJ) */}
-          {hasModulePermission(authUser, 'empresas') && (
+          {checkPerm( 'empresas') && (
             <button
               onClick={() => handleSelect('empresas')}
               className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
@@ -185,7 +187,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {/* 3. Protocolos */}
-          {hasModulePermission(authUser, 'protocolos') && (
+          {checkPerm( 'protocolos') && (
             <button
               onClick={() => handleSelect('protocolos')}
               className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
@@ -200,7 +202,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {/* 4. Cadastros Básicos (com seções próprias para Profissionais, Empresas, Protocolo e Processo) */}
-          {hasModulePermission(authUser, 'cadastros_basicos') && (
+          {checkPerm( 'cadastros_basicos') && (
             <div>
               <div className="flex items-center justify-between rounded-xl">
                 <button
@@ -278,7 +280,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {/* 5. Financeiro & Arrecadação */}
-          {hasModulePermission(authUser, 'financeiro') && (
+          {checkPerm( 'financeiro') && (
             <div>
               <button
                 onClick={() => toggleGroup('financeiro')}
@@ -310,7 +312,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {/* 6. Jurídico & Dívida Ativa */}
-          {hasModulePermission(authUser, 'cobranca_juridico') && (
+          {checkPerm( 'cobranca_juridico') && (
             <div>
               <button
                 onClick={() => toggleGroup('juridico')}
@@ -342,7 +344,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {/* 7. Fiscalização em Campo */}
-          {hasModulePermission(authUser, 'fiscalizacao') && (
+          {checkPerm( 'fiscalizacao') && (
             <div>
               <button
                 onClick={() => toggleGroup('fiscalizacao')}
@@ -374,7 +376,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {/* 8. Relatórios Analíticos */}
-          {hasModulePermission(authUser, 'relatorios') && (
+          {checkPerm( 'relatorios') && (
             <button
               onClick={() => handleSelect('relatorios')}
               className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
@@ -389,7 +391,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {/* 9. Formulários Dinâmicos */}
-          {hasModulePermission(authUser, 'formularios') && (
+          {checkPerm( 'formularios') && (
             <button
               onClick={() => handleSelect('formularios')}
               className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
@@ -404,7 +406,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {/* 10. Portal de Autoatendimento do Inscrito */}
-          {hasModulePermission(authUser, 'portal_inscrito') && (
+          {checkPerm( 'portal_inscrito') && (
             <button
               onClick={() => handleSelect('portal_inscrito')}
               className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
@@ -419,8 +421,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {/* Divisor do Sistema & Painel Admin */}
-          {(hasModulePermission(authUser, 'configuracoes') || 
-            hasModulePermission(authUser, 'funcionarios') || 
+          {(checkPerm( 'configuracoes') || 
+            checkPerm( 'funcionarios') || 
             isMasterDeveloper(authUser)) && (
             <>
               <div className="pt-2 pb-1 border-t border-slate-100">
@@ -448,7 +450,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {openGroups.configuracoes && (
                   <div className="ml-3 pl-2.5 border-l-2 border-slate-100 space-y-1 mt-1">
                     {/* Configurações Gerais */}
-                    {hasModulePermission(authUser, 'configuracoes') && (
+                    {checkPerm( 'configuracoes') && (
                       <button
                         onClick={() => handleSelect('configuracoes', 'geral')}
                         className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
@@ -463,7 +465,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     )}
 
                     {/* CADASTRO DE FUNCIONÁRIOS */}
-                    {(hasModulePermission(authUser, 'funcionarios') || hasModulePermission(authUser, 'configuracoes')) && (
+                    {(checkPerm( 'funcionarios') || checkPerm( 'configuracoes')) && (
                       <button
                         onClick={() => handleSelect('funcionarios')}
                         className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
@@ -478,7 +480,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     )}
 
                     {/* BANCO DE DADOS SUPABASE */}
-                    {onOpenSupabaseModal && (hasModulePermission(authUser, 'configuracoes') || isMasterDeveloper(authUser)) && (
+                    {onOpenSupabaseModal && (checkPerm( 'configuracoes') || isMasterDeveloper(authUser)) && (
                       <button
                         onClick={() => {
                           onOpenSupabaseModal();
@@ -500,7 +502,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     )}
 
                     {/* Assistência Farmacêutica */}
-                    {hasModulePermission(authUser, 'configuracoes') && (
+                    {checkPerm( 'configuracoes') && (
                       <button
                         onClick={() => handleSelect('configuracoes', 'assistencia')}
                         className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
@@ -515,7 +517,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     )}
 
                     {/* Impedimentos de ART */}
-                    {hasModulePermission(authUser, 'configuracoes') && (
+                    {checkPerm( 'configuracoes') && (
                       <button
                         onClick={() => handleSelect('configuracoes', 'impedimentos_art')}
                         className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
@@ -530,7 +532,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     )}
 
                     {/* Backup & Restore */}
-                    {(hasModulePermission(authUser, 'configuracoes') || hasModulePermission(authUser, 'backup_restore')) && (
+                    {(checkPerm( 'configuracoes') || checkPerm( 'backup_restore')) && (
                       <button
                         onClick={() => handleSelect('configuracoes', 'backup_restore')}
                         className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
@@ -545,7 +547,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     )}
 
                     {/* Parâmetros Administrativos */}
-                    {(hasModulePermission(authUser, 'cadastros_basicos') || hasModulePermission(authUser, 'configuracoes')) && (
+                    {(checkPerm( 'cadastros_basicos') || checkPerm( 'configuracoes')) && (
                       <button
                         onClick={() => handleSelect('cadastros_basicos', 'ADMIN')}
                         className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
@@ -565,7 +567,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {/* Microsserviços & Cloud */}
-          {hasModulePermission(authUser, 'microsservicos') && (
+          {checkPerm( 'microsservicos') && (
             <button
               onClick={() => handleSelect('microsservicos')}
               className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${

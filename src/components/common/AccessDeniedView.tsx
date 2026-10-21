@@ -9,7 +9,8 @@ import {
   User, 
   HelpCircle 
 } from 'lucide-react';
-import { AuthUser, MainSection } from '../../types';
+import { AuthUser } from '../../types';
+import { MainSection } from '../../components/Sidebar';
 import { 
   getModuleName, 
   getAllowedModules, 

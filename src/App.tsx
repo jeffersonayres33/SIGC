@@ -28,10 +28,12 @@ import { SyncErrorModal } from './components/common/SyncErrorModal';
 import { UserRole, Empresa, LancamentoFinanceiro, ProcessoCobranca, AuthUser } from './types';
 import { storageService } from './services/storageService';
 import { toastService } from './services/toastService';
+import { hasModulePermission, getDefaultAllowedSection, getModuleName } from './utils/permissionUtils';
+import { AccessDeniedView } from './components/common/AccessDeniedView';
 
 export default function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => storageService.getCurrentAuthUser());
-  const [activeSection, setActiveSection] = useState<MainSection>('dashboard');
+  const [activeSection, setActiveSection] = useState<MainSection>(() => getDefaultAllowedSection(storageService.getCurrentAuthUser(), storageService.getCurrentAuthUser()?.role));
   const [configTab, setConfigTab] = useState<ConfigTab>('geral');
   const [cadastrosBasicosGroup, setCadastrosBasicosGroup] = useState<'PROFISSIONAIS' | 'EMPRESAS' | 'PROTOCOLOS' | 'FUNCIONARIOS' | 'ADMIN'>('PROFISSIONAIS');
   const [currentUserRole, setCurrentUserRole] = useState<UserRole>(() => {
@@ -40,7 +42,7 @@ export default function App() {
   });
   const [networkStatus, setNetworkStatus] = useState(storageService.getNetworkStatus());
   const [councilConfig, setCouncilConfig] = useState(storageService.getCouncilConfig());
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [syncErrors, setSyncErrors] = useState(storageService.getSyncErrors());
   const [isSyncErrorModalOpen, setIsSyncErrorModalOpen] = useState(false);
@@ -55,6 +57,7 @@ export default function App() {
     const unsubscribe = storageService.subscribe(() => {
       setNetworkStatus(storageService.getNetworkStatus());
       setCouncilConfig(storageService.getCouncilConfig());
+      setAuthUser(storageService.getCurrentAuthUser());
       
       const newErrors = storageService.getSyncErrors();
       setSyncErrors(newErrors);
@@ -92,11 +95,7 @@ export default function App() {
           onLoginSuccess={(user) => {
             setAuthUser(user);
             setCurrentUserRole(user.role);
-            if (user.role === 'PORTAL_PROFISSIONAL' || user.role === 'PORTAL_EMPRESA') {
-              setActiveSection('portal_inscrito');
-            } else {
-              setActiveSection('dashboard');
-            }
+            setActiveSection(getDefaultAllowedSection(user, user.role));
           }}
         />
         <ToastContainer />
@@ -109,7 +108,12 @@ export default function App() {
       {/* Top Navigation */}
       <Navbar
         currentRole={currentUserRole}
-        onRoleChange={setCurrentUserRole}
+        onRoleChange={(role) => {
+          setCurrentUserRole(role);
+          if (!hasModulePermission(authUser, activeSection, role)) {
+            setActiveSection(getDefaultAllowedSection(authUser, role));
+          }
+        }}
         networkStatus={networkStatus}
         onSyncOffline={handleSyncOffline}
         activeModule={activeSection}
@@ -118,7 +122,6 @@ export default function App() {
         onOpenSettings={() => {
           setActiveSection('configuracoes');
           setConfigTab('geral');
-          setIsSidebarOpen(false);
         }}
         onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
         authUser={authUser}
@@ -143,95 +146,105 @@ export default function App() {
             if (section === 'cadastros_basicos' && subTab) {
               setCadastrosBasicosGroup(subTab as any);
             }
-            setIsSidebarOpen(false);
           }}
           currentRole={currentUserRole}
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
           councilConfig={councilConfig}
           onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+          authUser={authUser}
         />
 
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-slate-50">
           <div className="max-w-7xl mx-auto">
-            {activeSection === 'dashboard' && (
-              <DashboardView onNavigate={(sec) => setActiveSection(sec)} />
-            )}
-
-            {activeSection === 'profissionais' && (
-              <ProfissionaisView onOpenBoletoPix={setBoletoLancamento} />
-            )}
-
-            {activeSection === 'empresas' && (
-              <EmpresasView onOpenCrtModal={setCrtEmpresa} onOpenBoletoPix={setBoletoLancamento} />
-            )}
-
-            {activeSection === 'cadastros_basicos' && (
-              <CadastrosBasicosView 
-                key={cadastrosBasicosGroup} 
-                initialGroup={cadastrosBasicosGroup}
-                onNavigateToFuncionarios={() => setActiveSection('funcionarios')}
+            {!hasModulePermission(authUser, activeSection) ? (
+              <AccessDeniedView
+                attemptedSection={activeSection}
+                authUser={authUser}
+                onNavigateToAllowed={(sec) => setActiveSection(sec)}
               />
-            )}
+            ) : (
+              <>
+                {activeSection === 'dashboard' && (
+                  <DashboardView onNavigate={(sec) => setActiveSection(sec)} />
+                )}
 
-            {activeSection === 'financeiro' && (
-              <FinanceiroView onOpenBoletoPix={setBoletoLancamento} />
-            )}
+                {activeSection === 'profissionais' && (
+                  <ProfissionaisView onOpenBoletoPix={setBoletoLancamento} />
+                )}
 
-            {activeSection === 'cobranca_juridico' && (
-              <JuridicoView onOpenCdaModal={setCdaProcesso} />
-            )}
+                {activeSection === 'empresas' && (
+                  <EmpresasView onOpenCrtModal={setCrtEmpresa} onOpenBoletoPix={setBoletoLancamento} />
+                )}
 
-            {activeSection === 'fiscalizacao' && (
-              <FiscalizacaoView />
-            )}
+                {activeSection === 'cadastros_basicos' && (
+                  <CadastrosBasicosView 
+                    key={cadastrosBasicosGroup} 
+                    initialGroup={cadastrosBasicosGroup}
+                    onNavigateToFuncionarios={() => setActiveSection('funcionarios')}
+                  />
+                )}
 
-            {activeSection === 'relatorios' && (
-              <RelatoriosView />
-            )}
+                {activeSection === 'financeiro' && (
+                  <FinanceiroView onOpenBoletoPix={setBoletoLancamento} />
+                )}
 
-            {activeSection === 'formularios' && (
-              <FormulariosView />
-            )}
+                {activeSection === 'cobranca_juridico' && (
+                  <JuridicoView onOpenCdaModal={setCdaProcesso} />
+                )}
 
-            {activeSection === 'protocolos' && (
-              <ProtocolosView />
-            )}
+                {activeSection === 'fiscalizacao' && (
+                  <FiscalizacaoView />
+                )}
 
-            {activeSection === 'portal_inscrito' && (
-              <PortalView
-                onOpenBoletoPix={setBoletoLancamento}
-                onOpenCrtModal={setCrtEmpresa}
-              />
-            )}
+                {activeSection === 'relatorios' && (
+                  <RelatoriosView />
+                )}
 
-            {activeSection === 'configuracoes' && (
-              <ConfiguracoesView key={configTab} initialTab={configTab} />
-            )}
+                {activeSection === 'formularios' && (
+                  <FormulariosView />
+                )}
 
-            {activeSection === 'backup_restore' && (
-              <BackupRestoreConfig />
-            )}
+                {activeSection === 'protocolos' && (
+                  <ProtocolosView />
+                )}
 
-            {activeSection === 'funcionarios' && (
-              <FuncionariosView 
-                onNavigateToCadastrosBasicos={() => {
-                  setActiveSection('cadastros_basicos');
-                  setCadastrosBasicosGroup('FUNCIONARIOS');
-                }}
-              />
-            )}
+                {activeSection === 'portal_inscrito' && (
+                  <PortalView
+                    onOpenBoletoPix={setBoletoLancamento}
+                    onOpenCrtModal={setCrtEmpresa}
+                  />
+                )}
 
-            {activeSection === 'admin' && (
-              <CadastrosBasicosView 
-                key="admin-view" 
-                initialGroup="ADMIN"
-              />
-            )}
+                {activeSection === 'configuracoes' && (
+                  <ConfiguracoesView key={configTab} initialTab={configTab} />
+                )}
 
-            {activeSection === 'microsservicos' && (
-              <MicrosservicosView />
+                {activeSection === 'backup_restore' && (
+                  <BackupRestoreConfig />
+                )}
+
+                {activeSection === 'funcionarios' && (
+                  <FuncionariosView 
+                    onNavigateToCadastrosBasicos={() => {
+                      setActiveSection('cadastros_basicos');
+                      setCadastrosBasicosGroup('FUNCIONARIOS');
+                    }}
+                  />
+                )}
+
+                {activeSection === 'admin' && (
+                  <CadastrosBasicosView 
+                    key="admin-view" 
+                    initialGroup="ADMIN"
+                  />
+                )}
+
+                {activeSection === 'microsservicos' && (
+                  <MicrosservicosView />
+                )}
+              </>
             )}
           </div>
         </main>

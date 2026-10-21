@@ -1,4 +1,6 @@
-import { AuthUser, MainSection } from '../types';
+import { AuthUser } from '../types';
+import { MainSection } from '../components/Sidebar';
+import { UserRole } from '../types';
 
 export interface ModuloInfo {
   id: string;
@@ -21,14 +23,13 @@ export const MODULOS_SISTEMA: ModuloInfo[] = [
   { id: 'portal_inscrito', nome: '10. Portal do Inscrito (PF/PJ)', descricao: 'Autoatendimento de profissionais e empresas' },
   { id: 'configuracoes', nome: 'Painel do Administrador', descricao: 'Configurações gerais, parâmetros e sistema' },
   { id: 'funcionarios', nome: 'Cadastro de Funcionários', descricao: 'Gestão de colaboradores, acessos e cargos' },
-  { id: 'microsservicos', nome: 'Microsserviços & Cloud', descricao: 'Status dos serviços distribuídos e gateway' }
+  { id: 'microsservicos', nome: 'Microsservicos & Cloud', descricao: 'Status dos serviços distribuídos e gateway' }
 ];
 
 export const MASTER_DEVELOPER_CPF = '93413530259';
 
 /**
  * Verifica se o usuário autenticado é o Desenvolvedor Master do sistema.
- * O Desenvolvedor Master possui autoridade máxima e acesso irrestrito a todas as áreas.
  */
 export function isMasterDeveloper(user: AuthUser | null | undefined): boolean {
   if (!user) return false;
@@ -65,58 +66,81 @@ export function normalizeSectionToModule(section: string): string {
 
 /**
  * Verifica se o usuário autenticado possui permissão concedida para acessar a seção ou módulo especificado.
+ * Suporta opcionalmente um perfil simulado (para testes do desenvolvedor/administrador).
  */
 export function hasModulePermission(
   user: AuthUser | null | undefined, 
-  sectionOrModule: string
+  sectionOrModule: string,
+  simulatedRole?: UserRole | string
 ): boolean {
   if (!user) return false;
 
-  // 1. Desenvolvedor Master possui acesso total irrestrito
+  const activeRole = simulatedRole || user.role;
+  const targetModule = normalizeSectionToModule(sectionOrModule);
+
+  // Se o Master Developer estiver simulando um papel restrito, aplica as restrições daquele papel
   if (isMasterDeveloper(user)) {
+    if (activeRole === 'FISCAL') {
+      return ['dashboard', 'fiscalizacao', 'empresas', 'profissionais', 'formularios'].includes(targetModule);
+    }
+    if (activeRole === 'FINANCEIRO') {
+      return ['dashboard', 'financeiro', 'profissionais', 'empresas', 'protocolos', 'relatorios'].includes(targetModule);
+    }
+    if (activeRole === 'JURIDICO') {
+      return ['dashboard', 'cobranca_juridico', 'protocolos', 'profissionais', 'empresas', 'relatorios'].includes(targetModule);
+    }
+    if (activeRole === 'DIRETORIA') {
+      return ['dashboard', 'relatorios', 'protocolos', 'profissionais', 'empresas', 'financeiro', 'fiscalizacao', 'cobranca_juridico'].includes(targetModule);
+    }
+    if (activeRole === 'PORTAL_PROFISSIONAL' || activeRole === 'PORTAL_EMPRESA') {
+      return targetModule === 'portal_inscrito';
+    }
+    // Caso contrário, acesso total irrestrito para Desenvolvedor Master
     return true;
   }
 
-  // 2. Usuários externos do Portal têm acesso estritamente ao portal_inscrito
-  if (isPortalUser(user)) {
-    return sectionOrModule === 'portal_inscrito';
+  // Papéis simulados ou atribuídos para usuários normais
+  if (activeRole === 'FISCAL') {
+    return ['dashboard', 'fiscalizacao', 'empresas', 'profissionais', 'formularios'].includes(targetModule);
+  }
+  if (activeRole === 'FINANCEIRO') {
+    return ['dashboard', 'financeiro', 'profissionais', 'empresas', 'protocolos', 'relatorios'].includes(targetModule);
+  }
+  if (activeRole === 'JURIDICO') {
+    return ['dashboard', 'cobranca_juridico', 'protocolos', 'profissionais', 'empresas', 'relatorios'].includes(targetModule);
+  }
+  if (activeRole === 'DIRETORIA') {
+    return ['dashboard', 'relatorios', 'protocolos', 'profissionais', 'empresas', 'financeiro', 'fiscalizacao', 'cobranca_juridico'].includes(targetModule);
   }
 
-  // Se um colaborador tentar acessar o portal do inscrito diretamente sem ser portal,
-  // permitimos apenas se explicitamente concedido em permissoes
-  const targetModule = normalizeSectionToModule(sectionOrModule);
+  // Usuários externos do Portal
+  if (isPortalUser(user) || activeRole === 'PORTAL_PROFISSIONAL' || activeRole === 'PORTAL_EMPRESA') {
+    return targetModule === 'portal_inscrito';
+  }
 
-  // Lista de permissões concedidas pelo Administrador (normalizada)
+  // Lista de permissões concedidas pelo Administrador
   const userPerms = (user.permissoes || []).map(p => String(p).toLowerCase().trim());
 
-  // Se o usuário tem uma lista vazia ou não configurada:
-  // Se for admin geral sem lista definida ainda, permite tudo exceto se for colaborador restrito
   if (userPerms.length === 0) {
     if (user.role === 'ADMIN' && user.tipo === 'ADMIN') {
       return true;
     }
-    // Para funcionários sem permissões explícitas, apenas dashboard é concedido por padrão
     return targetModule === 'dashboard';
   }
 
-  // Verifica se o módulo requerido está expressamente autorizado
   if (userPerms.includes(targetModule)) {
     return true;
   }
 
-  // Verificação direta pelo nome original da seção
   const rawSection = String(sectionOrModule).toLowerCase().trim();
   if (userPerms.includes(rawSection)) {
     return true;
   }
 
-  // Permissões compostas:
-  // Se requer "funcionarios", verificar se tem "funcionarios" ou se tem "configuracoes"
   if (targetModule === 'funcionarios') {
     return userPerms.includes('funcionarios') || userPerms.includes('configuracoes');
   }
 
-  // Se requer "configuracoes", checa se tem "configuracoes"
   if (targetModule === 'configuracoes') {
     return userPerms.includes('configuracoes');
   }
@@ -125,30 +149,29 @@ export function hasModulePermission(
 }
 
 /**
- * Retorna todos os módulos que o usuário tem autorização para acessar.
+ * Retorna todos os módulos que o usuário tem autorização para acessar (considerando simulação de papel).
  */
-export function getAllowedModules(user: AuthUser | null | undefined): string[] {
+export function getAllowedModules(user: AuthUser | null | undefined, simulatedRole?: UserRole | string): string[] {
   if (!user) return [];
-  if (isMasterDeveloper(user)) {
+  const activeRole = simulatedRole || user.role;
+
+  if (isMasterDeveloper(user) && activeRole !== 'FISCAL' && activeRole !== 'FINANCEIRO' && activeRole !== 'JURIDICO' && activeRole !== 'DIRETORIA' && activeRole !== 'PORTAL_PROFISSIONAL' && activeRole !== 'PORTAL_EMPRESA') {
     return MODULOS_SISTEMA.map(m => m.id);
   }
-  if (isPortalUser(user)) {
-    return ['portal_inscrito'];
-  }
+
   return MODULOS_SISTEMA
     .map(m => m.id)
-    .filter(id => hasModulePermission(user, id));
+    .filter(id => hasModulePermission(user, id, simulatedRole));
 }
 
 /**
  * Obtém o módulo inicial padrão ou primeiro módulo liberado para o usuário.
  */
-export function getDefaultAllowedSection(user: AuthUser | null | undefined): MainSection {
+export function getDefaultAllowedSection(user: AuthUser | null | undefined, simulatedRole?: UserRole | string): MainSection {
   if (!user) return 'dashboard';
-  if (isPortalUser(user)) return 'portal_inscrito';
-  if (hasModulePermission(user, 'dashboard')) return 'dashboard';
+  if (hasModulePermission(user, 'dashboard', simulatedRole)) return 'dashboard';
 
-  const allowed = getAllowedModules(user);
+  const allowed = getAllowedModules(user, simulatedRole);
   if (allowed.length > 0) {
     return allowed[0] as MainSection;
   }
