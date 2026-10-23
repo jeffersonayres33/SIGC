@@ -395,7 +395,7 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Gestão de colaboradores, fiscais, assessores, cargos e níveis de acesso à plataforma SIGC Cloud.
+              Gestão de colaboradores, fiscais, assessores, cargos e níveis de acesso à plataforma SIGCON.
             </p>
           </div>
         </div>

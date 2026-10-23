@@ -26,20 +26,28 @@ import {
   Printer,
   Info,
   RotateCcw,
-  Trash2
+  Trash2,
+  Database,
+  Monitor
 } from 'lucide-react';
 import { TermoFiscalizacao, Empresa, TipoSignatarioNotificado } from '../../types';
 import { storageService } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
 import { AssinaturaTabletModal } from './AssinaturaTabletModal';
 import { TermoFiscalizacaoModal } from '../modals/TermoFiscalizacaoModal';
+import { TabletAppView } from './TabletAppView';
+import { ModalSqlDatabaseFiscalizacao } from './ModalSqlDatabaseFiscalizacao';
 
 export const FiscalizacaoView: React.FC = () => {
+  // View mode: 'tablet' (matching the 15 user photos) or 'web_admin' (management overview)
+  const [viewMode, setViewMode] = useState<'tablet' | 'web_admin'>('tablet');
+  const [isSqlModalOpen, setIsSqlModalOpen] = useState(false);
+
   const [termos, setTermos] = useState<TermoFiscalizacao[]>(storageService.getTermosFiscalizacao());
   const [network, setNetwork] = useState(storageService.getNetworkStatus());
   const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number } | null>({
-    lat: -3.10719,
-    lng: -60.01328
+    lat: -6.5338, // Canutama - AM
+    lng: -64.3833
   });
   const [isGettingGps, setIsGettingGps] = useState(false);
   const [isNewTermoModal, setIsNewTermoModal] = useState(false);
@@ -278,12 +286,30 @@ export const FiscalizacaoView: React.FC = () => {
     return true;
   });
 
+  // 1. Tablet View (Replicating the user photos)
+  if (viewMode === 'tablet') {
+    return (
+      <div className="relative">
+        <TabletAppView 
+          onSwitchToWebAdmin={() => setViewMode('web_admin')}
+          onOpenSqlModal={() => setIsSqlModalOpen(true)}
+        />
+
+        <ModalSqlDatabaseFiscalizacao
+          isOpen={isSqlModalOpen}
+          onClose={() => setIsSqlModalOpen(false)}
+        />
+      </div>
+    );
+  }
+
+  // 2. Desktop Web Management View
   return (
     <div className="space-y-5">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white border border-slate-200 p-4 sm:p-5 rounded-2xl shadow-xs">
         <div className="flex items-center space-x-3.5">
-          <div className="w-11 h-11 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-700 shadow-xs">
+          <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700 shadow-xs">
             <Compass className="w-5 h-5" />
           </div>
           <div>
@@ -291,12 +317,32 @@ export const FiscalizacaoView: React.FC = () => {
               <span>Módulo dos Fiscais de Campo (Offline & Tablet)</span>
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Lavratura de termos de inspeção, autos de infração e captura de assinatura digital no tablet para RTs, gerentes e funcionários.
+              Gestão administrativa de inspeções fiscais, autos lavrados e sincronização com tablets de campo.
             </p>
           </div>
         </div>
 
         <div className="flex items-center space-x-2">
+          {/* Switch to Tablet Simulator Mode */}
+          <button
+            onClick={() => setViewMode('tablet')}
+            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+            title="Abrir Simulador de Tablet FEM de Campo"
+          >
+            <Tablet className="w-4 h-4" />
+            <span>App Tablet FEM</span>
+          </button>
+
+          {/* Database SQL Script Modal Button */}
+          <button
+            onClick={() => setIsSqlModalOpen(true)}
+            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs border border-purple-200 transition-colors cursor-pointer"
+            title="Visualizar e Copiar Script SQL do Banco"
+          >
+            <Database className="w-4 h-4 text-purple-600" />
+            <span>Script SQL</span>
+          </button>
+
           <button
             onClick={handleCaptureGPS}
             disabled={isGettingGps}
@@ -307,7 +353,7 @@ export const FiscalizacaoView: React.FC = () => {
           </button>
           <button
             onClick={() => setIsNewTermoModal(true)}
-            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-sm shadow-purple-600/20 transition-all"
+            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-sm transition-all"
           >
             <Plus className="w-4 h-4" />
             <span>Lavrar Novo Termo</span>
@@ -746,6 +792,12 @@ export const FiscalizacaoView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* SQL Migration Script Modal */}
+      <ModalSqlDatabaseFiscalizacao
+        isOpen={isSqlModalOpen}
+        onClose={() => setIsSqlModalOpen(false)}
+      />
     </div>
   );
 };

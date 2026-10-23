@@ -86,7 +86,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-extrabold tracking-wider text-blue-400">SIGC Cloud</span>
+            <span className="font-extrabold tracking-wider text-blue-400">SIGCON</span>
             <span className="text-slate-600">•</span>
             <span className="font-mono font-bold tracking-wider text-slate-200">{councilConfig.sigla}</span>
             <span className="text-slate-500">|</span>
@@ -155,22 +155,24 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Menu className="w-5 h-5" />
           </button>
 
-          <div className="flex items-center space-x-2.5">
-            <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-sm shadow-blue-500/20">
-              <Building2 className="w-5 h-5" />
-            </div>
+          <div className="flex items-center space-x-3">
+            <img 
+              src="/public/assets/aistudio/Gemini_Generated_Image_ftnohaftnohaftno_8f366e0b.jpeg" 
+              alt="SIGCON Icon" 
+              className="h-9 w-9 object-contain rounded-xl border border-slate-200 shadow-2xs p-0.5 bg-white"
+            />
             <div>
               <div className="flex items-center space-x-2">
                 <h1 className="font-extrabold text-base tracking-tight text-slate-900 flex items-center">
-                  SIGC <span className="text-blue-600 font-semibold ml-1">Cloud</span>
+                  SIGCON <span className="text-slate-500 font-normal text-xs ml-1.5 hidden md:inline">| Sistema Integrado de Gestão de Conselho</span>
                 </h1>
               </div>
-              <p className="text-[11px] text-slate-500 hidden sm:block">
-                Sistema Integrado de Gestão de Conselhos
+              <p className="text-[11px] text-slate-500 font-medium hidden sm:block">
+                {councilConfig.sigla} — {councilConfig.nomeCompleto}
               </p>
               <div className="text-[11px] text-blue-700 font-bold mt-0.5 flex flex-wrap items-center gap-1.5">
                 <span>
-                  Olá, <strong className="text-blue-900 underline decoration-blue-300">{authUser?.nome || 'Usuário'}</strong>! Seja bem-vindo(a) ao SIGC Cloud.
+                  Olá, <strong className="text-blue-900 underline decoration-blue-300">{authUser?.nome || 'Usuário'}</strong>! Seja bem-vindo(a) ao SIGCON.
                 </span>
               </div>
             </div>

@@ -67,10 +67,12 @@ CREATE TABLE IF NOT EXISTS public.cadastros_basicos (
     codigo VARCHAR(50),
     descricao TEXT,
     ativo BOOLEAN DEFAULT TRUE,
-    ordem INTEGER DEFAULT 0,
+    ordem NUMERIC(10,2) DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+ALTER TABLE public.cadastros_basicos ALTER COLUMN ordem TYPE NUMERIC(10,2) USING ordem::numeric;
 
 CREATE INDEX IF NOT EXISTS idx_cadastros_basicos_cat ON public.cadastros_basicos(categoria);
 
@@ -81,13 +83,15 @@ CREATE TABLE IF NOT EXISTS public.regras_assistencia (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     municipio VARCHAR(100) NOT NULL,
     tipo_estabelecimento VARCHAR(100) NOT NULL,
-    horas_minimas INTEGER NOT NULL DEFAULT 40,
+    horas_minimas NUMERIC(10,2) NOT NULL DEFAULT 40,
     dias_semana TEXT[] DEFAULT '{}',
     ativo BOOLEAN DEFAULT true,
     observacoes TEXT,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+ALTER TABLE public.regras_assistencia ALTER COLUMN horas_minimas TYPE NUMERIC(10,2) USING horas_minimas::numeric;
 
 CREATE INDEX IF NOT EXISTS idx_regras_municipio_tipo ON public.regras_assistencia(municipio, tipo_estabelecimento);
 
@@ -270,8 +274,8 @@ CREATE TABLE IF NOT EXISTS public.empresas (
     responsaveis_tecnicos JSONB DEFAULT '[]'::jsonb,
     horarios_funcionamento JSONB DEFAULT '[]'::jsonb,
     horarios_assistencia JSONB DEFAULT '[]'::jsonb,
-    carga_horaria_funcionamento_semanal INTEGER DEFAULT 0,
-    carga_horaria_assistencia_semanal INTEGER DEFAULT 0,
+    carga_horaria_funcionamento_semanal NUMERIC(10,2) DEFAULT 0.00,
+    carga_horaria_assistencia_semanal NUMERIC(10,2) DEFAULT 0.00,
     justificativa_condicao TEXT,
     regra_assistencia_aplicada VARCHAR(150),
     bloqueado BOOLEAN DEFAULT FALSE,
@@ -284,7 +288,7 @@ CREATE TABLE IF NOT EXISTS public.empresas (
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Garantir colunas em empresas para tabelas pré-existentes
+-- Garantir colunas em empresas para tabelas pré-existentes e conversão de tipo (Correção do Erro 22P02: integer syntax for "88.98")
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Regular';
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS condicao VARCHAR(50) DEFAULT 'Regular';
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS situacao VARCHAR(50) DEFAULT 'Definitiva';
@@ -292,6 +296,10 @@ ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS status_financeiro VARCHAR(5
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS recadastrado BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS data_recadastramento VARCHAR(20);
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS dt_inicio_insc VARCHAR(20);
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS carga_horaria_funcionamento_semanal NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS carga_horaria_assistencia_semanal NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE public.empresas ALTER COLUMN carga_horaria_funcionamento_semanal TYPE NUMERIC(10,2) USING carga_horaria_funcionamento_semanal::numeric;
+ALTER TABLE public.empresas ALTER COLUMN carga_horaria_assistencia_semanal TYPE NUMERIC(10,2) USING carga_horaria_assistencia_semanal::numeric;
 
 DO $$
 BEGIN
@@ -426,6 +434,10 @@ CREATE TABLE IF NOT EXISTS public.termos_fiscalizacao (
 
 ALTER TABLE public.termos_fiscalizacao ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Concluído e Assinado';
 ALTER TABLE public.termos_fiscalizacao ADD COLUMN IF NOT EXISTS status_sincronizacao VARCHAR(50) DEFAULT 'Sincronizado';
+ALTER TABLE public.termos_fiscalizacao ADD COLUMN IF NOT EXISTS numero_notificacao VARCHAR(50);
+ALTER TABLE public.termos_fiscalizacao ADD COLUMN IF NOT EXISTS numero_intimacao VARCHAR(50);
+ALTER TABLE public.termos_fiscalizacao ADD COLUMN IF NOT EXISTS atendente_inscricao VARCHAR(50);
+ALTER TABLE public.termos_fiscalizacao ADD COLUMN IF NOT EXISTS observacao TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_termos_numero ON public.termos_fiscalizacao(numero_termo);
 CREATE INDEX IF NOT EXISTS idx_termos_status ON public.termos_fiscalizacao(status);

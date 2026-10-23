@@ -42,7 +42,7 @@ export default function App() {
   });
   const [networkStatus, setNetworkStatus] = useState(storageService.getNetworkStatus());
   const [councilConfig, setCouncilConfig] = useState(storageService.getCouncilConfig());
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
   const [syncErrors, setSyncErrors] = useState(storageService.getSyncErrors());
   const [isSyncErrorModalOpen, setIsSyncErrorModalOpen] = useState(false);

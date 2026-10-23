@@ -1,5 +1,5 @@
 /**
- * Utilitários de Validação e Formatação de Documentos e Textos em Caixa Alta (SIGC)
+ * Utilitários de Validação e Formatação de Documentos e Textos em Caixa Alta (SIGCON)
  */
 
 /**

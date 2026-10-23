@@ -49,11 +49,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
         <div className="bg-slate-900 p-8 text-center">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <Building2 className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-xl font-extrabold text-white">SIGC Cloud</h1>
-          <p className="text-slate-400 text-xs mt-1">Sistema Integrado de Gestão de Conselhos</p>
+          <img 
+            src="/public/assets/aistudio/Gemini_Generated_Image_ftnohaftnohaftno_8f366e0b.jpeg" 
+            alt="SIGCON Icon" 
+            className="w-16 h-16 object-contain rounded-2xl mx-auto mb-4 bg-white p-1 border border-slate-700"
+          />
+          <h1 className="text-xl font-extrabold text-white">SIGCON</h1>
+          <p className="text-slate-400 text-xs mt-1">Sistema Integrado de Gestão de Conselho</p>
         </div>
 
         <form onSubmit={handleLogin} className="p-8 space-y-5">
@@ -123,7 +125,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         </form>
 
         <div className="px-8 pb-8 text-center text-[11px] text-slate-400">
-          SIGC Cloud © 2026. Acesso restrito a profissionais, empresas e colaboradores autorizados.
+          SIGCON © 2026. Acesso restrito a profissionais, empresas e colaboradores autorizados.
         </div>
       </div>
     </div>

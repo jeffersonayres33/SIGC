@@ -184,7 +184,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, councilCon
   const SQL_UPDATE_SCRIPT = `-- ==============================================================================
 -- ATUALIZAÇÃO DO BANCO DE DADOS: USUÁRIO DESENVOLVEDOR MASTER & AUTENTICAÇÃO
 -- Banco Alvo: PostgreSQL / Supabase
--- Autor: Sistema Integrado de Gestão de Conselhos (SIGC Cloud)
+-- Autor: Sistema Integrado de Gestão de Conselho (SIGCON)
 -- CPF do Desenvolvedor: 934.135.302-59
 -- Compatibilidade: 100% resiliente com colunas id tipo UUID ou TEXT/VARCHAR
 -- ==============================================================================
@@ -338,31 +338,32 @@ END $$;
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-4 relative overflow-hidden font-sans selection:bg-blue-600 selection:text-white">
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4 relative overflow-hidden font-sans selection:bg-blue-600 selection:text-white">
       {/* Background Decor Elements */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-blue-600/15 rounded-full blur-3xl animate-pulse" />
-        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-purple-600/15 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-slate-800/30 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -left-40 w-96 h-96 bg-blue-100/60 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-slate-200/50 rounded-full blur-3xl" />
       </div>
 
       {/* Main Login Card */}
-      <div className="relative z-10 w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-        {/* Header Oficial do Conselho */}
-        <div className="bg-linear-to-r from-blue-700 via-blue-800 to-indigo-900 p-6 text-white text-center relative">
-          <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 mx-auto flex items-center justify-center text-white mb-3 shadow-lg shadow-black/10">
-            <Building2 className="w-8 h-8 text-blue-200" />
-          </div>
-          <h1 className="text-xl font-extrabold tracking-tight">
-            SIGC <span className="text-blue-300 font-semibold">Cloud</span>
+      <div className="relative z-10 w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200/80 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+        {/* Header Oficial do Conselho com Logo */}
+        <div className="p-6 text-center border-b border-slate-100 bg-white">
+          <img 
+            src="/public/assets/aistudio/Gemini_Generated_Image_ftnohaftnohaftno_8f366e0b.jpeg" 
+            alt="SIGCON Icon" 
+            className="h-14 w-14 object-contain mx-auto mb-3 shadow-2xs rounded-2xl p-1 bg-white border border-slate-200"
+          />
+          <h1 className="text-xl font-extrabold tracking-tight text-slate-900">
+            SIGCON <span className="text-blue-600 font-semibold text-sm">Enterprise</span>
           </h1>
-          <p className="text-[11px] text-blue-200/90 font-medium uppercase tracking-wider mt-0.5">
-            Sistema Integrado de Gestão de Conselhos
+          <p className="text-[11px] text-slate-500 font-medium uppercase tracking-wider mt-0.5">
+            Sistema Integrado de Gestão de Conselho
           </p>
-          <div className="mt-2 inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-blue-950/40 border border-blue-400/30 text-[10px] font-bold text-blue-100 font-mono">
+          <div className="mt-2.5 inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-700 font-mono">
             <span>{councilConfig.sigla || 'CRF-AM'}</span>
             <span>•</span>
-            <span className="truncate max-w-[200px]">{councilConfig.nomeCompleto || 'Conselho Regional'}</span>
+            <span className="truncate max-w-[220px]">{councilConfig.nomeCompleto || 'Conselho Regional'}</span>
           </div>
         </div>
 
@@ -590,7 +591,7 @@ END $$;
 
         {/* Footer info */}
         <div className="p-3 bg-slate-50 border-t border-slate-100 text-center text-[10px] text-slate-400">
-          SIGC Cloud • Conectado à Rede Oficial do Conselho Regional
+          SIGCON • Conectado à Rede Oficial do Conselho Regional
         </div>
       </div>
 

@@ -37,6 +37,7 @@ import { SupabaseManagerModal } from '../common/SupabaseManagerModal';
 import { AssistenciaFarmaceuticaConfig } from './AssistenciaFarmaceuticaConfig';
 import { ImpedimentosArtConfig } from './ImpedimentosArtConfig';
 import { BackupRestoreConfig } from './BackupRestoreConfig';
+import { FiscalizacaoEletronicaConfig } from './FiscalizacaoEletronicaConfig';
 import { 
   maskCNPJ, 
   validateCNPJ, 
@@ -47,7 +48,7 @@ import {
   formatInscricaoCompleta 
 } from '../../utils/documentUtils';
 
-export type ConfigTab = 'geral' | 'assistencia' | 'impedimentos_art' | 'backup_restore';
+export type ConfigTab = 'geral' | 'fiscalizacao' | 'assistencia' | 'impedimentos_art' | 'backup_restore';
 
 interface ConfiguracoesViewProps {
   initialTab?: ConfigTab;
@@ -170,7 +171,7 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
     setHasChanges(false);
     toastService.success(
       'Configurações Atualizadas',
-      `Os parâmetros do conselho (${config.sigla} - ${config.nomeCompleto}) foram atualizados e sincronizados em todo o sistema SIGC.`
+      `Os parâmetros do conselho (${config.sigla} - ${config.nomeCompleto}) foram atualizados e sincronizados em todo o sistema SIGCON.`
     );
   };
 
@@ -241,10 +242,11 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
           <span className="font-semibold text-slate-500">Configurações</span>
           <span className="text-slate-300">/</span>
           <span className="font-bold text-blue-700 uppercase">
-            {activeTab === 'geral' && '1. Dados do Conselho, Numeração & Validações'}
-            {activeTab === 'assistencia' && '2. Assistência Farmacêutica por Município'}
-            {activeTab === 'impedimentos_art' && '3. Impedimentos de ART / RT'}
-            {activeTab === 'backup_restore' && '4. Backup & Restore de Dados'}
+            {activeTab === 'geral' && 'Configuração > Geral (Dados do Conselho, Numeração & Validações)'}
+            {activeTab === 'fiscalizacao' && 'Configuração > Fiscalização Eletrônica (Módulo Tablet & Campo)'}
+            {activeTab === 'assistencia' && 'Assistência Farmacêutica por Município'}
+            {activeTab === 'impedimentos_art' && 'Impedimentos de ART / RT'}
+            {activeTab === 'backup_restore' && 'Backup & Restore de Dados'}
           </span>
         </div>
         <span className="text-[11px] text-slate-400 hidden sm:inline">
@@ -252,7 +254,9 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
         </span>
       </div>
 
-      {activeTab === 'assistencia' ? (
+      {activeTab === 'fiscalizacao' ? (
+        <FiscalizacaoEletronicaConfig />
+      ) : activeTab === 'assistencia' ? (
         <AssistenciaFarmaceuticaConfig />
       ) : activeTab === 'impedimentos_art' ? (
         <ImpedimentosArtConfig />

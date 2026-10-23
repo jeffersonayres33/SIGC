@@ -295,6 +295,8 @@ export interface Empresa {
   email: string;
   socios?: Socio[];
   responsaveisTecnicos?: ResponsavelTecnico[];
+  responsavelTecnico?: string;
+  crfResponsavel?: string;
   statusFinanceiro?: 'Adimplente' | 'Inadimplente' | 'Em Cobrança' | string;
   latitude?: number;
   longitude?: number;
@@ -379,12 +381,14 @@ export interface TermoFiscalizacao {
   empresaId: string;
   empresaInscricao?: string;
   empresaRazaoSocial?: string;
+  razaoSocial?: string;
   empresaNome?: string;
   empresaCnpj?: string;
   cnpj?: string;
   endereco?: string;
   bairro?: string;
   cidade?: string;
+  rota?: string;
   dataFiscalizacao?: string;
   horaFiscalizacao?: string;
   dataHora?: string;
@@ -442,6 +446,52 @@ export interface TermoFiscalizacao {
   fotosComprovantes?: string[];
   fotoEvidencias?: string[];
   sincronizado?: boolean;
+
+  // Campos específicos do App Mobile / Tablet dos Fiscais de Campo
+  encontrava?: 'Aberta' | 'Fechada' | string;
+  motivoFechada?: string;
+  rtSituacao?: 'Presente' | 'Ausente' | 'Não possui' | 'Não possui Farm.Sub ou A.T' | 'Fiscalização Realizada fora do HAT' | 'Dentro do prazo de 30 dias' | string;
+  respTecnicoSelecionadoNome?: string;
+  respTecnicoSelecionadoTipo?: string;
+  respTecnicoSelecionadoInscricao?: string;
+  rtPresenteMomentoNome?: string;
+  outrasObservacoesGerais?: string;
+  observacao?: string;
+
+  // Notificação
+  notificacaoAtiva?: boolean;
+  numeroNotificacao?: string;
+  notificacaoTexto?: string;
+  notificacaoObservacoes?: string;
+
+  // Intimação
+  intimacaoAtiva?: boolean;
+  numeroIntimacao?: string;
+  intimacaoCrtAtualizada?: boolean;
+  intimacaoCrtLocalVisivel?: boolean;
+  intimacaoAlteracaoSocial?: boolean;
+  intimacaoOutrasObservacoes?: string;
+
+  // Autuação (Auto de Infração)
+  autuacaoAtiva?: boolean;
+  autuacaoAusente?: boolean;
+  autuacaoSemRt?: boolean;
+  autuacaoChi?: boolean;
+  autuacaoSemSubstituto?: boolean;
+  autuacaoIlegal?: boolean;
+  autuacaoPrivativas?: boolean;
+  autuacaoOutrasObservacoes?: string;
+
+  // Informações prestadas por
+  atendenteCargo?: string;
+  atendenteNome?: string;
+  atendenteRg?: string;
+  atendenteCpf?: string;
+  atendenteInscricao?: string;
+
+  // Assinaturas Digitais do Tablet
+  assinaturaEstabelecimento?: string;
+  assinaturaEstabelecimentoDataHora?: string;
 }
 
 export interface RelatorioFiltro {

@@ -346,7 +346,7 @@ export const ImpedimentosArtConfig: React.FC = () => {
           <div>
             <span className="text-[11px] font-bold uppercase text-slate-500 block">Total de Situações</span>
             <span className="text-2xl font-black text-slate-900">{countTotal}</span>
-            <span className="text-[10px] text-slate-400 block">Cadastradas no sistema SIGC</span>
+            <span className="text-[10px] text-slate-400 block">Cadastradas no sistema SIGCON</span>
           </div>
         </div>
 

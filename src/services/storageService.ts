@@ -119,6 +119,13 @@ export interface CouncilConfig {
 
   // Situações que impedem o profissional de assumir Responsabilidade Técnica (ART)
   situacoesImpedidasRT: string[];
+
+  // Configurações de Fiscalização Eletrônica (Módulo Tablet & Fiscais)
+  textoPadraoNotificacao?: string;
+  proximoNumeroNotificacao?: number;
+  proximoNumeroIntimacao?: number;
+  proximoNumeroTermo?: number;
+  proximoNumeroAutuacao?: number;
 }
 
 export const DEFAULT_COUNCIL_CONFIG: CouncilConfig = {
@@ -178,7 +185,13 @@ export const DEFAULT_COUNCIL_CONFIG: CouncilConfig = {
     'Baixado',
     'Licenciado',
     'Transferido'
-  ]
+  ],
+
+  textoPadraoNotificacao: "A empresa foi encontrada aberta e em funcionamento em horário não declarado ao CRF/AM, com a presença no local de profissional farmacêutico que NÃO é responsável técnico (RT) no horário, não havendo farmacêutico RT averbado e legalmente habilitado da empresa no horário desta fiscalização. A empresa fica notificada a providenciar regularização do seu horário de funcionamento e averbação de farmacêutico responsável técnico em até 05 dias, sob pena de autuação no artigo 24 da lei federal 3820/1960.",
+  proximoNumeroNotificacao: 1,
+  proximoNumeroIntimacao: 1,
+  proximoNumeroTermo: 1,
+  proximoNumeroAutuacao: 1
 };
 
 export const DEFAULT_HORARIOS_FUNCIONAMENTO: HorarioFuncionamentoItem[] = [
@@ -608,7 +621,7 @@ export const INITIAL_FUNCIONARIOS: Funcionario[] = [
     primeiroAcessoPendente: false,
     zerarSenhaPendente: false,
     ultimoAcesso: '14/10/2026 15:30:00',
-    observacoes: 'Super Administrador Geral do Sistema SIGC Cloud.'
+    observacoes: 'Super Administrador Geral do Sistema SIGCON.'
   },
   {
     id: 'func-fiscal-01',
@@ -1736,9 +1749,12 @@ class StorageService {
         socios: e.socios || [],
         responsaveis_tecnicos: e.responsaveisTecnicos || [],
         horarios_funcionamento: e.horariosFuncionamento || [],
-        horarios_assistencia: e.horariosAssistencia || [],
-        carga_horaria_funcionamento_semanal: e.cargaHorariaFuncionamentoSemanal || 0,
-        carga_horaria_assistencia_semanal: e.cargaHorariaAssistenciaSemanal || 0,
+        carga_horaria_funcionamento_semanal: typeof e.cargaHorariaFuncionamentoSemanal === 'number'
+          ? Number(e.cargaHorariaFuncionamentoSemanal.toFixed(2))
+          : 0,
+        carga_horaria_assistencia_semanal: typeof e.cargaHorariaAssistenciaSemanal === 'number'
+          ? Number(e.cargaHorariaAssistenciaSemanal.toFixed(2))
+          : 0,
         justificativa_condicao: e.justificativaCondicao || null,
         regra_assistencia_aplicada: e.regraAssistenciaAplicada || null,
         bloqueado: e.bloqueado ?? false,
@@ -1750,7 +1766,18 @@ class StorageService {
       }));
 
       if (empRows.length > 0) {
-        const { error: eErr } = await supabase.from('empresas').upsert(empRows, { onConflict: 'id' });
+        let { error: eErr } = await supabase.from('empresas').upsert(empRows, { onConflict: 'id' });
+        // Auto-recuperação se o banco PostgreSQL ainda estiver com tipo INTEGER para carga_horaria
+        if (eErr && eErr.code === '22P02') {
+          console.warn('Detectado erro 22P02 em migrateAllToSupabase. Aplicando fallback com inteiros arredondados...');
+          const fallbackRows = empRows.map(r => ({
+            ...r,
+            carga_horaria_funcionamento_semanal: Math.round(Number(r.carga_horaria_funcionamento_semanal) || 0),
+            carga_horaria_assistencia_semanal: Math.round(Number(r.carga_horaria_assistencia_semanal) || 0)
+          }));
+          const retryRes = await supabase.from('empresas').upsert(fallbackRows, { onConflict: 'id' });
+          eErr = retryRes.error;
+        }
         if (eErr) throw new Error(`Falha ao migrar Empresas: ${eErr.message}`);
       }
 
@@ -2027,6 +2054,134 @@ class StorageService {
   // REGRAS DE IMPEDIMENTO DE RESPONSABILIDADE TÉCNICA (ART / RT)
   public getSituacoesImpedidasRT(): string[] {
     return this.councilConfig.situacoesImpedidasRT || DEFAULT_COUNCIL_CONFIG.situacoesImpedidasRT || [];
+  }
+
+  // GERADORES SEQUENCIAIS DE FISCALIZAÇÃO ELETRÔNICA (ANTI-DUPLICIDADE E RESILIENTES OFFLINE)
+  public getNextNumeroNotificacao(): string {
+    const ano = new Date().getFullYear();
+    const cfg = this.getCouncilConfig();
+    let num = cfg.proximoNumeroNotificacao || 1;
+
+    // Verificar se já existe algum termo com esse número para impedir qualquer duplicidade
+    const todosTermos = [...this.termosFiscalizacao, ...this.offlineQueue];
+    while (todosTermos.some(t => t.numeroNotificacao === `NOT-${ano}-${String(num).padStart(5, '0')}`)) {
+      num += 1;
+    }
+
+    const formatted = `NOT-${ano}-${String(num).padStart(5, '0')}`;
+    this.updateCouncilConfig({
+      proximoNumeroNotificacao: num + 1
+    });
+    return formatted;
+  }
+
+  public getNextNumeroIntimacao(): string {
+    const ano = new Date().getFullYear();
+    const cfg = this.getCouncilConfig();
+    let num = cfg.proximoNumeroIntimacao || 1;
+
+    const todosTermos = [...this.termosFiscalizacao, ...this.offlineQueue];
+    while (todosTermos.some(t => t.numeroIntimacao === `INT-${ano}-${String(num).padStart(5, '0')}`)) {
+      num += 1;
+    }
+
+    const formatted = `INT-${ano}-${String(num).padStart(5, '0')}`;
+    this.updateCouncilConfig({
+      proximoNumeroIntimacao: num + 1
+    });
+    return formatted;
+  }
+
+  public getNextNumeroTermo(): string {
+    const ano = new Date().getFullYear();
+    const cfg = this.getCouncilConfig();
+    let num = cfg.proximoNumeroTermo || 1;
+
+    const todosTermos = [...this.termosFiscalizacao, ...this.offlineQueue];
+    while (todosTermos.some(t => t.numeroTermo === `TI-${ano}-${String(num).padStart(5, '0')}`)) {
+      num += 1;
+    }
+
+    const formatted = `TI-${ano}-${String(num).padStart(5, '0')}`;
+    this.updateCouncilConfig({
+      proximoNumeroTermo: num + 1
+    });
+    return formatted;
+  }
+
+  public rollbackNumeroTermo(numeroStr: string) {
+    if (!numeroStr) return;
+    const cfg = this.getCouncilConfig();
+    const ano = new Date().getFullYear();
+    const match = numeroStr.match(/TI-\d{4}-(\d+)/);
+    if (match) {
+      const val = parseInt(match[1], 10);
+      if (val > 0 && val + 1 === (cfg.proximoNumeroTermo || 1)) {
+        this.updateCouncilConfig({
+          proximoNumeroTermo: val
+        });
+      }
+    }
+  }
+
+  public getNextNumeroAutuacao(): string {
+    const ano = new Date().getFullYear();
+    const cfg = this.getCouncilConfig();
+    let num = cfg.proximoNumeroAutuacao || 1;
+
+    const todosTermos = [...this.termosFiscalizacao, ...this.offlineQueue];
+    while (todosTermos.some(t => t.numeroAutoInfracao === `AI-${ano}-${String(num).padStart(5, '0')}`)) {
+      num += 1;
+    }
+
+    const formatted = `AI-${ano}-${String(num).padStart(5, '0')}`;
+    this.updateCouncilConfig({
+      proximoNumeroAutuacao: num + 1
+    });
+    return formatted;
+  }
+
+  public rollbackNumeroAutuacao(numeroStr: string) {
+    if (!numeroStr) return;
+    const cfg = this.getCouncilConfig();
+    const ano = new Date().getFullYear();
+    const match = numeroStr.match(/AI-\d{4}-(\d+)/);
+    if (match) {
+      const val = parseInt(match[1], 10);
+      if (val > 0 && val + 1 === (cfg.proximoNumeroAutuacao || 1)) {
+        this.updateCouncilConfig({
+          proximoNumeroAutuacao: val
+        });
+      }
+    }
+  }
+
+  public rollbackNumeroNotificacao(numeroStr: string) {
+    if (!numeroStr) return;
+    const cfg = this.getCouncilConfig();
+    const match = numeroStr.match(/NOT-\d{4}-(\d+)/);
+    if (match) {
+      const val = parseInt(match[1], 10);
+      if (val > 0 && val + 1 === (cfg.proximoNumeroNotificacao || 1)) {
+        this.updateCouncilConfig({
+          proximoNumeroNotificacao: val
+        });
+      }
+    }
+  }
+
+  public rollbackNumeroIntimacao(numeroStr: string) {
+    if (!numeroStr) return;
+    const cfg = this.getCouncilConfig();
+    const match = numeroStr.match(/INT-\d{4}-(\d+)/);
+    if (match) {
+      const val = parseInt(match[1], 10);
+      if (val > 0 && val + 1 === (cfg.proximoNumeroIntimacao || 1)) {
+        this.updateCouncilConfig({
+          proximoNumeroIntimacao: val
+        });
+      }
+    }
   }
 
   public setSituacoesImpedidasRT(situacoes: string[]) {
@@ -3765,8 +3920,12 @@ class StorageService {
             responsaveis_tecnicos: sanitized.responsaveisTecnicos || [],
             horarios_funcionamento: sanitized.horariosFuncionamento || [],
             horarios_assistencia: sanitized.horariosAssistencia || [],
-            carga_horaria_funcionamento_semanal: sanitized.cargaHorariaFuncionamentoSemanal || 0,
-            carga_horaria_assistencia_semanal: sanitized.cargaHorariaAssistenciaSemanal || 0,
+            carga_horaria_funcionamento_semanal: typeof sanitized.cargaHorariaFuncionamentoSemanal === 'number'
+              ? Number(sanitized.cargaHorariaFuncionamentoSemanal.toFixed(2))
+              : 0,
+            carga_horaria_assistencia_semanal: typeof sanitized.cargaHorariaAssistenciaSemanal === 'number'
+              ? Number(sanitized.cargaHorariaAssistenciaSemanal.toFixed(2))
+              : 0,
             justificativa_condicao: sanitized.justificativaCondicao || null,
             regra_assistencia_aplicada: sanitized.regraAssistenciaAplicada || null,
             bloqueado: sanitized.bloqueado ?? false,
@@ -3779,6 +3938,80 @@ class StorageService {
 
           if (error) {
             console.warn('Supabase empresa upsert failed:', error);
+
+            // Auto-recuperação do erro 22P02: caso a coluna de carga horária no PostgreSQL ainda seja INTEGER
+            if (error.code === '22P02') {
+              console.warn('Detectado erro 22P02 (coluna ainda INTEGER no PostgreSQL). Tentando fallback automático com arredondamento...');
+              const { error: retryError } = await supabase.from('empresas').upsert({
+                id: targetId,
+                cnpj: sanitized.cnpj,
+                razao_social: sanitized.razaoSocial,
+                nome_fantasia: sanitized.nomeFantasia || '',
+                inscricao: sanitized.inscricao,
+                inscricao_anterior: sanitized.inscricaoAnterior || null,
+                inscricao_definitiva_anterior: sanitized.inscricaoDefinitivaAnterior || null,
+                inscricao_estadual: sanitized.inscricaoEstadual || null,
+                categoria: sanitized.categoria || '',
+                categoria_empresa: sanitized.categoriaEmpresa || sanitized.categoria || '',
+                tipo_estabelecimento: sanitized.tipoEstabelecimento,
+                natureza_atividade: sanitized.naturezaAtividade || null,
+                tipo_empresa: sanitized.tipoEmpresa || 'PRIVADO',
+                condicao: sanitized.condicao || 'Regular',
+                situacao: sanitized.situacao || 'Definitiva',
+                motivo_situacao: sanitized.motivoSituacao || null,
+                dt_inicio_insc_provisoria: sanitized.dtInicioInscProvisoria || null,
+                dt_venc_insc_provisoria: sanitized.dtVencInscProvisoria || null,
+                data_conversao_definitiva: sanitized.dataConversaoDefinitiva || null,
+                capital_social: sanitized.capitalSocial || 0,
+                assistencia_plena: sanitized.assistenciaPlena ?? true,
+                isento_anuidade: sanitized.isentoAnuidade ?? false,
+                anuidade_reduzida: sanitized.anuidadeReduzida ?? false,
+                recadastrado: sanitized.recadastrado ?? false,
+                data_recadastramento: sanitized.dataRecadastramento || null,
+                isento_taxa_certificado: sanitized.isentoTaxaCertificado ?? false,
+                horario_plantao: sanitized.horarioPlantao || null,
+                horas_tolerancia: sanitized.horasTolerancia ? String(sanitized.horasTolerancia) : null,
+                data_inscricao: sanitized.dataInscricao || '',
+                validade_crt: sanitized.validadeCRT || null,
+                numero_crt: sanitized.numeroCRT || null,
+                numero_processo: sanitized.numeroProcesso || null,
+                endereco: sanitized.endereco || '',
+                complemento: sanitized.complemento || null,
+                bairro: sanitized.bairro || '',
+                cidade: sanitized.cidade || '',
+                uf: sanitized.uf || 'AM',
+                cep: sanitized.cep || '',
+                rota: sanitized.rota || null,
+                area: sanitized.area || null,
+                telefone: sanitized.telefone || '',
+                email: sanitized.email || '',
+                status_financeiro: sanitized.statusFinanceiro || 'Adimplente',
+                latitude: sanitized.latitude || null,
+                longitude: sanitized.longitude || null,
+                ultima_fiscalizacao: sanitized.ultimaFiscalizacao || null,
+                resultado_ultima_fiscalizacao: sanitized.resultadoUltimaFiscalizacao || null,
+                socios: sanitized.socios || [],
+                responsaveis_tecnicos: sanitized.responsaveisTecnicos || [],
+                horarios_funcionamento: sanitized.horariosFuncionamento || [],
+                horarios_assistencia: sanitized.horariosAssistencia || [],
+                carga_horaria_funcionamento_semanal: Math.round(Number(sanitized.cargaHorariaFuncionamentoSemanal) || 0),
+                carga_horaria_assistencia_semanal: Math.round(Number(sanitized.cargaHorariaAssistenciaSemanal) || 0),
+                justificativa_condicao: sanitized.justificativaCondicao || null,
+                regra_assistencia_aplicada: sanitized.regraAssistenciaAplicada || null,
+                bloqueado: sanitized.bloqueado ?? false,
+                motivo_bloqueio: sanitized.motivoBloqueio || null,
+                data_bloqueio: sanitized.dataBloqueio || null,
+                data_desbloqueio_prevista: sanitized.dataDesbloqueioPrevista || null,
+                usuario_bloqueio: sanitized.usuarioBloqueio || null,
+                observacoes_bloqueio: sanitized.observacoesBloqueio || null
+              }, { onConflict: 'id' });
+
+              if (!retryError) {
+                console.info('Empresa salva com sucesso no Supabase após arredondamento de carga horária (fallback).');
+                return;
+              }
+            }
+
             let msg = `Erro de banco de dados (Código ${error.code}): ${error.message}`;
             if (error.code === '23505') {
               if (error.message.includes('cnpj')) {
@@ -3786,6 +4019,8 @@ class StorageService {
               } else if (error.message.includes('inscricao')) {
                 msg = `Conflito de duplicidade (Código 23505): O número de inscrição PJ ${sanitized.inscricao} já está cadastrado no banco de dados.`;
               }
+            } else if (error.code === '22P02') {
+              msg = `Erro de tipo numérico (Código 22P02): Execute o script SQL no Supabase para alterar carga_horaria para NUMERIC(10,2).`;
             }
             this.addSyncError(
               'EMPRESA',
@@ -4096,12 +4331,74 @@ class StorageService {
             documento_signatario_notificado: termo.documentoSignatarioNotificado || null,
             inscricao_signatario_notificado: termo.inscricaoSignatarioNotificado || null,
             cargo_signatario_notificado: termo.cargoSignatarioNotificado || null,
-            motivo_assinatura_terceiro: termo.motivoAssinaturaTerceiro || null,
+            // Novos campos específicos do App Mobile / Tablet
+            encontrava: termo.encontrava || null,
+            motivo_fechada: termo.motivoFechada || null,
+            rt_situacao: termo.rtSituacao || null,
+            resp_tecnico_selecionado_nome: termo.respTecnicoSelecionadoNome || null,
+            resp_tecnico_selecionado_tipo: termo.respTecnicoSelecionadoTipo || null,
+            resp_tecnico_selecionado_inscricao: termo.respTecnicoSelecionadoInscricao || null,
+            rt_presente_momento_nome: termo.rtPresenteMomentoNome || null,
+            outras_observacoes_gerais: termo.outrasObservacoesGerais || null,
+
+            // Notificação
+            notificacao_ativa: termo.notificacaoAtiva ?? false,
+            numero_notificacao: termo.numeroNotificacao || null,
+            notificacao_texto: termo.notificacaoTexto || null,
+            notificacao_observacoes: termo.notificacaoObservacoes || null,
+
+            // Intimação
+            intimacao_ativa: termo.intimacaoAtiva ?? false,
+            numero_intimacao: termo.numeroIntimacao || null,
+            intimacao_crt_atualizada: termo.intimacaoCrtAtualizada ?? false,
+            intimacao_crt_local_visivel: termo.intimacaoCrtLocalVisivel ?? false,
+            intimacao_alteracao_social: termo.intimacaoAlteracaoSocial ?? false,
+            intimacao_outras_observacoes: termo.intimacaoOutrasObservacoes || null,
+
+            // Autuação (Auto de Infração)
+            autuacao_ativa: termo.autuacaoAtiva ?? false,
+            autuacao_ausente: termo.autuacaoAusente ?? false,
+            autuacao_sem_rt: termo.autuacaoSemRt ?? false,
+            autuacao_chi: termo.autuacaoChi ?? false,
+            autuacao_sem_substituto: termo.autuacaoSemSubstituto ?? false,
+            autuacao_ilegal: termo.autuacaoIlegal ?? false,
+            autuacao_privativas: termo.autuacaoPrivativas ?? false,
+            autuacao_outras_observacoes: termo.autuacaoOutrasObservacoes || null,
+
+            // Atendimento
+            atendente_cargo: termo.atendenteCargo || null,
+            atendente_nome: termo.atendenteNome || null,
+            atendente_rg: termo.atendenteRg || null,
+            atendente_cpf: termo.atendenteCpf || null,
+            atendente_inscricao: termo.atendenteInscricao || null,
+            observacao: termo.observacao || termo.outrasObservacoesGerais || null,
+
+            // Assinaturas do Tablet
+            assinatura_estabelecimento: termo.assinaturaEstabelecimento || null,
+            assinatura_estabelecimento_data_hora: termo.assinaturaEstabelecimentoDataHora || null,
+
             hash_validacao_digital: termo.hashValidacaoDigital || null,
             fotos_comprovantes: termo.fotosComprovantes || [],
             foto_evidencias: termo.fotoEvidencias || [],
             sincronizado: termo.sincronizado ?? true
           }, { onConflict: 'id' })
+        );
+      }
+    } catch (e) {}
+    this.notify();
+  }
+
+  public getTermosByEmpresaId(empresaId: string): TermoFiscalizacao[] {
+    return this.termosFiscalizacao.filter(t => t.empresaId === empresaId);
+  }
+
+  public deleteTermoFiscalizacao(id: string) {
+    this.termosFiscalizacao = this.termosFiscalizacao.filter(t => t.id !== id);
+    try {
+      localStorage.setItem(STORAGE_KEYS.TERMOS_FISCALIZACAO, JSON.stringify(this.termosFiscalizacao));
+      if (this.isOnline) {
+        runBackgroundSupabase(
+          supabase.from('termos_fiscalizacao').delete().eq('id', id)
         );
       }
     } catch (e) {}
@@ -4563,8 +4860,8 @@ class StorageService {
 
     return {
       siscon_backup: true,
-      sistema: 'SISCON',
-      versao: '2.5',
+      sistema: 'SIGCON',
+      versao: '3.0',
       exportadoEm: new Date().toISOString(),
       conselho: this.councilConfig.sigla || 'CRF',
       tabelasExportadas: tablesToExport,
@@ -4577,7 +4874,7 @@ class StorageService {
     const backup = this.getBackupData(selectedTables);
     const sqlLines: string[] = [
       '--',
-      '-- SISCON - DUMP DE BACKUP E RESTAURAÇÃO SQL',
+      '-- SIGCON - DUMP DE BACKUP E RESTAURAÇÃO SQL',
       `-- Gerado em: ${new Date().toLocaleString('pt-BR')}`,
       `-- Autarquia: ${this.councilConfig.sigla} (${this.councilConfig.nomeCompleto})`,
       `-- Total de Registros: ${backup.totalRegistros}`,

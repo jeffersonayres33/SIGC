@@ -90,7 +90,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({ onNavigate }) => {
           <div>
             <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold mb-2">
               <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-              <span>SIGC Cloud • Painel Executivo & Regulatório</span>
+              <span>SIGCON • Painel Executivo & Regulatório</span>
             </div>
             <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 tracking-tight">
               {council.sigla} - Sistema Central de Governança
