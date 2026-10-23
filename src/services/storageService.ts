@@ -823,7 +823,21 @@ class StorageService {
   private init() {
     try {
       const savedEmpresas = localStorage.getItem(STORAGE_KEYS.EMPRESAS);
-      this.empresas = savedEmpresas ? JSON.parse(savedEmpresas) : INITIAL_EMPRESAS;
+      const rawEmpresas: Empresa[] = savedEmpresas ? JSON.parse(savedEmpresas) : INITIAL_EMPRESAS;
+      this.empresas = rawEmpresas.map(emp => {
+        const seed = INITIAL_EMPRESAS.find(s => s.id === emp.id || s.cnpj === emp.cnpj);
+        if (seed && (!emp.responsaveisTecnicos || emp.responsaveisTecnicos.length === 0) && seed.responsaveisTecnicos && seed.responsaveisTecnicos.length > 0) {
+          return {
+            ...emp,
+            responsavelTecnico: emp.responsavelTecnico || seed.responsavelTecnico,
+            crfResponsavel: emp.crfResponsavel || seed.crfResponsavel,
+            responsaveisTecnicos: seed.responsaveisTecnicos,
+            email: emp.email || seed.email,
+            rota: emp.rota || seed.rota
+          };
+        }
+        return emp;
+      });
 
       const savedLancamentos = localStorage.getItem(STORAGE_KEYS.LANCAMENTOS);
       this.lancamentos = savedLancamentos ? JSON.parse(savedLancamentos) : INITIAL_LANCAMENTOS;
@@ -832,19 +846,22 @@ class StorageService {
       this.cobrancas = savedCobrancas ? JSON.parse(savedCobrancas) : INITIAL_COBRANCAS;
 
       const savedTermos = localStorage.getItem(STORAGE_KEYS.TERMOS_FISCALIZACAO);
-      this.termosFiscalizacao = savedTermos ? JSON.parse(savedTermos) : INITIAL_TERMOS_FISCALIZACAO;
-
-      const savedProtocolos = localStorage.getItem(STORAGE_KEYS.PROTOCOLOS);
-      this.protocolos = savedProtocolos ? JSON.parse(savedProtocolos) : INITIAL_PROTOCOLOS;
-
-      const savedForms = localStorage.getItem(STORAGE_KEYS.FORMULARIOS);
-      this.formularios = savedForms ? JSON.parse(savedForms) : INITIAL_DYNAMIC_FORMS;
-
-      const savedAuditoria = localStorage.getItem(STORAGE_KEYS.HISTORICO_AUDITORIA);
-      this.historicoAuditoria = savedAuditoria ? JSON.parse(savedAuditoria) : [];
-
       const savedQueue = localStorage.getItem(STORAGE_KEYS.OFFLINE_QUEUE);
       this.offlineQueue = savedQueue ? JSON.parse(savedQueue) : [];
+
+      let loadedTermos: TermoFiscalizacao[] = savedTermos ? JSON.parse(savedTermos) : INITIAL_TERMOS_FISCALIZACAO;
+
+      // Garantir união com quaisquer termos da offlineQueue
+      if (this.offlineQueue.length > 0) {
+        const existingIds = new Set(loadedTermos.map(t => t.id));
+        this.offlineQueue.forEach(item => {
+          if (!existingIds.has(item.id)) {
+            loadedTermos.unshift(item);
+          }
+        });
+      }
+
+      this.termosFiscalizacao = loadedTermos;
 
       const savedCadastrosBasicos = localStorage.getItem(STORAGE_KEYS.CADASTROS_BASICOS);
       if (savedCadastrosBasicos) {
@@ -1294,9 +1311,11 @@ class StorageService {
 
       // 7. Fetch Termos de Fiscalização
       try {
-        const { data: termoData } = await supabase.from('termos_fiscalizacao').select('*');
-        if (termoData && termoData.length > 0) {
-          this.termosFiscalizacao = termoData.map(t => ({
+        const { data: termoData, error: termoErr } = await supabase.from('termos_fiscalizacao').select('*');
+        if (termoErr) {
+          console.warn('Erro ao carregar termos_fiscalizacao do Supabase:', termoErr.message);
+        } else if (termoData && Array.isArray(termoData)) {
+          const remoteTermos: TermoFiscalizacao[] = termoData.map(t => ({
             id: t.id,
             numeroTermo: t.numero_termo,
             numeroAutoInfracao: t.numero_auto_infracao || undefined,
@@ -1305,19 +1324,21 @@ class StorageService {
             empresaId: t.empresa_id,
             empresaInscricao: t.empresa_inscricao || undefined,
             empresaRazaoSocial: t.empresa_razao_social || undefined,
+            razaoSocial: t.empresa_razao_social || undefined,
             empresaNome: t.empresa_nome || undefined,
             empresaCnpj: t.empresa_cnpj || undefined,
-            cnpj: t.cnpj || undefined,
+            cnpj: t.cnpj || t.empresa_cnpj || undefined,
             endereco: t.endereco || undefined,
             bairro: t.bairro || undefined,
             cidade: t.cidade || undefined,
+            rota: t.rota || undefined,
             dataFiscalizacao: t.data_fiscalizacao || undefined,
             horaFiscalizacao: t.hora_fiscalizacao || undefined,
             dataHora: t.data_hora || undefined,
             fiscalId: t.fiscal_id || undefined,
             fiscalNome: t.fiscal_nome || undefined,
-            fiscalMatricula: t.fiscal_matricula || undefined,
-            matriculaFiscal: t.matricula_fiscal || undefined,
+            fiscalMatricula: t.fiscal_matricula || t.matricula_fiscal || undefined,
+            matriculaFiscal: t.matricula_fiscal || t.fiscal_matricula || undefined,
             fiscalAssinanteNome: t.fiscal_assinante_nome || undefined,
             fiscalAssinanteMatricula: t.fiscal_assinante_matricula || undefined,
             latitude: Number(t.latitude) || 0,
@@ -1325,10 +1346,10 @@ class StorageService {
             enderecoGeo: t.endereco_geo || undefined,
             presencaRT: Boolean(t.presenca_rt),
             rtPresente: Boolean(t.rt_presente),
-            rtNomePresente: t.rt_nome_presente || undefined,
-            rtPresenteNome: t.rt_presente_nome || undefined,
-            rtCrfPresente: t.rt_crf_presente || undefined,
-            rtPresenteInscricao: t.rt_presente_inscricao || undefined,
+            rtNomePresente: t.rt_nome_presente || t.rt_presente_nome || undefined,
+            rtPresenteNome: t.rt_presente_nome || t.rt_nome_presente || undefined,
+            rtCrfPresente: t.rt_crf_presente || t.rt_presente_inscricao || undefined,
+            rtPresenteInscricao: t.rt_presente_inscricao || t.rt_crf_presente || undefined,
             motivoAusenciaRT: t.motivo_ausencia_rt || undefined,
             documentosVerificados: t.documentos_verificados || {},
             relatoFiscal: t.relato_fiscal || undefined,
@@ -1350,18 +1371,64 @@ class StorageService {
             assinaturaNotificadoDataHora: t.assinatura_notificado_data_hora || undefined,
             recusaAssinatura: Boolean(t.recusa_assinatura),
             motivoRecusa: t.motivo_recusa || undefined,
+            observacaoRecusa: t.observacao_recusa || undefined,
             tipoSignatarioNotificado: t.tipo_signatario_notificado || undefined,
             nomeSignatarioNotificado: t.nome_signatario_notificado || undefined,
             documentoSignatarioNotificado: t.documento_signatario_notificado || undefined,
             inscricaoSignatarioNotificado: t.inscricao_signatario_notificado || undefined,
             cargoSignatarioNotificado: t.cargo_signatario_notificado || undefined,
             motivoAssinaturaTerceiro: t.motivo_assinatura_terceiro || undefined,
+            encontrava: t.encontrava || undefined,
+            motivoFechada: t.motivo_fechada || undefined,
+            rtSituacao: t.rt_situacao || undefined,
+            respTecnicoSelecionadoNome: t.resp_tecnico_selecionado_nome || undefined,
+            respTecnicoSelecionadoTipo: t.resp_tecnico_selecionado_tipo || undefined,
+            respTecnicoSelecionadoInscricao: t.resp_tecnico_selecionado_inscricao || undefined,
+            rtPresenteMomentoNome: t.rt_presente_momento_nome || undefined,
+            outrasObservacoesGerais: t.outras_observacoes_gerais || undefined,
+            observacao: t.observacao || t.outras_observacoes_gerais || undefined,
+            notificacaoAtiva: Boolean(t.notificacao_ativa),
+            numeroNotificacao: t.numero_notificacao || undefined,
+            notificacaoTexto: t.notificacao_texto || undefined,
+            notificacaoObservacoes: t.notificacao_observacoes || undefined,
+            intimacaoAtiva: Boolean(t.intimacao_ativa),
+            numeroIntimacao: t.numero_intimacao || undefined,
+            intimacaoCrtAtualizada: Boolean(t.intimacao_crt_atualizada),
+            intimacaoCrtLocalVisivel: Boolean(t.intimacao_crt_local_visivel),
+            intimacaoAlteracaoSocial: Boolean(t.intimacao_alteracao_social),
+            intimacaoOutrasObservacoes: t.intimacao_outras_observacoes || undefined,
+            autuacaoAtiva: Boolean(t.autuacao_ativa),
+            autuacaoAusente: Boolean(t.autuacao_ausente),
+            autuacaoSemRt: Boolean(t.autuacao_sem_rt),
+            autuacaoChi: Boolean(t.autuacao_chi),
+            autuacaoSemSubstituto: Boolean(t.autuacao_sem_substituto),
+            autuacaoIlegal: Boolean(t.autuacao_ilegal),
+            autuacaoPrivativas: Boolean(t.autuacao_privativas),
+            autuacaoOutrasObservacoes: t.autuacao_outras_observacoes || undefined,
+            atendenteCargo: t.atendente_cargo || undefined,
+            atendenteNome: t.atendente_nome || undefined,
+            atendenteRg: t.atendente_rg || undefined,
+            atendenteCpf: t.atendente_cpf || undefined,
+            atendenteInscricao: t.atendente_inscricao || undefined,
+            assinaturaEstabelecimento: t.assinatura_estabelecimento || undefined,
+            assinaturaEstabelecimentoDataHora: t.assinatura_estabelecimento_data_hora || undefined,
             hashValidacaoDigital: t.hash_validacao_digital || undefined,
             fotosComprovantes: t.fotos_comprovantes || [],
             fotoEvidencias: t.foto_evidencias || [],
             sincronizado: Boolean(t.sincronizado)
           }));
+
+          // MERGE CRÍTICO: Não descartar termos criados localmente que ainda não estão no Supabase
+          const remoteIds = new Set(remoteTermos.map(rt => rt.id));
+          const localOnly = this.termosFiscalizacao.filter(lt => !remoteIds.has(lt.id));
+
+          this.termosFiscalizacao = [...localOnly, ...remoteTermos];
           localStorage.setItem(STORAGE_KEYS.TERMOS_FISCALIZACAO, JSON.stringify(this.termosFiscalizacao));
+
+          // Tentar re-sincronizar termos locais pendentes
+          if (localOnly.length > 0 && this.isOnline) {
+            localOnly.forEach(locTermo => this.syncSingleTermoToSupabase(locTermo));
+          }
         }
       } catch (e) {
         console.warn('Erro ao carregar termos_fiscalizacao:', e);
@@ -4261,6 +4328,121 @@ class StorageService {
     return [...this.termosFiscalizacao];
   }
 
+  public syncSingleTermoToSupabase(termo: TermoFiscalizacao) {
+    if (!this.isOnline) return;
+
+    runBackgroundSupabase(
+      (async () => {
+        const payload = {
+          id: termo.id,
+          numero_termo: termo.numeroTermo,
+          numero_auto_infracao: termo.numeroAutoInfracao || null,
+          tipo_termo: termo.tipoTermo || null,
+          tipo_visita: termo.tipoVisita || null,
+          empresa_id: termo.empresaId,
+          empresa_inscricao: termo.empresaInscricao || null,
+          empresa_razao_social: termo.empresaRazaoSocial || termo.razaoSocial || null,
+          empresa_nome: termo.empresaNome || null,
+          empresa_cnpj: termo.empresaCnpj || termo.cnpj || null,
+          cnpj: termo.cnpj || termo.empresaCnpj || null,
+          endereco: termo.endereco || null,
+          bairro: termo.bairro || null,
+          cidade: termo.cidade || null,
+          rota: termo.rota || null,
+          data_fiscalizacao: termo.dataFiscalizacao || null,
+          hora_fiscalizacao: termo.horaFiscalizacao || null,
+          data_hora: termo.dataHora || null,
+          fiscal_id: termo.fiscalId || null,
+          fiscal_nome: termo.fiscalNome || null,
+          fiscal_matricula: termo.fiscalMatricula || null,
+          matricula_fiscal: termo.matriculaFiscal || null,
+          fiscal_assinante_nome: termo.fiscalAssinanteNome || null,
+          fiscal_assinante_matricula: termo.fiscalAssinanteMatricula || null,
+          latitude: termo.latitude || null,
+          longitude: termo.longitude || null,
+          endereco_geo: termo.enderecoGeo || null,
+          presenca_rt: termo.presencaRT ?? termo.rtPresente ?? false,
+          rt_presente: termo.rtPresente ?? termo.presencaRT ?? false,
+          rt_nome_presente: termo.rtNomePresente || termo.rtPresenteNome || null,
+          rt_presente_nome: termo.rtPresenteNome || termo.rtNomePresente || null,
+          rt_crf_presente: termo.rtCrfPresente || termo.rtPresenteInscricao || null,
+          rt_presente_inscricao: termo.rtPresenteInscricao || termo.rtCrfPresente || null,
+          motivo_ausencia_rt: termo.motivoAusenciaRT || null,
+          documentos_verificados: termo.documentosVerificados || {},
+          relato_fiscal: termo.relatoFiscal || null,
+          irregularidades_constatadas: termo.irregularidadesConstatadas || [],
+          infracoes_identificadas: termo.infracoesIdentificadas || [],
+          artigos_incorridos: termo.artigosIncorridos || [],
+          auto_infracao_gerado: termo.autoInfracaoGerado || false,
+          valor_multa_previsto: termo.valorMultaPrevisto || 0,
+          orientacoes_fiscais: termo.orientacoesFiscais || null,
+          observacoes_notificado: termo.observacoesNotificado || null,
+          prazo_regularizacao_dias: termo.prazoRegularizacaoDias || null,
+          notificacao_prazo_dias: termo.notificacaoPrazoDias || null,
+          status: termo.status || 'Concluído e Assinado',
+          status_sincronizacao: termo.statusSincronizacao || 'Sincronizado',
+          assinatura_fiscal: termo.assinaturaFiscal || null,
+          assinatura_fiscal_data_hora: termo.assinaturaFiscalDataHora || null,
+          assinatura_responsavel: termo.assinaturaResponsavel || null,
+          assinatura_notificado: termo.assinaturaNotificado || null,
+          assinatura_notificado_data_hora: termo.assinaturaNotificadoDataHora || null,
+          recusa_assinatura: termo.recusaAssinatura || false,
+          motivo_recusa: termo.motivoRecusa || null,
+          observacao_recusa: termo.observacaoRecusa || null,
+          tipo_signatario_notificado: termo.tipoSignatarioNotificado || null,
+          nome_signatario_notificado: termo.nomeSignatarioNotificado || null,
+          documento_signatario_notificado: termo.documentoSignatarioNotificado || null,
+          inscricao_signatario_notificado: termo.inscricaoSignatarioNotificado || null,
+          cargo_signatario_notificado: termo.cargoSignatarioNotificado || null,
+          motivo_assinatura_terceiro: termo.motivoAssinaturaTerceiro || null,
+          encontrava: termo.encontrava || null,
+          motivo_fechada: termo.motivoFechada || null,
+          rt_situacao: termo.rtSituacao || null,
+          resp_tecnico_selecionado_nome: termo.respTecnicoSelecionadoNome || null,
+          resp_tecnico_selecionado_tipo: termo.respTecnicoSelecionadoTipo || null,
+          resp_tecnico_selecionado_inscricao: termo.respTecnicoSelecionadoInscricao || null,
+          rt_presente_momento_nome: termo.rtPresenteMomentoNome || null,
+          outras_observacoes_gerais: termo.outrasObservacoesGerais || null,
+          notificacao_ativa: termo.notificacaoAtiva ?? false,
+          numero_notificacao: termo.numeroNotificacao || null,
+          notificacao_texto: termo.notificacaoTexto || null,
+          notificacao_observacoes: termo.notificacaoObservacoes || null,
+          intimacao_ativa: termo.intimacaoAtiva ?? false,
+          numero_intimacao: termo.numeroIntimacao || null,
+          intimacao_crt_atualizada: termo.intimacaoCrtAtualizada ?? false,
+          intimacao_crt_local_visivel: termo.intimacaoCrtLocalVisivel ?? false,
+          intimacao_alteracao_social: termo.intimacaoAlteracaoSocial ?? false,
+          intimacao_outras_observacoes: termo.intimacaoOutrasObservacoes || null,
+          autuacao_ativa: termo.autuacaoAtiva ?? false,
+          autuacao_ausente: termo.autuacaoAusente ?? false,
+          autuacao_sem_rt: termo.autuacaoSemRt ?? false,
+          autuacao_chi: termo.autuacaoChi ?? false,
+          autuacao_sem_substituto: termo.autuacaoSemSubstituto ?? false,
+          autuacao_ilegal: termo.autuacaoIlegal ?? false,
+          autuacao_privativas: termo.autuacaoPrivativas ?? false,
+          autuacao_outras_observacoes: termo.autuacaoOutrasObservacoes || null,
+          atendente_cargo: termo.atendenteCargo || null,
+          atendente_nome: termo.atendenteNome || null,
+          atendente_rg: termo.atendenteRg || null,
+          atendente_cpf: termo.atendenteCpf || null,
+          atendente_inscricao: termo.atendenteInscricao || null,
+          observacao: termo.observacao || termo.outrasObservacoesGerais || null,
+          assinatura_estabelecimento: termo.assinaturaEstabelecimento || null,
+          assinatura_estabelecimento_data_hora: termo.assinaturaEstabelecimentoDataHora || null,
+          hash_validacao_digital: termo.hashValidacaoDigital || null,
+          fotos_comprovantes: termo.fotosComprovantes || [],
+          foto_evidencias: termo.fotoEvidencias || [],
+          sincronizado: true
+        };
+
+        const { error } = await supabase.from('termos_fiscalizacao').upsert(payload, { onConflict: 'id' });
+        if (error) {
+          console.warn('Aviso Supabase ao salvar termo de fiscalização:', error.message);
+        }
+      })()
+    );
+  }
+
   public saveTermoFiscalizacao(termo: TermoFiscalizacao) {
     const idx = this.termosFiscalizacao.findIndex(t => t.id === termo.id);
     if (idx >= 0) {
@@ -4271,120 +4453,11 @@ class StorageService {
     try {
       localStorage.setItem(STORAGE_KEYS.TERMOS_FISCALIZACAO, JSON.stringify(this.termosFiscalizacao));
       if (this.isOnline) {
-        runBackgroundSupabase(
-          supabase.from('termos_fiscalizacao').upsert({
-            id: termo.id,
-            numero_termo: termo.numeroTermo,
-            numero_auto_infracao: termo.numeroAutoInfracao || null,
-            tipo_termo: termo.tipoTermo || null,
-            tipo_visita: termo.tipoVisita || null,
-            empresa_id: termo.empresaId,
-            empresa_inscricao: termo.empresaInscricao || null,
-            empresa_razao_social: termo.empresaRazaoSocial || null,
-            empresa_nome: termo.empresaNome || null,
-            empresa_cnpj: termo.empresaCnpj || null,
-            cnpj: termo.cnpj || null,
-            endereco: termo.endereco || null,
-            bairro: termo.bairro || null,
-            cidade: termo.cidade || null,
-            data_fiscalizacao: termo.dataFiscalizacao || null,
-            hora_fiscalizacao: termo.horaFiscalizacao || null,
-            data_hora: termo.dataHora || null,
-            fiscal_id: termo.fiscalId || null,
-            fiscal_nome: termo.fiscalNome || null,
-            fiscal_matricula: termo.fiscalMatricula || null,
-            matricula_fiscal: termo.matriculaFiscal || null,
-            fiscal_assinante_nome: termo.fiscalAssinanteNome || null,
-            fiscal_assinante_matricula: termo.fiscalAssinanteMatricula || null,
-            latitude: termo.latitude || null,
-            longitude: termo.longitude || null,
-            endereco_geo: termo.enderecoGeo || null,
-            presenca_rt: termo.presencaRT ?? termo.rtPresente ?? false,
-            rt_presente: termo.rtPresente ?? termo.presencaRT ?? false,
-            rt_nome_presente: termo.rtNomePresente || termo.rtPresenteNome || null,
-            rt_presente_nome: termo.rtPresenteNome || termo.rtNomePresente || null,
-            rt_crf_presente: termo.rtCrfPresente || termo.rtPresenteInscricao || null,
-            rt_presente_inscricao: termo.rtPresenteInscricao || termo.rtCrfPresente || null,
-            motivo_ausencia_rt: termo.motivoAusenciaRT || null,
-            documentos_verificados: termo.documentosVerificados || {},
-            relato_fiscal: termo.relatoFiscal || null,
-            irregularidades_constatadas: termo.irregularidadesConstatadas || [],
-            infracoes_identificadas: termo.infracoesIdentificadas || [],
-            artigos_incorridos: termo.artigosIncorridos || [],
-            auto_infracao_gerado: termo.autoInfracaoGerado || false,
-            valor_multa_previsto: termo.valorMultaPrevisto || 0,
-            orientacoes_fiscais: termo.orientacoesFiscais || null,
-            observacoes_notificado: termo.observacoesNotificado || null,
-            prazo_regularizacao_dias: termo.prazoRegularizacaoDias || null,
-            notificacao_prazo_dias: termo.notificacaoPrazoDias || null,
-            status: termo.status || 'Concluído e Assinado',
-            status_sincronizacao: termo.statusSincronizacao || 'Sincronizado',
-            assinatura_fiscal: termo.assinaturaFiscal || null,
-            assinatura_fiscal_data_hora: termo.assinaturaFiscalDataHora || null,
-            assinatura_responsavel: termo.assinaturaResponsavel || null,
-            assinatura_notificado: termo.assinaturaNotificado || null,
-            assinatura_notificado_data_hora: termo.assinaturaNotificadoDataHora || null,
-            recusa_assinatura: termo.recusaAssinatura || false,
-            motivo_recusa: termo.motivoRecusa || null,
-            tipo_signatario_notificado: termo.tipoSignatarioNotificado || null,
-            nome_signatario_notificado: termo.nomeSignatarioNotificado || null,
-            documento_signatario_notificado: termo.documentoSignatarioNotificado || null,
-            inscricao_signatario_notificado: termo.inscricaoSignatarioNotificado || null,
-            cargo_signatario_notificado: termo.cargoSignatarioNotificado || null,
-            // Novos campos específicos do App Mobile / Tablet
-            encontrava: termo.encontrava || null,
-            motivo_fechada: termo.motivoFechada || null,
-            rt_situacao: termo.rtSituacao || null,
-            resp_tecnico_selecionado_nome: termo.respTecnicoSelecionadoNome || null,
-            resp_tecnico_selecionado_tipo: termo.respTecnicoSelecionadoTipo || null,
-            resp_tecnico_selecionado_inscricao: termo.respTecnicoSelecionadoInscricao || null,
-            rt_presente_momento_nome: termo.rtPresenteMomentoNome || null,
-            outras_observacoes_gerais: termo.outrasObservacoesGerais || null,
-
-            // Notificação
-            notificacao_ativa: termo.notificacaoAtiva ?? false,
-            numero_notificacao: termo.numeroNotificacao || null,
-            notificacao_texto: termo.notificacaoTexto || null,
-            notificacao_observacoes: termo.notificacaoObservacoes || null,
-
-            // Intimação
-            intimacao_ativa: termo.intimacaoAtiva ?? false,
-            numero_intimacao: termo.numeroIntimacao || null,
-            intimacao_crt_atualizada: termo.intimacaoCrtAtualizada ?? false,
-            intimacao_crt_local_visivel: termo.intimacaoCrtLocalVisivel ?? false,
-            intimacao_alteracao_social: termo.intimacaoAlteracaoSocial ?? false,
-            intimacao_outras_observacoes: termo.intimacaoOutrasObservacoes || null,
-
-            // Autuação (Auto de Infração)
-            autuacao_ativa: termo.autuacaoAtiva ?? false,
-            autuacao_ausente: termo.autuacaoAusente ?? false,
-            autuacao_sem_rt: termo.autuacaoSemRt ?? false,
-            autuacao_chi: termo.autuacaoChi ?? false,
-            autuacao_sem_substituto: termo.autuacaoSemSubstituto ?? false,
-            autuacao_ilegal: termo.autuacaoIlegal ?? false,
-            autuacao_privativas: termo.autuacaoPrivativas ?? false,
-            autuacao_outras_observacoes: termo.autuacaoOutrasObservacoes || null,
-
-            // Atendimento
-            atendente_cargo: termo.atendenteCargo || null,
-            atendente_nome: termo.atendenteNome || null,
-            atendente_rg: termo.atendenteRg || null,
-            atendente_cpf: termo.atendenteCpf || null,
-            atendente_inscricao: termo.atendenteInscricao || null,
-            observacao: termo.observacao || termo.outrasObservacoesGerais || null,
-
-            // Assinaturas do Tablet
-            assinatura_estabelecimento: termo.assinaturaEstabelecimento || null,
-            assinatura_estabelecimento_data_hora: termo.assinaturaEstabelecimentoDataHora || null,
-
-            hash_validacao_digital: termo.hashValidacaoDigital || null,
-            fotos_comprovantes: termo.fotosComprovantes || [],
-            foto_evidencias: termo.fotoEvidencias || [],
-            sincronizado: termo.sincronizado ?? true
-          }, { onConflict: 'id' })
-        );
+        this.syncSingleTermoToSupabase(termo);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Erro ao salvar no localStorage:', e);
+    }
     this.notify();
   }
 
@@ -4406,23 +4479,29 @@ class StorageService {
   }
 
   public submitTermoFiscalizacao(termo: any): { success: boolean; offline: boolean } {
-    if (!this.isOnline) {
-      termo.statusSincronizacao = 'Pendente Offline';
-      this.offlineQueue.push(termo);
+    const isCurrentlyOffline = !this.isOnline;
+
+    termo.statusSincronizacao = isCurrentlyOffline ? 'Pendente Offline' : 'Sincronizado';
+    termo.sincronizado = !isCurrentlyOffline;
+
+    // Salva o termo SEMPRE no repositório local de termos (persistido no localStorage)
+    this.saveTermoFiscalizacao(termo);
+
+    // Se estiver offline, adiciona ou atualiza também na fila offline
+    if (isCurrentlyOffline) {
+      const idx = this.offlineQueue.findIndex(t => t.id === termo.id);
+      if (idx >= 0) this.offlineQueue[idx] = termo;
+      else this.offlineQueue.push(termo);
+
       try {
         localStorage.setItem(STORAGE_KEYS.OFFLINE_QUEUE, JSON.stringify(this.offlineQueue));
       } catch (e) {}
-      this.notify();
-      return { success: true, offline: true };
     }
 
-    termo.statusSincronizacao = 'Sincronizado';
-    this.saveTermoFiscalizacao(termo);
-    
     const emp = this.empresas.find(e => e.id === termo.empresaId);
     if (emp) {
       emp.ultimaFiscalizacao = termo.dataHora?.split(' ')[0] || new Date().toLocaleDateString('pt-BR');
-      emp.resultadoUltimaFiscalizacao = termo.autoInfracaoGerado ? 'Autuado' : (termo.infracoesIdentificadas?.length > 0 ? 'Notificado' : 'Regular');
+      emp.resultadoUltimaFiscalizacao = termo.autoInfracaoGerado ? 'Autuado' : (termo.infracoesIdentificadas?.length > 0 || termo.notificacaoAtiva ? 'Notificado' : 'Regular');
       if (termo.autoInfracaoGerado) {
         emp.condicao = 'Irregular';
       }
@@ -4439,7 +4518,7 @@ class StorageService {
         targetInscricao: emp?.inscricao || 'CRF-PJ',
         descricao: `Auto de Multa nº ${termo.numeroAutoInfracao || 'AI-2026'}`,
         tipo: 'Auto de Multa',
-        exercicio: 2026,
+        exercicio: new Date().getFullYear(),
         valorOriginal: termo.valorMultaPrevisto,
         desconto: 0,
         jurosMulta: 0,
@@ -4454,7 +4533,8 @@ class StorageService {
       this.addLancamento(novoLanc);
     }
 
-    return { success: true, offline: false };
+    this.notify();
+    return { success: true, offline: isCurrentlyOffline };
   }
 
   public syncOfflineQueue(): number {

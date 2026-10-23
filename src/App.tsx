@@ -36,6 +36,7 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<MainSection>(() => getDefaultAllowedSection(storageService.getCurrentAuthUser(), storageService.getCurrentAuthUser()?.role));
   const [configTab, setConfigTab] = useState<ConfigTab>('geral');
   const [cadastrosBasicosGroup, setCadastrosBasicosGroup] = useState<'PROFISSIONAIS' | 'EMPRESAS' | 'PROTOCOLOS' | 'FUNCIONARIOS' | 'ADMIN'>('PROFISSIONAIS');
+  const [fiscalizacaoSubTab, setFiscalizacaoSubTab] = useState<'eletronica' | 'termo_inspecao'>('eletronica');
   const [currentUserRole, setCurrentUserRole] = useState<UserRole>(() => {
     const saved = storageService.getCurrentAuthUser();
     return saved ? saved.role : 'ADMIN';
@@ -137,7 +138,13 @@ export default function App() {
         {/* Collapsible Sidebar Drawer */}
         <Sidebar
           activeSection={activeSection}
-          activeSubTab={activeSection === 'configuracoes' ? configTab : cadastrosBasicosGroup}
+          activeSubTab={
+            activeSection === 'configuracoes' 
+              ? configTab 
+              : activeSection === 'fiscalizacao' 
+              ? fiscalizacaoSubTab 
+              : cadastrosBasicosGroup
+          }
           onSelectSection={(section, subTab) => {
             setActiveSection(section);
             if (section === 'configuracoes' && subTab) {
@@ -145,6 +152,9 @@ export default function App() {
             }
             if (section === 'cadastros_basicos' && subTab) {
               setCadastrosBasicosGroup(subTab as any);
+            }
+            if (section === 'fiscalizacao' && subTab) {
+              setFiscalizacaoSubTab(subTab as 'eletronica' | 'termo_inspecao');
             }
           }}
           currentRole={currentUserRole}
@@ -195,7 +205,10 @@ export default function App() {
                 )}
 
                 {activeSection === 'fiscalizacao' && (
-                  <FiscalizacaoView />
+                  <FiscalizacaoView 
+                    initialTab={fiscalizacaoSubTab}
+                    onTabChange={setFiscalizacaoSubTab}
+                  />
                 )}
 
                 {activeSection === 'relatorios' && (

@@ -29,6 +29,8 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Mail,
   Filter,
   Check,
   Layers,
@@ -47,10 +49,12 @@ import {
 import { TermoFiscalizacao, Empresa, Profissional } from '../../types';
 import { storageService } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
+import { printTermoFiscalizacao } from '../../utils/printTermoFiscalizacao';
+import { ModalEnviarTermoEmail } from './ModalEnviarTermoEmail';
 
 interface TabletAppViewProps {
-  onSwitchToWebAdmin: () => void;
-  onOpenSqlModal: () => void;
+  onSwitchToWebAdmin?: () => void;
+  onOpenSqlModal?: () => void;
 }
 
 type TabletScreen = 
@@ -69,11 +73,17 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
 }) => {
   const council = storageService.getCouncilConfig();
   const authUser = storageService.getCurrentAuthUser();
+  const cadastrosBasicos = storageService.getCadastrosBasicos();
 
   // Screen State
   const [currentScreen, setCurrentScreen] = useState<TabletScreen>('menu');
   const [selectedEmpresa, setSelectedEmpresa] = useState<Empresa | null>(null);
   const [selectedTermoParaVisualizar, setSelectedTermoParaVisualizar] = useState<TermoFiscalizacao | null>(null);
+  const [selectedRtForFicha, setSelectedRtForFicha] = useState<any>(null);
+
+  // Email & PDF Modal State
+  const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+  const [termoParaEmail, setTermoParaEmail] = useState<TermoFiscalizacao | null>(null);
 
   // Tablet Device State
   const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
@@ -89,7 +99,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
   const allEmpresas = storageService.getEmpresas();
   const allTermos = storageService.getTermosFiscalizacao();
   const [searchTerm, setSearchTerm] = useState('');
-  const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [showFiltrosInline, setShowFiltrosInline] = useState(false);
 
   // Advanced Filters (Screens 1, 2, 5)
   const [filtroOrdenacao, setFiltroOrdenacao] = useState<'codigo' | 'razao' | 'fantasia' | 'bairro' | 'endereco'>('fantasia');
@@ -102,6 +112,10 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
   const [filtroEndereco, setFiltroEndereco] = useState<string>('');
   const [filtroFantasia, setFiltroFantasia] = useState<string>('');
   const [filtroFiscalizadas, setFiltroFiscalizadas] = useState<'todos' | 'sim' | 'nao'>('todos');
+
+  // Histórico de Termos Filters
+  const [filtroHistoricoPeriodo, setFiltroHistoricoPeriodo] = useState<'todos' | '1_ano' | '2_anos' | '3_anos'>('todos');
+  const [filtroHistoricoTipo, setFiltroHistoricoTipo] = useState<'todos' | 'intimada' | 'notificada' | 'autuada' | 'regular'>('todos');
 
   // Form State for Novo Termo (Screens 3, 4, 6, 7, 8, 9)
   const [encontrava, setEncontrava] = useState<'Aberta' | 'Fechada'>('Aberta');
@@ -142,8 +156,27 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
   const [autuacaoOutrasObservacoes, setAutuacaoOutrasObservacoes] = useState('');
   const [horariosVagosVerificados, setHorariosVagosVerificados] = useState(false);
 
+  interface DiagnosticoHorariosVagos {
+    temInconformidade: boolean;
+    motivoPrincipal: string;
+    intervalosVagos: string[];
+    regraNome: string;
+    regraBaseLegal: string;
+    horasFuncionamento: number;
+    horasAssistencia: number;
+    bloqueiosIdentificados: string[];
+    diaSemana: string;
+    horaVerificacao: string;
+    rtNome?: string;
+    rtStatus?: string;
+  }
+
+  const [diagnosticoHorariosVagos, setDiagnosticoHorariosVagos] = useState<DiagnosticoHorariosVagos | null>(null);
+
   // Atendente (Screen 9)
-  const [atendenteCargo, setAtendenteCargo] = useState('Farmacêutico Responsável Técnico');
+  const [currentTermoNum, setCurrentTermoNum] = useState<string>('');
+  const [numeroAutoInfracao, setNumeroAutoInfracao] = useState<string>('');
+  const [atendenteCargo, setAtendenteCargo] = useState('Farmacêutico');
   const [atendenteNome, setAtendenteNome] = useState('');
   const [atendenteRg, setAtendenteRg] = useState('');
   const [atendenteCpf, setAtendenteCpf] = useState('');
@@ -196,7 +229,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
     }
   }, [selectedEmpresa]);
 
-  // Toggle handlers for Notificação and Intimação com geração de número sequencial único anti-duplicidade
+  // Toggle handlers for Notificação, Intimação and Autuação com geração e rollback automático
   const handleToggleNotificacao = (checked: boolean) => {
     setNotificacaoAtiva(checked);
     if (checked) {
@@ -208,15 +241,65 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
       if (cfg.textoPadraoNotificacao && (!notificacaoTexto || notificacaoTexto === NOTIFICACAO_TEXTO_PADRAO)) {
         setNotificacaoTexto(cfg.textoPadraoNotificacao);
       }
+    } else {
+      if (numeroNotificacao) {
+        storageService.rollbackNumeroNotificacao(numeroNotificacao);
+        setNumeroNotificacao('');
+      }
     }
   };
 
   const handleToggleIntimacao = (checked: boolean) => {
     setIntimacaoAtiva(checked);
-    if (checked && !numeroIntimacao) {
-      const num = storageService.getNextNumeroIntimacao();
-      setNumeroIntimacao(num);
+    if (checked) {
+      if (!numeroIntimacao) {
+        const num = storageService.getNextNumeroIntimacao();
+        setNumeroIntimacao(num);
+      }
+    } else {
+      if (numeroIntimacao) {
+        storageService.rollbackNumeroIntimacao(numeroIntimacao);
+        setNumeroIntimacao('');
+      }
     }
+  };
+
+  const handleToggleAutuacao = (checked: boolean) => {
+    setAutuacaoAtiva(checked);
+    if (checked) {
+      if (!numeroAutoInfracao) {
+        const num = storageService.getNextNumeroAutuacao();
+        setNumeroAutoInfracao(num);
+      }
+    } else {
+      if (numeroAutoInfracao) {
+        storageService.rollbackNumeroAutuacao(numeroAutoInfracao);
+        setNumeroAutoInfracao('');
+      }
+    }
+  };
+
+  const handleCancelarTermo = () => {
+    if (currentTermoNum) {
+      storageService.rollbackNumeroTermo(currentTermoNum);
+      setCurrentTermoNum('');
+    }
+    if (notificacaoAtiva && numeroNotificacao) {
+      storageService.rollbackNumeroNotificacao(numeroNotificacao);
+      setNotificacaoAtiva(false);
+      setNumeroNotificacao('');
+    }
+    if (intimacaoAtiva && numeroIntimacao) {
+      storageService.rollbackNumeroIntimacao(numeroIntimacao);
+      setIntimacaoAtiva(false);
+      setNumeroIntimacao('');
+    }
+    if (autuacaoAtiva && numeroAutoInfracao) {
+      storageService.rollbackNumeroAutuacao(numeroAutoInfracao);
+      setAutuacaoAtiva(false);
+      setNumeroAutoInfracao('');
+    }
+    setCurrentScreen('ficha_estabelecimento');
   };
 
   // Limpar campos de atendimento
@@ -254,6 +337,201 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
       setAtendenteInscricao(selectedRtInscricao);
       setAtendenteCargo('Farmacêutico Responsável Técnico');
       toastService.info('Dados Aplicados', `Nome e Inscrição do RT ${selectedRtNome} aplicados.`);
+    }
+  };
+
+  // Verificação inteligente de Horários Vagos respeitando regras do Módulo de Assistência por Município e Ramo, e restrições de bloqueio
+  const handleVerificarHorariosVagos = () => {
+    if (!selectedEmpresa) {
+      toastService.warning('Aviso', 'Selecione um estabelecimento antes de verificar horários.');
+      return;
+    }
+
+    const agora = new Date();
+    const diasSemana = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+    const diaAtual = diasSemana[agora.getDay()];
+    const horaAtualStr = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+    // 1. Avaliar regularidade de assistência pelo módulo por Município e Ramo
+    const avaliacao = storageService.avaliarRegularidadeAssistencia(selectedEmpresa);
+    const regra = avaliacao.regraAplicada;
+
+    // 2. Verificar restrições de bloqueio cadastral de Profissionais e Empresas
+    const bloqueios: string[] = [];
+    if (selectedEmpresa.bloqueado) {
+      bloqueios.push(`EMPRESA BLOQUEADA no cadastro sanitário/administrativo: ${selectedEmpresa.motivoBloqueio || 'Bloqueio ativo no CRF'}`);
+    }
+
+    const todosProfissionais = storageService.getProfissionais();
+    const rtsVinculados = selectedEmpresa.responsaveisTecnicos || [];
+    const rtsAtivosEValidos: typeof rtsVinculados = [];
+
+    rtsVinculados.forEach(rt => {
+      const prof = todosProfissionais.find(p => p.id === rt.profissionalId || p.inscricao === rt.profissionalInscricao);
+      if (prof) {
+        if (prof.bloqueado) {
+          bloqueios.push(`Farmacêutico RT ${rt.profissionalNome} (${rt.profissionalInscricao}) BLOQUEADO: ${prof.motivoBloqueio || 'Bloqueio cadastral ativo'}`);
+        } else {
+          const impedimento = storageService.isProfissionalImpedidoRT(prof);
+          if (impedimento.impedido) {
+            bloqueios.push(`Farmacêutico RT ${rt.profissionalNome} IMPEDIDO para RT: ${impedimento.motivo}`);
+          } else {
+            rtsAtivosEValidos.push(rt);
+          }
+        }
+      } else {
+        rtsAtivosEValidos.push(rt);
+      }
+    });
+
+    // 3. Verificar horários declarados de funcionamento e assistência para o dia de hoje
+    const normalizeDay = (d: string) => (d || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().slice(0, 3);
+    const diaNorm = normalizeDay(diaAtual);
+
+    const horariosFunc = (selectedEmpresa.horariosFuncionamento && selectedEmpresa.horariosFuncionamento.length > 0)
+      ? selectedEmpresa.horariosFuncionamento
+      : [
+          { dia: 'Segunda-feira', ativo: true, inicio1: '07:00', fim1: '12:00', inicio2: '14:00', fim2: '21:00' },
+          { dia: 'Terça-feira', ativo: true, inicio1: '07:00', fim1: '12:00', inicio2: '14:00', fim2: '21:00' },
+          { dia: 'Quarta-feira', ativo: true, inicio1: '07:00', fim1: '12:00', inicio2: '14:00', fim2: '21:00' },
+          { dia: 'Quinta-feira', ativo: true, inicio1: '07:00', fim1: '12:00', inicio2: '14:00', fim2: '21:00' },
+          { dia: 'Sexta-feira', ativo: true, inicio1: '07:00', fim1: '12:00', inicio2: '14:00', fim2: '21:00' },
+          { dia: 'Sábado', ativo: true, inicio1: '08:00', fim1: '13:00' }
+        ];
+
+    const funcHoje = horariosFunc.find(h => normalizeDay(h.dia) === diaNorm && h.ativo !== false);
+
+    const intervalosVagos: string[] = [];
+    let rtCobreMomentoAtual = false;
+
+    const toMinutes = (timeStr: string) => {
+      if (!timeStr || !timeStr.includes(':')) return 0;
+      const [h, m] = timeStr.split(':').map(Number);
+      return (h || 0) * 60 + (m || 0);
+    };
+
+    const horaAtualMin = toMinutes(horaAtualStr);
+
+    if (funcHoje) {
+      // Coleta todos os horários cobertos pelos RTs válidos hoje
+      const faixasRT: { inicio: number; fim: number }[] = [];
+      rtsAtivosEValidos.forEach(rt => {
+        const hDia = rt.horarios?.find(item => normalizeDay(item.dia) === diaNorm && item.ativo !== false);
+        if (hDia) {
+          if (hDia.inicio1 && hDia.fim1) {
+            faixasRT.push({ inicio: toMinutes(hDia.inicio1), fim: toMinutes(hDia.fim1) });
+          }
+          if (hDia.inicio2 && hDia.fim2) {
+            faixasRT.push({ inicio: toMinutes(hDia.inicio2), fim: toMinutes(hDia.fim2) });
+          }
+        }
+      });
+
+      // Checa se o horário atual está coberto por algum RT
+      rtCobreMomentoAtual = faixasRT.some(f => horaAtualMin >= f.inicio && horaAtualMin <= f.fim);
+
+      // Checa se há períodos declarados da empresa sem cobertura de RT hoje
+      const faixasEmpresa: { inicio: number; fim: number; label: string }[] = [];
+      if (funcHoje.inicio1 && funcHoje.fim1) {
+        faixasEmpresa.push({ inicio: toMinutes(funcHoje.inicio1), fim: toMinutes(funcHoje.fim1), label: `${funcHoje.inicio1} às ${funcHoje.fim1}` });
+      }
+      if (funcHoje.inicio2 && funcHoje.fim2) {
+        faixasEmpresa.push({ inicio: toMinutes(funcHoje.inicio2), fim: toMinutes(funcHoje.fim2), label: `${funcHoje.inicio2} às ${funcHoje.fim2}` });
+      }
+
+      faixasEmpresa.forEach(fe => {
+        let cobertoTotalmente = false;
+        for (const frt of faixasRT) {
+          if (frt.inicio <= fe.inicio && frt.fim >= fe.fim) {
+            cobertoTotalmente = true;
+            break;
+          }
+        }
+        if (!cobertoTotalmente) {
+          if (faixasRT.length === 0) {
+            intervalosVagos.push(`Turno ${fe.label} sem nenhum RT averbado`);
+          } else {
+            intervalosVagos.push(`Intervalo desassistido dentro de ${fe.label}`);
+          }
+        }
+      });
+    }
+
+    // 4. Detecção de Inconformidade
+    const semRtValido = rtsAtivosEValidos.length === 0;
+    const rtAusenteNoMomento = rtSituacao === 'Ausente' || !rtCobreMomentoAtual;
+    const temHorariosVagos = intervalosVagos.length > 0 || semRtValido;
+    const temBloqueio = bloqueios.length > 0;
+    const temInconformidade = temHorariosVagos || temBloqueio || rtSituacao === 'Ausente' || avaliacao.condicao === 'Irregular';
+
+    let motivoPrincipal = '';
+    if (selectedEmpresa.bloqueado) {
+      motivoPrincipal = 'Estabelecimento em funcionamento com BLOQUEIO ADMINISTRATIVO ativo no CRF.';
+    } else if (semRtValido) {
+      motivoPrincipal = 'Estabelecimento em funcionamento sem Responsável Técnico legalmente habilitado (ou todos os RTs encontram-se bloqueados/impedidos).';
+    } else if (rtSituacao === 'Ausente') {
+      motivoPrincipal = `Estabelecimento aberto e em funcionamento durante horário de assistência obrigatória com AUSÊNCIA DO FARMACÊUTICO RT (${selectedRtNome}).`;
+    } else if (intervalosVagos.length > 0) {
+      motivoPrincipal = `Estabelecimento funcionando em horário declarado com HORÁRIOS VAGOS (intervalos desassistidos sem presença de farmacêutico).`;
+    } else {
+      motivoPrincipal = 'Escala de horários e assistência em total conformidade com as regras do CRF.';
+    }
+
+    const diagnostico: DiagnosticoHorariosVagos = {
+      temInconformidade,
+      motivoPrincipal,
+      intervalosVagos,
+      regraNome: regra?.descricao || 'Assistência Farmacêutica Obrigatória',
+      regraBaseLegal: regra?.baseLegal || 'Lei Federal nº 13.021/2014 & Art. 24 da Lei Federal nº 3.820/1960',
+      horasFuncionamento: avaliacao.horasFuncionamentoSemanais,
+      horasAssistencia: avaliacao.horasAssistenciaSemanais,
+      bloqueiosIdentificados: bloqueios,
+      diaSemana: diaAtual,
+      horaVerificacao: horaAtualStr,
+      rtNome: selectedRtNome,
+      rtStatus: rtSituacao
+    };
+
+    setDiagnosticoHorariosVagos(diagnostico);
+    setHorariosVagosVerificados(true);
+
+    if (temInconformidade) {
+      // Habilita Auto de Infração automaticamente com geração do sequencial crescente anti-duplicidade
+      handleToggleAutuacao(true);
+
+      // Marca tipificações legais cabíveis
+      if (rtSituacao === 'Ausente') {
+        setAutuacaoAusente(true);
+      }
+      if (semRtValido) {
+        setAutuacaoSemRt(true);
+      }
+      if (intervalosVagos.length > 0) {
+        setAutuacaoSemSubstituto(true);
+      }
+
+      // Preenche / complementa o campo obrigatório Observação
+      const novoRelato = `Constatado funcionamento do estabelecimento em horário declarado sem a presença de farmacêutico em conformidade com as normas do município de ${selectedEmpresa.cidade} (${regra?.descricao || 'Carga Horária Regulamentar'}). ` +
+        (intervalosVagos.length > 0 ? `Horários vagos / intervalos desassistidos identificados: ${intervalosVagos.join('; ')}. ` : '') +
+        (bloqueios.length > 0 ? `Restrições cadastrais ativas: ${bloqueios.join('; ')}. ` : '') +
+        (rtSituacao === 'Ausente' ? `Farmacêutico RT ${selectedRtNome} ausente no momento da inspeção (${horaAtualStr}). ` : '') +
+        `Enquadramento legal: ${regra?.baseLegal || 'Lei Federal nº 13.021/2014, Art. 5º e 6º c/c Art. 24 da Lei Federal nº 3.820/1960'}.`;
+
+      if (!observacaoFiscais.trim()) {
+        setObservacaoFiscais(novoRelato);
+      } else if (!observacaoFiscais.includes('Horários vagos')) {
+        setObservacaoFiscais(prev => `${prev}\n\n[VERIFICAÇÃO DE HORÁRIOS VAGOS - ${horaAtualStr}]: ${novoRelato}`);
+      }
+
+      toastService.warning(
+        'Horários Vagos / Irregularidade Identificada',
+        `Estabelecimento funcionando em horário declarado sem farmacêutico. Tipificações preenchidas para lavratura do Auto de Infração.`
+      );
+    } else {
+      toastService.success(
+        'Assistência Farmacêutica Regular',
+        `Horários verificados com sucesso para ${selectedEmpresa.cidade}. Nenhuma pendência ou horário vago identificado.`
+      );
     }
   };
 
@@ -466,8 +744,22 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
       return;
     }
 
-    if (!recusouAssinar && !signatureNotificadoUrl) {
-      toastService.warning('Assinatura Pendente', 'Solicite a assinatura do atendente ou marque "Recusou-se a assinar".');
+    // 1. Campo Obrigatório: Observação
+    if (!observacaoFiscais || !observacaoFiscais.trim()) {
+      toastService.error(
+        'Campo Obrigatório',
+        'O campo Observação é obrigatório para lavrar o Termo de Inspeção. Descreva as constatações fiscais no local.'
+      );
+      return;
+    }
+
+    // 2. Campo Obrigatório: Assinatura do Fiscal
+    if (!signatureFiscalUrl) {
+      toastService.error(
+        'Campo Obrigatório',
+        'A Assinatura do Fiscal é obrigatória para lavrar o Termo de Inspeção. Assine digitalmente no campo correspondente antes de salvar.'
+      );
+      return;
     }
 
     const agora = new Date();
@@ -555,13 +847,16 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
       atendenteInscricao: atendenteInscricao || undefined,
 
       // Assinaturas
-      assinaturaNotificado: signatureNotificadoUrl || undefined,
-      assinaturaEstabelecimento: signatureNotificadoUrl || undefined,
+      assinaturaNotificado: recusouAssinar ? undefined : (signatureNotificadoUrl || undefined),
+      assinaturaEstabelecimento: recusouAssinar ? undefined : (signatureNotificadoUrl || undefined),
+      assinaturaFiscal: signatureFiscalUrl || undefined,
+      assinaturaFiscalDataHora: signatureFiscalUrl ? `${agora.toLocaleDateString('pt-BR')} ${agora.toLocaleTimeString('pt-BR')}` : undefined,
       assinaturaEstabelecimentoDataHora: signatureNotificadoUrl ? `${agora.toLocaleDateString('pt-BR')} ${agora.toLocaleTimeString('pt-BR')}` : undefined,
       tipoSignatarioNotificado: atendenteCargo as any,
-      nomeSignatarioNotificado: atendenteNome,
+      nomeSignatarioNotificado: atendenteNome || 'Estabelecimento/Farmacêutico',
       documentoSignatarioNotificado: atendenteCpf || atendenteRg,
       recusaAssinatura: recusouAssinar,
+      observacaoRecusa: recusouAssinar ? 'Recusou-se a assinar' : undefined,
 
       hashValidacaoDigital: `SHA256-${Date.now().toString(16).toUpperCase()}-SIGCON-CRFAM`,
       sincronizado: network.isOnline
@@ -598,8 +893,9 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
     clearCanvasNotificado();
     clearCanvasFiscal();
 
-    // Show preview of created term
+    // Show preview of created term and set for PDF/email
     setSelectedTermoParaVisualizar(novoTermo);
+    setTermoParaEmail(novoTermo);
     setCurrentScreen('historico_termos');
   };
 
@@ -617,10 +913,10 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
         <div className="flex items-center space-x-3">
           <div className="flex items-center space-x-1.5 bg-blue-900/60 text-blue-300 px-2 py-0.5 rounded-lg border border-blue-700/50">
             <Tablet className="w-3.5 h-3.5 text-blue-400" />
-            <span className="font-extrabold tracking-wide">FEM TABLET</span>
+            <span className="font-extrabold tracking-wide">Fiscalização Eletrônica</span>
           </div>
           <span className="text-slate-600">|</span>
-          <span className="font-bold text-slate-300">{council.sigla} - Fiscalização de Campo</span>
+          <span className="font-bold text-slate-200 font-mono tracking-wider">{council.sigla}</span>
           <span className="hidden md:inline text-slate-500">•</span>
           <span className="hidden md:inline text-slate-400">Rota: <strong className="text-emerald-400">{filtroRota}</strong></span>
         </div>
@@ -653,23 +949,16 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
           </div>
 
           {/* Web Admin View Switcher */}
-          <button
-            onClick={onSwitchToWebAdmin}
-            className="hidden sm:flex items-center space-x-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-blue-300 hover:text-blue-200 rounded-lg text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
-            title="Alternar para Visão Administrativa Desktop"
-          >
-            <ExternalLink className="w-3 h-3" />
-            <span>Gestão Web</span>
-          </button>
-
-          {/* SQL Database Modal Trigger */}
-          <button
-            onClick={onOpenSqlModal}
-            className="flex items-center space-x-1 px-2.5 py-1 bg-purple-900/80 hover:bg-purple-800 text-purple-200 rounded-lg text-xs font-bold border border-purple-700 transition-colors cursor-pointer"
-            title="Visualizar e Copiar Script SQL do Banco de Dados"
-          >
-            <span>Script SQL</span>
-          </button>
+          {onSwitchToWebAdmin && (
+            <button
+              onClick={onSwitchToWebAdmin}
+              className="hidden sm:flex items-center space-x-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-blue-300 hover:text-blue-200 rounded-lg text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
+              title="Acessar Seção Geral de Termos de Inspeção"
+            >
+              <ExternalLink className="w-3 h-3" />
+              <span>Termos Lavrados</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -760,7 +1049,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                 </div>
               </button>
 
-              {/* Card 3: Informação Lote */}
+              {/* Card 3: Importar Estabelecimentos Offline */}
               <button
                 onClick={() => setCurrentScreen('info_lote')}
                 className="group bg-white hover:bg-purple-50/50 border-2 border-slate-200 hover:border-purple-500 rounded-2xl p-6 sm:p-8 flex flex-col items-center text-center transition-all shadow-sm hover:shadow-md cursor-pointer"
@@ -769,13 +1058,13 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   <Layers className="w-10 h-10" />
                 </div>
                 <h2 className="text-xl font-black text-slate-900 group-hover:text-purple-900">
-                  Informação Lote
+                  Importar Estabelecimentos Offline
                 </h2>
                 <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                  Detalhes do pacote de dados baixado para o tablet, municípios e quantidade de farmácias na rota.
+                  Filtre por cidade, zona e rota para baixar estabelecimentos para o SQLite/IndexedDB e fiscalizar sem internet.
                 </p>
                 <div className="mt-5 inline-flex items-center space-x-1.5 px-4 py-1.5 rounded-full bg-purple-50 group-hover:bg-purple-600 text-purple-700 group-hover:text-white font-bold text-xs transition-colors">
-                  <span>Ver Lote Canutama</span>
+                  <span>Baixar / Atualizar Lote</span>
                   <ArrowRight className="w-3.5 h-3.5" />
                 </div>
               </button>
@@ -816,7 +1105,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   </button>
                   <div>
                     <h2 className="text-lg font-black text-slate-900">
-                      Estabelecimentos da Rota
+                      Estabelecimentos
                     </h2>
                     <p className="text-xs text-slate-500">
                       {filtroRota} • {filteredEmpresas.length} cadastros encontrados
@@ -845,17 +1134,164 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                     )}
                   </div>
 
-                  {/* Filter Trigger Button (Screen 1, 2, 5) */}
+                  {/* Filter Trigger Button (Inline Toggle) */}
                   <button
-                    onClick={() => setIsFilterModalOpen(true)}
-                    className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border border-slate-200 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer"
-                    title="Abrir Filtros Avançados"
+                    onClick={() => setShowFiltrosInline(!showFiltrosInline)}
+                    className={`px-3 py-2 rounded-xl border text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer ${
+                      showFiltrosInline 
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-xs' 
+                        : 'bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 border-slate-200'
+                    }`}
+                    title="Abrir/Fechar Filtros Avançados nesta mesma tela"
                   >
-                    <Filter className="w-3.5 h-3.5 text-blue-600" />
+                    <Filter className="w-3.5 h-3.5" />
                     <span>Filtros</span>
+                    {showFiltrosInline ? <ChevronDown className="w-3 h-3 ml-0.5" /> : <ChevronRight className="w-3 h-3 ml-0.5" />}
                   </button>
                 </div>
               </div>
+
+              {/* INLINE COLLAPSIBLE FILTER PANEL (Screen 1, 2, 5 directly on same screen) */}
+              {showFiltrosInline && (
+                <div className="mt-4 pt-4 border-t border-slate-200 animate-in fade-in duration-200 space-y-3 text-xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-slate-700 uppercase tracking-wider text-[11px] flex items-center">
+                      <Filter className="w-3.5 h-3.5 mr-1 text-blue-600" />
+                      Filtros e Busca Avançada (Dados dos Cadastros Básicos)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFiltroOrdenacao('fantasia');
+                        setFiltroSituacao('todos');
+                        setFiltroCondicao('todos');
+                        setFiltroNatureza('todos');
+                        setFiltroRota('todos');
+                        setFiltroCidade('todos');
+                        setFiltroBairro('');
+                        setFiltroEndereco('');
+                        setFiltroFiscalizadas('todos');
+                      }}
+                      className="text-xs text-rose-600 font-bold hover:underline"
+                    >
+                      Limpar Todos
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {/* Rota (Cadastros Básicos / Empresas) */}
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Rota:</label>
+                      <select
+                        value={filtroRota}
+                        onChange={(e) => setFiltroRota(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                      >
+                        <option value="Canutama">Canutama (Polo Purus)</option>
+                        <option value="Manaus - Centro">Manaus - Centro</option>
+                        <option value="Manaus - Zona Leste">Manaus - Zona Leste</option>
+                        <option value="INTERIOR">Interior Geral</option>
+                        <option value="todos">Todas as Rotas</option>
+                      </select>
+                    </div>
+
+                    {/* Cidade (Cadastros Básicos MUNICIPIO) */}
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Cidade / Município:</label>
+                      <select
+                        value={filtroCidade}
+                        onChange={(e) => setFiltroCidade(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                      >
+                        <option value="todos">Todas as Cidades</option>
+                        <option value="Canutama">Canutama</option>
+                        <option value="Manaus">Manaus</option>
+                        <option value="Manacapuru">Manacapuru</option>
+                        <option value="Itacoatiara">Itacoatiara</option>
+                        <option value="Parintins">Parintins</option>
+                        {cadastrosBasicos
+                          .filter(i => i.categoria === 'MUNICIPIO' && i.ativo && !['Canutama', 'Manaus', 'Manacapuru', 'Itacoatiara', 'Parintins'].includes(i.nome))
+                          .map(m => (
+                            <option key={m.id} value={m.nome}>{m.nome}</option>
+                          ))
+                        }
+                      </select>
+                    </div>
+
+                    {/* Situação Cadastral (SITUACAO_EMPRESA) */}
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Situação:</label>
+                      <select
+                        value={filtroSituacao}
+                        onChange={(e) => setFiltroSituacao(e.target.value as any)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                      >
+                        <option value="todos">Todos</option>
+                        <option value="regular">Regular</option>
+                        <option value="irregular">Irregular</option>
+                      </select>
+                    </div>
+
+                    {/* Ordenação */}
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Ordenar Por:</label>
+                      <select
+                        value={filtroOrdenacao}
+                        onChange={(e) => setFiltroOrdenacao(e.target.value as any)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                      >
+                        <option value="fantasia">Nome Fantasia</option>
+                        <option value="razao">Razão Social</option>
+                        <option value="codigo">Inscrição / Código</option>
+                        <option value="bairro">Bairro</option>
+                        <option value="endereco">Endereço</option>
+                      </select>
+                    </div>
+
+                    {/* Bairro */}
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Bairro:</label>
+                      <input
+                        type="text"
+                        value={filtroBairro}
+                        onChange={(e) => setFiltroBairro(e.target.value)}
+                        placeholder="Ex: Centro, São Francisco..."
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800"
+                      />
+                    </div>
+
+                    {/* Fiscalizadas */}
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Fiscalizadas Hoje:</label>
+                      <select
+                        value={filtroFiscalizadas}
+                        onChange={(e) => setFiltroFiscalizadas(e.target.value as any)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                      >
+                        <option value="todos">Todos</option>
+                        <option value="sim">Apenas Fiscalizadas</option>
+                        <option value="nao">Não Fiscalizadas</option>
+                      </select>
+                    </div>
+
+                    {/* Natureza / Atividade */}
+                    <div className="sm:col-span-2">
+                      <label className="block font-bold text-slate-700 mb-1">Tipo de Estabelecimento / Atividade:</label>
+                      <select
+                        value={filtroNatureza}
+                        onChange={(e) => setFiltroNatureza(e.target.value as any)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                      >
+                        <option value="todos">Todos os Tipos de Estabelecimento</option>
+                        <option value="drogaria">Drogarias</option>
+                        <option value="manipulacao">Farmácias com Manipulação</option>
+                        <option value="hospitalar">Farmácias Hospitalares / Clínicas</option>
+                        <option value="distribuidora">Distribuidoras / Transportadoras</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* List of Establishments (Matching Screen 13 Card Format) */}
@@ -872,6 +1308,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                       setSearchTerm('');
                       setFiltroRota('todos');
                       setFiltroCidade('todos');
+                      setFiltroBairro('');
                     }}
                     className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700"
                   >
@@ -889,6 +1326,25 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                       key={emp.id}
                       onClick={() => {
                         setSelectedEmpresa(emp);
+                        const primaryRt = (emp.responsaveisTecnicos && emp.responsaveisTecnicos.length > 0)
+                          ? emp.responsaveisTecnicos[0]
+                          : null;
+                        if (primaryRt) {
+                          setSelectedRtNome(primaryRt.profissionalNome);
+                          setSelectedRtInscricao(primaryRt.profissionalInscricao.startsWith('CRF') ? primaryRt.profissionalInscricao : `CRF-AM ${primaryRt.profissionalInscricao}`);
+                          setSelectedRtCargo(primaryRt.cargo || 'RESPONSÁVEL TÉCNICO');
+                          setSelectedRtForFicha(primaryRt);
+                        } else {
+                          setSelectedRtNome(emp.responsavelTecnico || 'ANA KERCIA OLIVEIRA MENDES');
+                          setSelectedRtInscricao(emp.crfResponsavel || 'CRF-AM 4821');
+                          setSelectedRtCargo('RESPONSÁVEL TÉCNICO');
+                          setSelectedRtForFicha({
+                            profissionalNome: emp.responsavelTecnico || 'ANA KERCIA OLIVEIRA MENDES',
+                            profissionalInscricao: emp.crfResponsavel || 'CRF-AM 4821',
+                            cargo: 'RESPONSÁVEL TÉCNICO',
+                            cargaHorariaSemanal: 44
+                          });
+                        }
                         setCurrentScreen('ficha_estabelecimento');
                       }}
                       className="bg-white hover:bg-blue-50/40 border border-slate-200 hover:border-blue-400 rounded-xl p-3.5 shadow-2xs hover:shadow-sm transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
@@ -994,7 +1450,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                 className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold flex items-center space-x-2 shadow-xs transition-colors cursor-pointer"
               >
                 <Plus className="w-4 h-4" />
-                <span>+ Iniciar Termo de Inspeção</span>
+                <span>Iniciar Termo de Inspeção</span>
               </button>
             </div>
 
@@ -1072,35 +1528,83 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                       Responsável Técnico (RT)
                     </span>
                     <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
-                      Averbado
+                      {selectedEmpresa.responsaveisTecnicos?.length || (selectedEmpresa.responsavelTecnico ? 1 : 0)} Averbado(s)
                     </span>
                   </h2>
 
-                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-800 font-bold flex items-center justify-center text-xs">
-                        RT
-                      </div>
-                      <div>
-                        <h3 className="font-black text-xs text-slate-900">
-                          {selectedEmpresa.responsavelTecnico || 'ANA KERCIA OLIVEIRA MENDES'}
-                        </h3>
-                        <p className="font-mono text-[11px] text-blue-700 font-bold">
-                          {selectedEmpresa.crfResponsavel || 'CRF-AM 4821'}
-                        </p>
-                        <p className="text-[10px] text-slate-500 uppercase font-semibold">
-                          DIRETOR TÉCNICO • 44H SEMANAIS
-                        </p>
-                      </div>
-                    </div>
+                  <div className="space-y-3">
+                    {selectedEmpresa.responsaveisTecnicos && selectedEmpresa.responsaveisTecnicos.length > 0 ? (
+                      selectedEmpresa.responsaveisTecnicos.map((rt, idx) => (
+                        <div key={rt.profissionalId || idx} className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-800 font-bold flex items-center justify-center text-xs shrink-0">
+                              RT
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-black text-xs text-slate-900 truncate">
+                                {rt.profissionalNome}
+                              </h3>
+                              <p className="font-mono text-[11px] text-blue-700 font-bold">
+                                {rt.profissionalInscricao.startsWith('CRF') ? rt.profissionalInscricao : `CRF-AM ${rt.profissionalInscricao}`}
+                              </p>
+                              <p className="text-[10px] text-slate-500 uppercase font-semibold">
+                                {rt.cargo} • {rt.cargaHorariaSemanal || 44}H SEMANAIS
+                              </p>
+                            </div>
+                          </div>
 
-                    <button
-                      onClick={() => setCurrentScreen('ficha_rt')}
-                      className="mt-3 w-full py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold flex items-center justify-center space-x-1 transition-colors"
-                    >
-                      <Eye className="w-3.5 h-3.5 text-slate-500" />
-                      <span>Ver Ficha e Horários do RT</span>
-                    </button>
+                          <button
+                            onClick={() => {
+                              setSelectedRtForFicha(rt);
+                              setCurrentScreen('ficha_rt');
+                            }}
+                            className="w-full py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold flex items-center justify-center space-x-1 transition-colors cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-slate-500" />
+                            <span>Ver Ficha e Horários do RT</span>
+                          </button>
+                        </div>
+                      ))
+                    ) : selectedEmpresa.responsavelTecnico ? (
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-800 font-bold flex items-center justify-center text-xs shrink-0">
+                            RT
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-black text-xs text-slate-900 truncate">
+                              {selectedEmpresa.responsavelTecnico}
+                            </h3>
+                            <p className="font-mono text-[11px] text-blue-700 font-bold">
+                              {selectedEmpresa.crfResponsavel || 'CRF REGULAR'}
+                            </p>
+                            <p className="text-[10px] text-slate-500 uppercase font-semibold">
+                              DIRETOR TÉCNICO • 44H SEMANAIS
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => {
+                            setSelectedRtForFicha({
+                              profissionalNome: selectedEmpresa.responsavelTecnico,
+                              profissionalInscricao: selectedEmpresa.crfResponsavel || 'CRF-AM 4821',
+                              cargo: 'DIRETOR TÉCNICO',
+                              cargaHorariaSemanal: 44
+                            });
+                            setCurrentScreen('ficha_rt');
+                          }}
+                          className="w-full py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold flex items-center justify-center space-x-1 transition-colors cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-slate-500" />
+                          <span>Ver Ficha e Horários do RT</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="p-3 text-center bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-400">
+                        Nenhum farmacêutico responsável técnico averbado no cadastro.
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1180,109 +1684,116 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
             </div>
 
             {/* RT Profile Card (Screen 11) */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6">
-              <div className="flex items-center space-x-4 border-b border-slate-100 pb-5">
-                <div className="w-16 h-16 rounded-2xl bg-blue-100 text-blue-700 font-extrabold text-xl flex items-center justify-center border border-blue-200">
-                  AK
-                </div>
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                      REGULAR / ATIVO
-                    </span>
-                    <span className="text-xs text-slate-400">•</span>
-                    <span className="text-xs font-mono font-bold text-blue-700">
-                      CRF-AM 4821
-                    </span>
+            {(() => {
+              const rtAtual = selectedRtForFicha || (selectedEmpresa.responsaveisTecnicos && selectedEmpresa.responsaveisTecnicos.length > 0 ? selectedEmpresa.responsaveisTecnicos[0] : null) || {
+                profissionalNome: selectedEmpresa.responsavelTecnico || 'FARMACÊUTICO RESPONSÁVEL',
+                profissionalInscricao: selectedEmpresa.crfResponsavel || 'CRF-AM 4821',
+                cargo: 'DIRETOR TÉCNICO',
+                cargaHorariaSemanal: 44,
+                horarios: [
+                  { dia: 'Segunda-feira', inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+                  { dia: 'Terça-feira', inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+                  { dia: 'Quarta-feira', inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+                  { dia: 'Quinta-feira', inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+                  { dia: 'Sexta-feira', inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+                  { dia: 'Sábado', inicio1: '08:00', fim1: '12:00', totalHorasDia: 4 }
+                ]
+              };
+
+              const initials = rtAtual.profissionalNome
+                .split(' ')
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((n: string) => n[0])
+                .join('');
+
+              const inscricaoFmt = rtAtual.profissionalInscricao.startsWith('CRF')
+                ? rtAtual.profissionalInscricao
+                : `CRF-AM ${rtAtual.profissionalInscricao}`;
+
+              const defaultHorarios = [
+                { dia: 'Segunda-feira', inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+                { dia: 'Terça-feira', inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+                { dia: 'Quarta-feira', inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+                { dia: 'Quinta-feira', inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+                { dia: 'Sexta-feira', inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+                { dia: 'Sábado', inicio1: '08:00', fim1: '12:00', totalHorasDia: 4 }
+              ];
+
+              const horariosRender = (rtAtual.horarios && rtAtual.horarios.length > 0) ? rtAtual.horarios : defaultHorarios;
+
+              return (
+                <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-6">
+                  <div className="flex items-center space-x-4 border-b border-slate-100 pb-5">
+                    <div className="w-16 h-16 rounded-2xl bg-blue-100 text-blue-700 font-extrabold text-xl flex items-center justify-center border border-blue-200">
+                      {initials || 'RT'}
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                          REGULAR / ATIVO
+                        </span>
+                        <span className="text-xs text-slate-400">•</span>
+                        <span className="text-xs font-mono font-bold text-blue-700">
+                          {inscricaoFmt}
+                        </span>
+                      </div>
+                      <h1 className="text-xl font-black text-slate-900 mt-0.5">
+                        {rtAtual.profissionalNome}
+                      </h1>
+                      <p className="text-xs text-slate-500 font-medium">
+                        Farmacêutico • {rtAtual.cargo || 'DIRETOR TÉCNICO'} • Carga Horária: {rtAtual.cargaHorariaSemanal || 44} horas semanais
+                      </p>
+                    </div>
                   </div>
-                  <h1 className="text-xl font-black text-slate-900 mt-0.5">
-                    ANA KERCIA OLIVEIRA MENDES
-                  </h1>
-                  <p className="text-xs text-slate-500 font-medium">
-                    Farmacêutica • DIRETOR TÉCNICO • Carga Horária: 44 horas semanais
-                  </p>
+
+                  {/* Weekly Working Hours Table (Screen 11) */}
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center">
+                      <Clock className="w-4 h-4 mr-1.5 text-blue-600" />
+                      Horário de Assistência Técnica Declarado pelo Farmacêutico
+                    </h3>
+
+                    <div className="overflow-hidden border border-slate-200 rounded-xl">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
+                          <tr>
+                            <th className="py-2.5 px-3">Dia da Semana</th>
+                            <th className="py-2.5 px-3">Turno Manhã</th>
+                            <th className="py-2.5 px-3">Turno Tarde</th>
+                            <th className="py-2.5 px-3 text-right">Total Horas</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-slate-700 font-mono">
+                          {horariosRender.map((h: any, i: number) => (
+                            <tr key={i}>
+                              <td className="py-2 px-3 font-sans font-semibold text-slate-900">{h.dia}</td>
+                              <td className="py-2 px-3">{h.inicio1 && h.fim1 ? `${h.inicio1} - ${h.fim1}` : (h.inicio1 || '---')}</td>
+                              <td className="py-2 px-3">{h.inicio2 && h.fim2 ? `${h.inicio2} - ${h.fim2}` : '---'}</td>
+                              <td className="py-2 px-3 text-right font-bold text-blue-700">{h.totalHorasDia || 8}h</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-blue-50 font-bold text-blue-900 border-t border-blue-200">
+                          <tr>
+                            <td colSpan={3} className="py-2 px-3 font-sans">Carga Horária Semanal Total</td>
+                            <td className="py-2 px-3 text-right font-mono">{rtAtual.cargaHorariaSemanal || 44} horas</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              );
+            })()}
 
-              {/* Weekly Working Hours Table (Screen 11) */}
-              <div>
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center">
-                  <Clock className="w-4 h-4 mr-1.5 text-blue-600" />
-                  Horário de Assistência Técnica Declarado pelo Farmacêutico
-                </h3>
-
-                <div className="overflow-hidden border border-slate-200 rounded-xl">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
-                      <tr>
-                        <th className="py-2.5 px-3">Dia da Semana</th>
-                        <th className="py-2.5 px-3">Turno Manhã</th>
-                        <th className="py-2.5 px-3">Turno Tarde</th>
-                        <th className="py-2.5 px-3 text-right">Total Horas</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-slate-700 font-mono">
-                      <tr>
-                        <td className="py-2 px-3 font-sans font-semibold text-slate-900">Segunda-feira</td>
-                        <td className="py-2 px-3">08:00 - 12:00</td>
-                        <td className="py-2 px-3">14:00 - 18:00</td>
-                        <td className="py-2 px-3 text-right font-bold text-blue-700">8h</td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 px-3 font-sans font-semibold text-slate-900">Terça-feira</td>
-                        <td className="py-2 px-3">08:00 - 12:00</td>
-                        <td className="py-2 px-3">14:00 - 18:00</td>
-                        <td className="py-2 px-3 text-right font-bold text-blue-700">8h</td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 px-3 font-sans font-semibold text-slate-900">Quarta-feira</td>
-                        <td className="py-2 px-3">08:00 - 12:00</td>
-                        <td className="py-2 px-3">14:00 - 18:00</td>
-                        <td className="py-2 px-3 text-right font-bold text-blue-700">8h</td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 px-3 font-sans font-semibold text-slate-900">Quinta-feira</td>
-                        <td className="py-2 px-3">08:00 - 12:00</td>
-                        <td className="py-2 px-3">14:00 - 18:00</td>
-                        <td className="py-2 px-3 text-right font-bold text-blue-700">8h</td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 px-3 font-sans font-semibold text-slate-900">Sexta-feira</td>
-                        <td className="py-2 px-3">08:00 - 12:00</td>
-                        <td className="py-2 px-3">14:00 - 18:00</td>
-                        <td className="py-2 px-3 text-right font-bold text-blue-700">8h</td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 px-3 font-sans font-semibold text-slate-900">Sábado</td>
-                        <td className="py-2 px-3">08:00 - 12:00</td>
-                        <td className="py-2 px-3 text-slate-400">---</td>
-                        <td className="py-2 px-3 text-right font-bold text-blue-700">4h</td>
-                      </tr>
-                      <tr className="bg-slate-50 text-slate-400">
-                        <td className="py-2 px-3 font-sans font-semibold">Domingo</td>
-                        <td className="py-2 px-3">Folga</td>
-                        <td className="py-2 px-3">Folga</td>
-                        <td className="py-2 px-3 text-right">0h</td>
-                      </tr>
-                    </tbody>
-                    <tfoot className="bg-blue-50 font-bold text-blue-900 border-t border-blue-200">
-                      <tr>
-                        <td colSpan={3} className="py-2 px-3 font-sans">Carga Horária Semanal Total</td>
-                        <td className="py-2 px-3 text-right font-mono">44 horas</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              </div>
-
-              {/* Botão de Retorno */}
-              <button
-                onClick={() => setCurrentScreen('ficha_estabelecimento')}
-                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors"
-              >
-                Voltar para Ficha do Estabelecimento
-              </button>
-            </div>
+            {/* Botão de Retorno */}
+            <button
+              onClick={() => setCurrentScreen('ficha_estabelecimento')}
+              className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            >
+              Voltar para Ficha do Estabelecimento
+            </button>
           </div>
         )}
 
@@ -1474,6 +1985,10 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   <span className="flex items-center space-x-1.5">
                     <FileText className="w-3.5 h-3.5 text-blue-600" />
                     <span>Observação:</span>
+                    <span className="text-rose-600 font-bold">*</span>
+                    <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
+                      Obrigatório
+                    </span>
                   </span>
                   <span className="text-[10px] text-slate-400 font-normal">
                     Orientações prestadas e constatações gerais in loco
@@ -1618,19 +2133,19 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                     Auto de Infração (Autuação)
                   </h2>
+                  {numeroAutoInfracao && (
+                    <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-md bg-rose-100 text-rose-900 border border-rose-300">
+                      Nº {numeroAutoInfracao}
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center space-x-3">
                   <button
                     type="button"
-                    onClick={() => {
-                      setHorariosVagosVerificados(true);
-                      toastService.info(
-                        'Verificação de Horários Vagos',
-                        'Escala verificada: Farmácia aberta sem RT cobrindo o intervalo atual (Art. 24 da Lei 3820/60).'
-                      );
-                    }}
-                    className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 rounded-lg text-xs font-bold flex items-center space-x-1"
+                    onClick={handleVerificarHorariosVagos}
+                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-2xs transition-colors cursor-pointer"
+                    title="Verificar horários vagos conforme módulo de assistência por município/ramo e restrições de bloqueio"
                   >
                     <Clock className="w-3.5 h-3.5 text-blue-600" />
                     <span>Verificar Horários Vagos</span>
@@ -1640,7 +2155,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                     <input
                       type="checkbox"
                       checked={autuacaoAtiva}
-                      onChange={(e) => setAutuacaoAtiva(e.target.checked)}
+                      onChange={(e) => handleToggleAutuacao(e.target.checked)}
                       className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500"
                     />
                     <span className="text-xs font-bold text-rose-900">Lavrar Auto de Infração</span>
@@ -1648,10 +2163,74 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                 </div>
               </div>
 
-              {horariosVagosVerificados && (
-                <div className="mb-3 p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-center justify-between">
-                  <span>Horário Oficial: <strong>07h00 às 21h00</strong>. Horário RT: <strong>08h às 12h / 14h às 18h</strong>. Intervalo desassistido constatado.</span>
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+              {horariosVagosVerificados && diagnosticoHorariosVagos && (
+                <div className={`mb-3 p-3.5 rounded-xl border text-xs space-y-2 animate-in fade-in duration-200 ${
+                  diagnosticoHorariosVagos.temInconformidade 
+                    ? 'bg-rose-50 border-rose-200 text-rose-950' 
+                    : 'bg-emerald-50 border-emerald-200 text-emerald-950'
+                }`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center space-x-2">
+                      {diagnosticoHorariosVagos.temInconformidade ? (
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                      ) : (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      )}
+                      <div>
+                        <strong className="font-extrabold text-xs block">
+                          {diagnosticoHorariosVagos.temInconformidade 
+                            ? 'HORÁRIOS VAGOS / DESASSISTÊNCIA DETECTADA' 
+                            : 'ASSISTÊNCIA FARMACÊUTICA REGULAR'}
+                        </strong>
+                        <span className="text-[11px] opacity-90">
+                          {diagnosticoHorariosVagos.motivoPrincipal}
+                        </span>
+                      </div>
+                    </div>
+
+                    <span className="font-mono text-[10px] font-bold px-2 py-0.5 rounded bg-white border border-slate-200 shrink-0">
+                      {diagnosticoHorariosVagos.diaSemana} • {diagnosticoHorariosVagos.horaVerificacao}
+                    </span>
+                  </div>
+
+                  <div className="pt-1.5 border-t border-rose-200/50 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
+                    <div>
+                      <strong>Regra do Município ({selectedEmpresa.cidade}):</strong> {diagnosticoHorariosVagos.regraNome}
+                    </div>
+                    <div>
+                      <strong>Base Legal:</strong> {diagnosticoHorariosVagos.regraBaseLegal}
+                    </div>
+                    <div>
+                      <strong>Carga Horária Semanal:</strong> Func: {diagnosticoHorariosVagos.horasFuncionamento}h • Assist: {diagnosticoHorariosVagos.horasAssistencia}h
+                    </div>
+                  </div>
+
+                  {diagnosticoHorariosVagos.intervalosVagos.length > 0 && (
+                    <div className="bg-white/80 p-2 rounded-lg border border-rose-200 space-y-1">
+                      <div className="font-bold text-[10px] text-rose-900 uppercase tracking-wide">
+                        Intervalos Desassistidos (Horários Vagos):
+                      </div>
+                      <ul className="list-disc list-inside space-y-0.5 text-[11px] text-rose-800 font-mono">
+                        {diagnosticoHorariosVagos.intervalosVagos.map((iv, idx) => (
+                          <li key={idx}>{iv}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {diagnosticoHorariosVagos.bloqueiosIdentificados.length > 0 && (
+                    <div className="bg-amber-50 p-2 rounded-lg border border-amber-200 text-amber-900 space-y-1">
+                      <div className="font-bold text-[10px] uppercase tracking-wide flex items-center space-x-1">
+                        <AlertTriangle className="w-3 h-3 text-amber-600" />
+                        <span>Restrições de Bloqueio no Cadastro:</span>
+                      </div>
+                      <ul className="list-disc list-inside space-y-0.5 text-[11px]">
+                        {diagnosticoHorariosVagos.bloqueiosIdentificados.map((b, idx) => (
+                          <li key={idx}>{b}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1789,7 +2368,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                     onChange={(e) => setAtendenteCargo(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="Farmacêutico Responsável Técnico">Farmacêutico RT</option>
+                    <option value="Farmacêutico">Farmacêutico</option>
                     <option value="Gerente / Administrador">Gerente / Administrador</option>
                     <option value="Balconista / Atendente">Balconista / Atendente</option>
                     <option value="Proprietário / Sócio">Proprietário / Sócio</option>
@@ -1808,17 +2387,19 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   />
                 </div>
 
-                {/* NOVO CAMPO: NÚMERO DE INSCRIÇÃO DO PROFISSIONAL */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Número de Inscrição (CRF):</label>
-                  <input
-                    type="text"
-                    value={atendenteInscricao}
-                    onChange={(e) => setAtendenteInscricao(e.target.value)}
-                    placeholder="Ex: CRF-AM 4821"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-blue-700 font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+                {/* CAMPO NÚMERO DE INSCRIÇÃO: SÓ APARECE SE O CARGO FOR FARMACÊUTICO */}
+                {atendenteCargo === 'Farmacêutico' && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Número de Inscrição (CRF):</label>
+                    <input
+                      type="text"
+                      value={atendenteInscricao}
+                      onChange={(e) => setAtendenteInscricao(e.target.value)}
+                      placeholder="Ex: CRF-AM 4821"
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-blue-700 font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">RG:</label>
@@ -1866,11 +2447,12 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* 1. Assinatura do Notificado / Estabelecimento */}
+                {/* 1. Assinatura Estabelecimento / Farmacêutico (Opcional) */}
                 <div className="border border-slate-200 rounded-xl p-3 bg-slate-50 flex flex-col justify-between">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-800">
-                      Assinatura do Notificado ({atendenteCargo})
+                    <span className="text-xs font-bold text-slate-800 flex items-center space-x-1">
+                      <span>Assinatura Estabelecimento/Farmacêutico</span>
+                      <span className="text-[10px] font-normal text-slate-500">(Opcional)</span>
                     </span>
                     <button
                       type="button"
@@ -1884,7 +2466,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
 
                   {recusouAssinar ? (
                     <div className="h-32 border-2 border-dashed border-rose-300 rounded-lg bg-rose-50 flex items-center justify-center text-xs text-rose-700 font-bold p-3 text-center">
-                      Notificado recusou-se a apor sua assinatura na tela deste dispositivo tablet. Lavrado com 2 testemunhas conforme previsão legal.
+                      Notificado recusou-se a apor sua assinatura na tela deste dispositivo tablet. Lavrado com a observação formal: "Recusou-se a assinar".
                     </div>
                   ) : (
                     <div className="bg-white border border-slate-300 rounded-lg overflow-hidden relative">
@@ -1903,21 +2485,25 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                       />
                       {!signatureNotificadoUrl && (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-slate-300 text-xs font-bold">
-                          Desenhe a assinatura com a caneta ou dedo
+                          Assinatura opcional (deixar em branco se ausente)
                         </div>
                       )}
                     </div>
                   )}
                   <span className="text-[10px] text-slate-400 mt-1.5 block">
-                    {atendenteNome || 'Representante do Estabelecimento'}
+                    {atendenteNome || 'Representante do Estabelecimento'} ({atendenteCargo})
                   </span>
                 </div>
 
-                {/* 2. Assinatura do Fiscal Autuante */}
+                {/* 2. Assinatura do Fiscal Autuante (Obrigatório) */}
                 <div className="border border-slate-200 rounded-xl p-3 bg-slate-50 flex flex-col justify-between">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-800">
-                      Assinatura do Fiscal do Conselho
+                    <span className="text-xs font-bold text-slate-800 flex items-center space-x-1">
+                      <span>Assinatura do Fiscal do Conselho</span>
+                      <span className="text-rose-600 font-bold">*</span>
+                      <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
+                        Obrigatório
+                      </span>
                     </span>
                     <button
                       type="button"
@@ -1944,8 +2530,8 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                       onTouchEnd={stopDrawingFiscal}
                     />
                     {!signatureFiscalUrl && (
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-slate-300 text-xs font-bold">
-                        Assinatura digital do fiscal
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-slate-400 text-xs font-bold">
+                        Desenhe a assinatura do Fiscal aqui *
                       </div>
                     )}
                   </div>
@@ -1981,173 +2567,299 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
         {/* ======================================================================= */}
         {/* SCREEN: HISTÓRICO DE TERMOS (SCREEN 10) */}
         {/* ======================================================================= */}
-        {currentScreen === 'historico_termos' && (
-          <div className="flex-1 flex flex-col space-y-4 animate-in fade-in duration-150">
-            {/* Top Bar */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <button
-                  onClick={() => setCurrentScreen('ficha_estabelecimento')}
-                  className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <div>
-                  <h2 className="text-lg font-black text-slate-900">
-                    Termos Lavrados
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    {selectedEmpresa ? selectedEmpresa.nomeFantasia : 'Todos os Estabelecimentos'}
-                  </p>
+        {/* ======================================================================= */}
+        {/* SCREEN: HISTÓRICO DE TERMOS (SCREEN 10) */}
+        {/* ======================================================================= */}
+        {currentScreen === 'historico_termos' && (() => {
+          const now = new Date();
+          const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+          const twoYearsAgo = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate());
+          const threeYearsAgo = new Date(now.getFullYear() - 3, now.getMonth(), now.getDate());
+
+          const termosFiltrados = termosDaEmpresa.filter(termo => {
+            // Occurrence filter
+            if (filtroHistoricoTipo === 'autuada' && !termo.autoInfracaoGerado) return false;
+            if (filtroHistoricoTipo === 'notificada' && !termo.notificacaoAtiva) return false;
+            if (filtroHistoricoTipo === 'intimada' && !termo.intimacaoAtiva) return false;
+            if (filtroHistoricoTipo === 'regular' && (termo.autoInfracaoGerado || termo.notificacaoAtiva || termo.intimacaoAtiva)) return false;
+
+            // Period filter
+            if (filtroHistoricoPeriodo !== 'todos') {
+              const datePart = termo.dataHora ? termo.dataHora.split(' ')[0] : '';
+              const parts = datePart.split('/');
+              if (parts.length === 3) {
+                const d = parseInt(parts[0], 10);
+                const m = parseInt(parts[1], 10) - 1;
+                const y = parseInt(parts[2], 10);
+                const termoDate = new Date(y, m, d);
+
+                if (filtroHistoricoPeriodo === '1_ano' && termoDate < oneYearAgo) return false;
+                if (filtroHistoricoPeriodo === '2_anos' && termoDate < twoYearsAgo) return false;
+                if (filtroHistoricoPeriodo === '3_anos' && termoDate < threeYearsAgo) return false;
+              }
+            }
+
+            return true;
+          });
+
+          return (
+            <div className="flex-1 flex flex-col space-y-4 animate-in fade-in duration-150">
+              {/* Top Bar */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => setCurrentScreen('ficha_estabelecimento')}
+                    className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+                  <div>
+                    <h2 className="text-lg font-black text-slate-900">
+                      Histórico de Termos Lavrados
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      {selectedEmpresa ? selectedEmpresa.nomeFantasia : 'Todos os Estabelecimentos'} • {termosFiltrados.length} termo(s) exibido(s)
+                    </p>
+                  </div>
+                </div>
+
+                {selectedEmpresa && (
+                  <button
+                    onClick={() => setCurrentScreen('novo_termo')}
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 cursor-pointer self-start sm:self-auto"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Iniciar Termo de Inspeção</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Filtros por Período e Tipo (Pré-definidos 1, 2, 3 anos e ocorrências) */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
+                {/* Período Pré-definido */}
+                <div className="flex items-center space-x-2">
+                  <span className="font-bold text-slate-700 flex items-center space-x-1">
+                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Período:</span>
+                  </span>
+                  <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setFiltroHistoricoPeriodo('todos')}
+                      className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors ${
+                        filtroHistoricoPeriodo === 'todos' ? 'bg-white text-blue-700 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Todos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFiltroHistoricoPeriodo('1_ano')}
+                      className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors ${
+                        filtroHistoricoPeriodo === '1_ano' ? 'bg-white text-blue-700 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Último 1 ano
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFiltroHistoricoPeriodo('2_anos')}
+                      className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors ${
+                        filtroHistoricoPeriodo === '2_anos' ? 'bg-white text-blue-700 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      2 anos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFiltroHistoricoPeriodo('3_anos')}
+                      className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors ${
+                        filtroHistoricoPeriodo === '3_anos' ? 'bg-white text-blue-700 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      3 anos
+                    </button>
+                  </div>
+                </div>
+
+                {/* Filtro Ocorrência: intimada, notificada, autuada, todos */}
+                <div className="flex items-center space-x-2">
+                  <span className="font-bold text-slate-700 flex items-center space-x-1">
+                    <Filter className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Ocorrência:</span>
+                  </span>
+                  <select
+                    value={filtroHistoricoTipo}
+                    onChange={(e) => setFiltroHistoricoTipo(e.target.value as any)}
+                    className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:bg-white text-xs"
+                  >
+                    <option value="todos">Todas as Inspeções</option>
+                    <option value="intimada">Apenas Intimada</option>
+                    <option value="notificada">Apenas Notificada</option>
+                    <option value="autuada">Apenas Autuada (Auto de Infração)</option>
+                    <option value="regular">Apenas Conforme / Regular</option>
+                  </select>
                 </div>
               </div>
 
-              {selectedEmpresa && (
-                <button
-                  onClick={() => setCurrentScreen('novo_termo')}
-                  className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Novo Termo</span>
-                </button>
-              )}
-            </div>
-
-            {/* List or Selected Preview */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* List */}
-              <div className="space-y-2.5">
-                {termosDaEmpresa.length === 0 ? (
-                  <div className="bg-white rounded-xl p-8 border border-slate-200 text-center text-xs text-slate-500">
-                    Nenhum termo cadastrado.
-                  </div>
-                ) : (
-                  termosDaEmpresa.map(termo => (
-                    <div
-                      key={termo.id}
-                      onClick={() => setSelectedTermoParaVisualizar(termo)}
-                      className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                        selectedTermoParaVisualizar?.id === termo.id 
-                          ? 'bg-blue-50/70 border-blue-400 ring-2 ring-blue-200 shadow-xs' 
-                          : 'bg-white border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-mono font-black text-sm text-blue-700">
-                          {termo.numeroTermo}
-                        </span>
-                        <span className="text-[11px] text-slate-500 font-mono">
-                          {termo.dataHora}
-                        </span>
-                      </div>
-
-                      <div className="mt-1 text-xs text-slate-700 flex flex-wrap items-center gap-1.5">
-                        <span className="font-bold">{termo.empresaNome}</span>
-                        <span className="text-slate-300">•</span>
-                        <span>Fiscal: {termo.fiscalNome}</span>
-                      </div>
-
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        {termo.autoInfracaoGerado ? (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800">
-                            Auto de Infração: {termo.numeroAutoInfracao}
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                            Sem Auto de Infração
-                          </span>
-                        )}
-
-                        {termo.notificacaoAtiva && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
-                            Notificado
-                          </span>
-                        )}
-
-                        {termo.intimacaoAtiva && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
-                            Intimado
-                          </span>
-                        )}
-                      </div>
+              {/* List or Selected Preview */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                {/* List */}
+                <div className="space-y-2.5">
+                  {termosFiltrados.length === 0 ? (
+                    <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center text-xs text-slate-500">
+                      <FileText className="w-10 h-10 mx-auto mb-2 text-slate-300" />
+                      <p className="font-bold text-slate-700">Nenhum termo encontrado para os filtros selecionados.</p>
+                      <p className="text-[11px] mt-0.5">Altere o período ou o filtro de ocorrência.</p>
                     </div>
-                  ))
-                )}
-              </div>
-
-              {/* Preview Document Panel */}
-              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs">
-                {selectedTermoParaVisualizar ? (
-                  <div className="space-y-4 text-xs">
-                    <div className="border-b border-slate-200 pb-3 flex items-center justify-between">
-                      <div>
-                        <span className="font-mono font-bold text-xs text-blue-700">
-                          {selectedTermoParaVisualizar.numeroTermo}
-                        </span>
-                        <h3 className="font-black text-slate-900 text-sm">
-                          Termo de Inspeção e Visita Fiscal
-                        </h3>
-                      </div>
-                      <button
-                        onClick={() => window.print()}
-                        className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center space-x-1"
+                  ) : (
+                    termosFiltrados.map(termo => (
+                      <div
+                        key={termo.id}
+                        onClick={() => setSelectedTermoParaVisualizar(termo)}
+                        className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                          selectedTermoParaVisualizar?.id === termo.id 
+                            ? 'bg-blue-50/70 border-blue-400 ring-2 ring-blue-200 shadow-xs' 
+                            : 'bg-white border-slate-200 hover:bg-slate-50'
+                        }`}
                       >
-                        <Printer className="w-3.5 h-3.5" />
-                        <span>Imprimir</span>
-                      </button>
+                        <div className="flex items-center justify-between">
+                          <span className="font-mono font-black text-sm text-blue-700">
+                            {termo.numeroTermo}
+                          </span>
+                          <span className="text-[11px] text-slate-500 font-mono">
+                            {termo.dataHora}
+                          </span>
+                        </div>
+
+                        <div className="mt-1 text-xs text-slate-700 flex flex-wrap items-center gap-1.5">
+                          <span className="font-bold">{termo.empresaNome}</span>
+                          <span className="text-slate-300">•</span>
+                          <span>Fiscal: {termo.fiscalNome}</span>
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {termo.autoInfracaoGerado ? (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800">
+                              Auto de Infração: {termo.numeroAutoInfracao}
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
+                              Sem Auto de Infração
+                            </span>
+                          )}
+
+                          {termo.notificacaoAtiva && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
+                              Notificado
+                            </span>
+                          )}
+
+                          {termo.intimacaoAtiva && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
+                              Intimado
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Preview Document Panel */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs">
+                  {selectedTermoParaVisualizar ? (
+                    <div className="space-y-4 text-xs">
+                      <div className="border-b border-slate-200 pb-3 flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="font-mono font-bold text-xs text-blue-700">
+                            {selectedTermoParaVisualizar.numeroTermo}
+                          </span>
+                          <h3 className="font-black text-slate-900 text-sm">
+                            Termo de Inspeção e Visita Fiscal
+                          </h3>
+                        </div>
+
+                        <div className="flex items-center space-x-1.5">
+                          {/* Botão Imprimir corrigido com template oficial e iframe */}
+                          <button
+                            type="button"
+                            onClick={() => printTermoFiscalizacao(selectedTermoParaVisualizar, council)}
+                            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center space-x-1 transition-colors cursor-pointer"
+                            title="Imprimir Termo em papel ou salvar PDF via navegador"
+                          >
+                            <Printer className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Imprimir</span>
+                          </button>
+
+                          {/* Botão Transformar em PDF e Enviar por E-mail */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTermoParaEmail(selectedTermoParaVisualizar);
+                              setIsEmailModalOpen(true);
+                            }}
+                            className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center space-x-1 shadow-2xs transition-colors cursor-pointer"
+                            title="Gerar PDF oficial e enviar por e-mail para RT e empresa"
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                            <span>PDF / E-mail</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200 font-mono text-[11px]">
+                        <div><strong>Estabelecimento:</strong> {selectedTermoParaVisualizar.empresaNome}</div>
+                        <div><strong>CNPJ:</strong> {selectedTermoParaVisualizar.cnpj}</div>
+                        <div><strong>Inscrição CRF:</strong> {selectedTermoParaVisualizar.empresaInscricao}</div>
+                        <div><strong>Data/Hora:</strong> {selectedTermoParaVisualizar.dataHora}</div>
+                        <div><strong>Localização:</strong> Lat: {selectedTermoParaVisualizar.latitude}, Lng: {selectedTermoParaVisualizar.longitude}</div>
+                        <div><strong>Fiscal:</strong> {selectedTermoParaVisualizar.fiscalNome} ({selectedTermoParaVisualizar.fiscalMatricula})</div>
+                      </div>
+
+                      {selectedTermoParaVisualizar.notificacaoAtiva && (
+                        <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs">
+                          <strong>Notificação Regulamentar:</strong>
+                          <p className="mt-1">{selectedTermoParaVisualizar.notificacaoTexto}</p>
+                        </div>
+                      )}
+
+                      {selectedTermoParaVisualizar.autoInfracaoGerado && (
+                        <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-rose-900 text-xs">
+                          <strong className="text-rose-800">Auto de Infração nº {selectedTermoParaVisualizar.numeroAutoInfracao}:</strong>
+                          <ul className="mt-1 list-disc list-inside space-y-0.5">
+                            {selectedTermoParaVisualizar.infracoesIdentificadas?.map((inf, idx) => (
+                              <li key={idx}>{inf}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {selectedTermoParaVisualizar.assinaturaEstabelecimento && (
+                        <div className="border border-slate-200 rounded-xl p-3 bg-white">
+                          <span className="text-[11px] text-slate-500 block mb-1">Assinatura do Notificado:</span>
+                          <img 
+                            src={selectedTermoParaVisualizar.assinaturaEstabelecimento} 
+                            alt="Assinatura" 
+                            className="h-16 object-contain"
+                          />
+                          <span className="text-[10px] text-slate-400 block mt-1 font-mono">
+                            {selectedTermoParaVisualizar.atendenteNome} ({selectedTermoParaVisualizar.atendenteCargo})
+                          </span>
+                        </div>
+                      )}
                     </div>
-
-                    <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200 font-mono text-[11px]">
-                      <div><strong>Estabelecimento:</strong> {selectedTermoParaVisualizar.empresaNome}</div>
-                      <div><strong>CNPJ:</strong> {selectedTermoParaVisualizar.cnpj}</div>
-                      <div><strong>Inscrição CRF:</strong> {selectedTermoParaVisualizar.empresaInscricao}</div>
-                      <div><strong>Data/Hora:</strong> {selectedTermoParaVisualizar.dataHora}</div>
-                      <div><strong>Localização:</strong> Lat: {selectedTermoParaVisualizar.latitude}, Lng: {selectedTermoParaVisualizar.longitude}</div>
-                      <div><strong>Fiscal:</strong> {selectedTermoParaVisualizar.fiscalNome} ({selectedTermoParaVisualizar.fiscalMatricula})</div>
+                  ) : (
+                    <div className="h-64 flex flex-col items-center justify-center text-slate-400 text-xs">
+                      <FileText className="w-10 h-10 mb-2 text-slate-300" />
+                      <span>Selecione um termo na lista ao lado para visualizar os detalhes.</span>
                     </div>
-
-                    {selectedTermoParaVisualizar.notificacaoAtiva && (
-                      <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs">
-                        <strong>Notificação Regulamentar:</strong>
-                        <p className="mt-1">{selectedTermoParaVisualizar.notificacaoTexto}</p>
-                      </div>
-                    )}
-
-                    {selectedTermoParaVisualizar.autoInfracaoGerado && (
-                      <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-rose-900 text-xs">
-                        <strong className="text-rose-800">Auto de Infração nº {selectedTermoParaVisualizar.numeroAutoInfracao}:</strong>
-                        <ul className="mt-1 list-disc list-inside space-y-0.5">
-                          {selectedTermoParaVisualizar.infracoesIdentificadas?.map((inf, idx) => (
-                            <li key={idx}>{inf}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {selectedTermoParaVisualizar.assinaturaEstabelecimento && (
-                      <div className="border border-slate-200 rounded-xl p-3 bg-white">
-                        <span className="text-[11px] text-slate-500 block mb-1">Assinatura do Notificado:</span>
-                        <img 
-                          src={selectedTermoParaVisualizar.assinaturaEstabelecimento} 
-                          alt="Assinatura" 
-                          className="h-16 object-contain"
-                        />
-                        <span className="text-[10px] text-slate-400 block mt-1 font-mono">
-                          {selectedTermoParaVisualizar.atendenteNome} ({selectedTermoParaVisualizar.atendenteCargo})
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="h-64 flex flex-col items-center justify-center text-slate-400 text-xs">
-                    <FileText className="w-10 h-10 mb-2 text-slate-300" />
-                    <span>Selecione um termo na lista ao lado para visualizar os detalhes.</span>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ======================================================================= */}
         {/* SCREEN: INFORMAÇÃO DO LOTE (SCREEN 15) */}
@@ -2164,37 +2876,82 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                 </button>
                 <div>
                   <h2 className="text-lg font-black text-slate-900">
-                    Informações do Lote de Fiscalização
+                    Importar Estabelecimentos Offline
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Dados baixados para operação offline no tablet
+                    Baixe estabelecimentos para o SQLite do tablet usando filtros de cidade e zona para operação sem internet
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-4 text-xs">
+            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm space-y-5 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                  <span className="text-slate-500 block text-[11px]">Município da Rota:</span>
-                  <span className="text-sm font-black text-slate-900">Canutama — AM</span>
-                  <span className="text-[10px] text-slate-400 block mt-0.5">Polo Purus / Calha Sul</span>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Filtrar por Município / Cidade:</label>
+                  <select 
+                    value={filtroCidade}
+                    onChange={(e) => setFiltroCidade(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
+                  >
+                    <option value="Canutama">Canutama</option>
+                    <option value="Manaus">Manaus</option>
+                    <option value="Manacapuru">Manacapuru</option>
+                    <option value="todos">Todos os Municípios</option>
+                  </select>
                 </div>
-                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl">
-                  <span className="text-slate-500 block text-[11px]">Total de Farmácias no Pacote:</span>
-                  <span className="text-sm font-black text-blue-700">9 Estabelecimentos</span>
-                  <span className="text-[10px] text-emerald-600 block mt-0.5">Cadastros completos baixados</span>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Filtrar por Zona / Rota:</label>
+                  <select 
+                    value={filtroRota}
+                    onChange={(e) => setFiltroRota(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
+                  >
+                    <option value="Canutama">Canutama (Polo Purus)</option>
+                    <option value="Manaus - Centro">Manaus - Centro</option>
+                    <option value="Manaus - Zona Leste">Manaus - Zona Leste</option>
+                    <option value="todos">Todas as Rotas</option>
+                  </select>
                 </div>
               </div>
 
-              <div className="border border-slate-200 rounded-xl overflow-hidden">
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={() => {
+                    toastService.success(
+                      'Lote Baixado com Sucesso',
+                      `Foram baixados ${filteredEmpresas.length} estabelecimentos para o SQLite/IndexedDB do tablet para operação offline na rota ${filtroRota}.`
+                    );
+                  }}
+                  className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black flex items-center justify-center space-x-2 shadow-sm transition-colors cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Baixar Estabelecimentos para SQLite (Offline)</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    toastService.success(
+                      'Atualizar Lote',
+                      'Verificando atualizações de cadastros e RTs no servidor central em segundo plano... Banco local atualizado!'
+                    );
+                  }}
+                  className="py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black flex items-center justify-center space-x-2 shadow-sm transition-colors cursor-pointer"
+                  title="Atualizar lote de estabelecimentos e profissionais"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span>Atualizar Lote</span>
+                </button>
+              </div>
+
+              <div className="border border-slate-200 rounded-xl overflow-hidden mt-2">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
                     <tr>
                       <th className="py-2 px-3">Inscrição</th>
                       <th className="py-2 px-3">Nome Fantasia</th>
-                      <th className="py-2 px-3">Bairro</th>
-                      <th className="py-2 px-3 text-right">Status</th>
+                      <th className="py-2 px-3">Município / Rota</th>
+                      <th className="py-2 px-3 text-right">Status Offline</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-slate-700 font-mono">
@@ -2202,10 +2959,10 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                       <tr key={e.id}>
                         <td className="py-2 px-3 font-bold text-blue-700">{e.inscricao}</td>
                         <td className="py-2 px-3 font-sans font-semibold text-slate-900">{e.nomeFantasia}</td>
-                        <td className="py-2 px-3 font-sans text-slate-500">{e.bairro || 'Centro'}</td>
+                        <td className="py-2 px-3 font-sans text-slate-500">{e.cidade} / {filtroRota}</td>
                         <td className="py-2 px-3 text-right font-sans">
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">
-                            Pronto
+                            Disponível Offline
                           </span>
                         </td>
                       </tr>
@@ -2285,14 +3042,6 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   <RefreshCw className="w-4 h-4" />
                   <span>Sincronizar Termos Pendentes Agora</span>
                 </button>
-
-                <button
-                  onClick={onOpenSqlModal}
-                  className="w-full py-3 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold flex items-center justify-center space-x-2 transition-colors cursor-pointer"
-                >
-                  <FileText className="w-4 h-4 text-purple-600" />
-                  <span>Ver Script SQL de Atualização da Base de Dados</span>
-                </button>
               </div>
             </div>
           </div>
@@ -2300,154 +3049,16 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
 
       </div>
 
-      {/* ========================================================================= */}
-      {/* 3. MODAL DE FILTROS AVANÇADOS (SCREENS 1, 2, 5) */}
-      {/* ========================================================================= */}
-      {isFilterModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-xl w-full shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="px-5 py-3.5 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Filter className="w-4 h-4 text-blue-600" />
-                <h3 className="font-black text-sm text-slate-900">Filtros e Busca Avançada</h3>
-              </div>
-              <button
-                onClick={() => setIsFilterModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto text-xs">
-              {/* Ordenação */}
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Ordenação:</label>
-                <select
-                  value={filtroOrdenacao}
-                  onChange={(e) => setFiltroOrdenacao(e.target.value as any)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
-                >
-                  <option value="fantasia">Nome Fantasia</option>
-                  <option value="codigo">Código / Inscrição</option>
-                  <option value="razao">Razão Social</option>
-                  <option value="bairro">Bairro</option>
-                  <option value="endereco">Endereço</option>
-                </select>
-              </div>
-
-              {/* Rota e Cidade */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Rota:</label>
-                  <select
-                    value={filtroRota}
-                    onChange={(e) => setFiltroRota(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
-                  >
-                    <option value="Canutama">Canutama</option>
-                    <option value="Manaus - Centro">Manaus - Centro</option>
-                    <option value="Manaus - Zona Leste">Manaus - Zona Leste</option>
-                    <option value="todos">Todas as Rotas</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Cidade:</label>
-                  <select
-                    value={filtroCidade}
-                    onChange={(e) => setFiltroCidade(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
-                  >
-                    <option value="Canutama">Canutama</option>
-                    <option value="Manaus">Manaus</option>
-                    <option value="todos">Todas</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Situação e Fiscalizadas */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Situação:</label>
-                  <select
-                    value={filtroSituacao}
-                    onChange={(e) => setFiltroSituacao(e.target.value as any)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
-                  >
-                    <option value="todos">Todos</option>
-                    <option value="regular">Regular</option>
-                    <option value="irregular">Irregular</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Fiscalizadas Hoje:</label>
-                  <select
-                    value={filtroFiscalizadas}
-                    onChange={(e) => setFiltroFiscalizadas(e.target.value as any)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
-                  >
-                    <option value="todos">Todos</option>
-                    <option value="sim">Apenas Fiscalizadas</option>
-                    <option value="nao">Não Fiscalizadas</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Bairro e Endereço */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Bairro:</label>
-                  <input
-                    type="text"
-                    value={filtroBairro}
-                    onChange={(e) => setFiltroBairro(e.target.value)}
-                    placeholder="Filtrar por bairro"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Endereço:</label>
-                  <input
-                    type="text"
-                    value={filtroEndereco}
-                    onChange={(e) => setFiltroEndereco(e.target.value)}
-                    placeholder="Filtrar por logradouro"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="px-5 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => {
-                  setFiltroOrdenacao('fantasia');
-                  setFiltroSituacao('todos');
-                  setFiltroCondicao('todos');
-                  setFiltroNatureza('todos');
-                  setFiltroBairro('');
-                  setFiltroEndereco('');
-                  setFiltroFiscalizadas('todos');
-                }}
-                className="text-xs text-rose-600 font-bold hover:underline"
-              >
-                Limpar Filtros
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsFilterModalOpen(false)}
-                className="px-5 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors"
-              >
-                Aplicar Filtros
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal de Download em PDF e Envio por E-mail */}
+      <ModalEnviarTermoEmail
+        isOpen={isEmailModalOpen}
+        onClose={() => {
+          setIsEmailModalOpen(false);
+          setTermoParaEmail(null);
+        }}
+        termo={termoParaEmail}
+        empresa={selectedEmpresa}
+      />
     </div>
   );
 };

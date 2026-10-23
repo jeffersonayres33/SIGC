@@ -492,6 +492,7 @@ export interface TermoFiscalizacao {
   // Assinaturas Digitais do Tablet
   assinaturaEstabelecimento?: string;
   assinaturaEstabelecimentoDataHora?: string;
+  observacaoRecusa?: string;
 }
 
 export interface RelatorioFiltro {

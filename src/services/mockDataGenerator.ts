@@ -260,12 +260,35 @@ export const INITIAL_EMPRESAS: Empresa[] = [
     cidade: 'CANUTAMA',
     uf: 'AM',
     cep: '69820-000',
-    rota: 'INTERIOR',
+    rota: 'Canutama',
     telefone: '(97) 3334-1120',
     email: 'shekinah.farma@gmail.com',
     statusFinanceiro: 'Adimplente',
     latitude: -6.53420,
-    longitude: -64.36110
+    longitude: -64.36110,
+    responsavelTecnico: 'LUCAS NOGUEIRA PARENTE',
+    crfResponsavel: 'CRF-AM 5210',
+    responsaveisTecnicos: [
+      {
+        profissionalId: 'prof-canutama-2',
+        profissionalInscricao: '05210',
+        profissionalNome: 'LUCAS NOGUEIRA PARENTE',
+        cargo: 'DIRETOR TÉCNICO',
+        tipo: 'Farmacêutico',
+        situacaoVinculo: 'CONTRATADO',
+        dataInicio: '10/01/2022',
+        cargaHorariaSemanal: 44,
+        horarios: [
+          { dia: 'Segunda', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Terça', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Quarta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Quinta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Sexta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Sábado', ativo: true, inicio1: '08:00', fim1: '12:00', totalHorasDia: 4 },
+          { dia: 'Domingo', ativo: false, inicio1: '', fim1: '', totalHorasDia: 0 }
+        ]
+      }
+    ]
   },
   {
     id: 'emp-canutama-3',
@@ -286,12 +309,35 @@ export const INITIAL_EMPRESAS: Empresa[] = [
     cidade: 'CANUTAMA',
     uf: 'AM',
     cep: '69820-000',
-    rota: 'INTERIOR',
+    rota: 'Canutama',
     telefone: '(97) 3334-1550',
     email: 'drogariavida.canutama@gmail.com',
     statusFinanceiro: 'Adimplente',
     latitude: -6.53500,
-    longitude: -64.36200
+    longitude: -64.36200,
+    responsavelTecnico: 'JULIANA SANTOS VASCONCELOS',
+    crfResponsavel: 'CRF-AM 4980',
+    responsaveisTecnicos: [
+      {
+        profissionalId: 'prof-canutama-3',
+        profissionalInscricao: '04980',
+        profissionalNome: 'JULIANA SANTOS VASCONCELOS',
+        cargo: 'DIRETOR TÉCNICO',
+        tipo: 'Farmacêutico',
+        situacaoVinculo: 'CONTRATADO',
+        dataInicio: '01/03/2021',
+        cargaHorariaSemanal: 40,
+        horarios: [
+          { dia: 'Segunda', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Terça', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Quarta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Quinta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Sexta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Sábado', ativo: false, inicio1: '', fim1: '', totalHorasDia: 0 },
+          { dia: 'Domingo', ativo: false, inicio1: '', fim1: '', totalHorasDia: 0 }
+        ]
+      }
+    ]
   },
   {
     id: 'emp-canutama-4',
@@ -312,12 +358,51 @@ export const INITIAL_EMPRESAS: Empresa[] = [
     cidade: 'CANUTAMA',
     uf: 'AM',
     cep: '69820-000',
-    rota: 'INTERIOR',
+    rota: 'Canutama',
     telefone: '(97) 3334-1800',
     email: 'comprebem.canutama@gmail.com',
     statusFinanceiro: 'Adimplente',
     latitude: -6.53450,
-    longitude: -64.36090
+    longitude: -64.36090,
+    responsavelTecnico: 'MARCOS ROBERTO JACINTO',
+    crfResponsavel: 'CRF-AM 3880',
+    responsaveisTecnicos: [
+      {
+        profissionalId: 'prof-canutama-4a',
+        profissionalInscricao: '03880',
+        profissionalNome: 'MARCOS ROBERTO JACINTO',
+        cargo: 'DIRETOR TÉCNICO',
+        tipo: 'Farmacêutico',
+        situacaoVinculo: 'SÓCIO / PROPRIETÁRIO',
+        dataInicio: '15/05/2018',
+        cargaHorariaSemanal: 44,
+        horarios: [
+          { dia: 'Segunda', ativo: true, inicio1: '07:30', fim1: '11:30', inicio2: '13:30', fim2: '17:30', totalHorasDia: 8 },
+          { dia: 'Terça', ativo: true, inicio1: '07:30', fim1: '11:30', inicio2: '13:30', fim2: '17:30', totalHorasDia: 8 },
+          { dia: 'Quarta', ativo: true, inicio1: '07:30', fim1: '11:30', inicio2: '13:30', fim2: '17:30', totalHorasDia: 8 },
+          { dia: 'Quinta', ativo: true, inicio1: '07:30', fim1: '11:30', inicio2: '13:30', fim2: '17:30', totalHorasDia: 8 },
+          { dia: 'Sexta', ativo: true, inicio1: '07:30', fim1: '11:30', inicio2: '13:30', fim2: '17:30', totalHorasDia: 8 },
+          { dia: 'Sábado', ativo: true, inicio1: '08:00', fim1: '12:00', totalHorasDia: 4 }
+        ]
+      },
+      {
+        profissionalId: 'prof-canutama-4b',
+        profissionalInscricao: '06120',
+        profissionalNome: 'CAMILA DUTRA LIMA',
+        cargo: 'RT SUBSTITUTO',
+        tipo: 'Farmacêutico',
+        situacaoVinculo: 'CONTRATADO',
+        dataInicio: '01/08/2023',
+        cargaHorariaSemanal: 20,
+        horarios: [
+          { dia: 'Segunda', ativo: true, inicio1: '17:30', fim1: '21:30', totalHorasDia: 4 },
+          { dia: 'Terça', ativo: true, inicio1: '17:30', fim1: '21:30', totalHorasDia: 4 },
+          { dia: 'Quarta', ativo: true, inicio1: '17:30', fim1: '21:30', totalHorasDia: 4 },
+          { dia: 'Quinta', ativo: true, inicio1: '17:30', fim1: '21:30', totalHorasDia: 4 },
+          { dia: 'Sexta', ativo: true, inicio1: '17:30', fim1: '21:30', totalHorasDia: 4 }
+        ]
+      }
+    ]
   },
   {
     id: 'emp-canutama-5',
@@ -338,12 +423,34 @@ export const INITIAL_EMPRESAS: Empresa[] = [
     cidade: 'CANUTAMA',
     uf: 'AM',
     cep: '69820-000',
-    rota: 'INTERIOR',
+    rota: 'Canutama',
     telefone: '(97) 3334-1422',
     email: 'drogariasaude1@gmail.com',
     statusFinanceiro: 'Adimplente',
     latitude: -6.53320,
-    longitude: -64.35980
+    longitude: -64.35980,
+    responsavelTecnico: 'MARIA EVA DE OLIVEIRA ALMEIDA',
+    crfResponsavel: 'CRF-AM 2940',
+    responsaveisTecnicos: [
+      {
+        profissionalId: 'prof-canutama-5',
+        profissionalInscricao: '02940',
+        profissionalNome: 'MARIA EVA DE OLIVEIRA ALMEIDA',
+        cargo: 'DIRETOR TÉCNICO',
+        tipo: 'Farmacêutico',
+        situacaoVinculo: 'SÓCIO / PROPRIETÁRIO',
+        dataInicio: '01/01/2013',
+        cargaHorariaSemanal: 44,
+        horarios: [
+          { dia: 'Segunda', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Terça', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Quarta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Quinta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Sexta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Sábado', ativo: true, inicio1: '08:00', fim1: '12:00', totalHorasDia: 4 }
+        ]
+      }
+    ]
   },
   {
     id: 'emp-canutama-6',
@@ -364,12 +471,33 @@ export const INITIAL_EMPRESAS: Empresa[] = [
     cidade: 'CANUTAMA',
     uf: 'AM',
     cep: '69820-000',
-    rota: 'INTERIOR',
+    rota: 'Canutama',
     telefone: '(97) 3334-1423',
     email: 'drogariasaude2@gmail.com',
     statusFinanceiro: 'Adimplente',
     latitude: -6.53280,
-    longitude: -64.35900
+    longitude: -64.35900,
+    responsavelTecnico: 'THIAGO FERREIRA DE ALMEIDA',
+    crfResponsavel: 'CRF-AM 5402',
+    responsaveisTecnicos: [
+      {
+        profissionalId: 'prof-canutama-6',
+        profissionalInscricao: '05402',
+        profissionalNome: 'THIAGO FERREIRA DE ALMEIDA',
+        cargo: 'DIRETOR TÉCNICO',
+        tipo: 'Farmacêutico',
+        situacaoVinculo: 'CONTRATADO',
+        dataInicio: '01/07/2021',
+        cargaHorariaSemanal: 40,
+        horarios: [
+          { dia: 'Segunda', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Terça', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Quarta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Quinta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Sexta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 }
+        ]
+      }
+    ]
   },
   {
     id: 'emp-canutama-7',
@@ -390,12 +518,34 @@ export const INITIAL_EMPRESAS: Empresa[] = [
     cidade: 'CANUTAMA',
     uf: 'AM',
     cep: '69820-000',
-    rota: 'INTERIOR',
+    rota: 'Canutama',
     telefone: '(97) 3334-1990',
     email: 'popularcanutama@gmail.com',
     statusFinanceiro: 'Adimplente',
     latitude: -6.53350,
-    longitude: -64.36010
+    longitude: -64.36010,
+    responsavelTecnico: 'LARISSA CARVALHO PANTOJA',
+    crfResponsavel: 'CRF-AM 4425',
+    responsaveisTecnicos: [
+      {
+        profissionalId: 'prof-canutama-7',
+        profissionalInscricao: '04425',
+        profissionalNome: 'LARISSA CARVALHO PANTOJA',
+        cargo: 'DIRETOR TÉCNICO',
+        tipo: 'Farmacêutico',
+        situacaoVinculo: 'CONTRATADO',
+        dataInicio: '15/02/2020',
+        cargaHorariaSemanal: 44,
+        horarios: [
+          { dia: 'Segunda', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Terça', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Quarta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Quinta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Sexta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Sábado', ativo: true, inicio1: '08:00', fim1: '12:00', totalHorasDia: 4 }
+        ]
+      }
+    ]
   },
   {
     id: 'emp-canutama-8',
@@ -416,19 +566,41 @@ export const INITIAL_EMPRESAS: Empresa[] = [
     cidade: 'CANUTAMA',
     uf: 'AM',
     cep: '69820-000',
-    rota: 'INTERIOR',
+    rota: 'Canutama',
     telefone: '(97) 3334-1670',
     email: 'drogariacarvalho@gmail.com',
     statusFinanceiro: 'Adimplente',
     latitude: -6.53360,
-    longitude: -64.36015
+    longitude: -64.36015,
+    responsavelTecnico: 'PAULO ROBERTO CARVALHO',
+    crfResponsavel: 'CRF-AM 3150',
+    responsaveisTecnicos: [
+      {
+        profissionalId: 'prof-canutama-8',
+        profissionalInscricao: '03150',
+        profissionalNome: 'PAULO ROBERTO CARVALHO',
+        cargo: 'DIRETOR TÉCNICO',
+        tipo: 'Farmacêutico',
+        situacaoVinculo: 'CONTRATADO',
+        dataInicio: '01/10/2018',
+        cargaHorariaSemanal: 44,
+        horarios: [
+          { dia: 'Segunda', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Terça', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Quarta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Quinta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Sexta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Sábado', ativo: true, inicio1: '08:00', fim1: '12:00', totalHorasDia: 4 }
+        ]
+      }
+    ]
   },
   {
     id: 'emp-canutama-9',
     cnpj: '15.670.339/0001-21',
     razaoSocial: 'PONTES E MARTINEZ LTDA',
     nomeFantasia: 'DROGARIA MENOR PRECO',
-    inscricao: '1000634',
+    inscricao: '792000',
     categoria: 'Privada',
     tipoEmpresa: 'PRIVADO',
     tipoEstabelecimento: 'Drogaria',
@@ -436,18 +608,38 @@ export const INITIAL_EMPRESAS: Empresa[] = [
     condicao: 'Regular',
     situacao: 'Definitiva',
     assistenciaPlena: false,
-    dataInscricao: '08/03/2019',
-    endereco: 'AV. BENJAMIN CONSTANT, 848',
-    bairro: 'SAO FRANCISCO',
+    dataInscricao: '11/04/2013',
+    endereco: 'RUA FLORIANO PEIXOTO, 400',
+    bairro: 'CENTRO',
     cidade: 'CANUTAMA',
     uf: 'AM',
     cep: '69820-000',
-    rota: 'INTERIOR',
-    telefone: '(97) 3334-1780',
-    email: 'menorprecocanutama@gmail.com',
+    rota: 'Canutama',
+    telefone: '(97) 3334-1188',
+    email: 'menorpreco.canutama@gmail.com',
     statusFinanceiro: 'Adimplente',
-    latitude: -6.53490,
-    longitude: -64.36150
+    latitude: -6.53340,
+    longitude: -64.36005,
+    responsavelTecnico: 'FRANCIELE MARTINEZ PONTES',
+    crfResponsavel: 'CRF-AM 5890',
+    responsaveisTecnicos: [
+      {
+        profissionalId: 'prof-canutama-9',
+        profissionalInscricao: '05890',
+        profissionalNome: 'FRANCIELE MARTINEZ PONTES',
+        cargo: 'DIRETOR TÉCNICO',
+        tipo: 'Farmacêutico',
+        situacaoVinculo: 'CONTRATADO',
+        dataInicio: '01/06/2022',
+        cargaHorariaSemanal: 40,
+        horarios: [
+          { dia: 'Segunda', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Terça', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Quarta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+          { dia: 'Quinta', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
+        ]
+      }
+    ]
   },
   {
     id: 'emp-1',

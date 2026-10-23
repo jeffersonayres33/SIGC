@@ -108,8 +108,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       {/* Sliding Sidebar Drawer */}
       <aside 
-        className={`fixed top-0 left-0 bottom-0 z-50 w-72 bg-white border-r border-slate-200 text-slate-700 flex flex-col shadow-2xl transition-transform duration-300 ease-out transform lg:translate-x-0 ${
-          isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        className={`fixed top-0 left-0 bottom-0 z-50 w-72 bg-white border-r border-slate-200 text-slate-700 flex flex-col shadow-2xl transition-transform duration-300 ease-out transform ${
+          isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Sidebar Header */}
@@ -348,7 +348,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
 
-          {/* 7. Fiscalização em Campo */}
+          {/* 7. Fiscalização */}
           {checkPerm( 'fiscalizacao') && (
             <div>
               <button
@@ -357,7 +357,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <div className="flex items-center space-x-2">
                   <Compass className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>7. Fiscalização em Campo</span>
+                  <span>7. Fiscalização</span>
                 </div>
                 {openGroups.fiscalizacao ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
               </button>
@@ -365,15 +365,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {openGroups.fiscalizacao && (
                 <div className="ml-3 pl-2.5 border-l-2 border-slate-100 space-y-1 mt-1">
                   <button
-                    onClick={() => handleSelect('fiscalizacao')}
+                    onClick={() => handleSelect('fiscalizacao', 'eletronica')}
                     className={`w-full flex items-center space-x-2 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                      activeSection === 'fiscalizacao'
+                      activeSection === 'fiscalizacao' && (activeSubTab === 'eletronica' || !activeSubTab)
                         ? 'bg-emerald-50 text-emerald-800 font-bold border-l-2 border-emerald-500'
                         : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   >
-                    <Compass className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Fiscais Offline & GPS</span>
+                    <Tablet className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Fiscalização Eletrônica</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleSelect('fiscalizacao', 'termo_inspecao')}
+                    className={`w-full flex items-center space-x-2 px-2.5 py-2 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                      activeSection === 'fiscalizacao' && activeSubTab === 'termo_inspecao'
+                        ? 'bg-emerald-50 text-emerald-800 font-bold border-l-2 border-emerald-500'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    <FileText className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Termos de Inspeção/ Visita</span>
                   </button>
                 </div>
               )}
