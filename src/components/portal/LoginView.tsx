@@ -11,6 +11,7 @@ import {
 import { storageService } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
 import { AuthUser } from '../../types';
+import { SIGCON_LOGO } from '../../constants/assets';
 
 interface LoginViewProps {
   onLoginSuccess: (user: AuthUser) => void;
@@ -50,9 +51,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
         <div className="bg-slate-900 p-8 text-center">
           <img 
-            src="/public/assets/aistudio/Gemini_Generated_Image_ftnohaftnohaftno_8f366e0b.jpeg" 
+            src={SIGCON_LOGO} 
             alt="SIGCON Icon" 
-            className="w-16 h-16 object-contain rounded-2xl mx-auto mb-4 bg-white p-1 border border-slate-700"
+            className="w-16 h-16 object-contain rounded-2xl mx-auto mb-4 bg-white p-1 border border-slate-700 shadow-md"
           />
           <h1 className="text-xl font-extrabold text-white">SIGCON</h1>
           <p className="text-slate-400 text-xs mt-1">Sistema Integrado de Gestão de Conselho</p>

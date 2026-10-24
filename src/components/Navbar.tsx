@@ -21,6 +21,7 @@ import { UserRole, AuthUser } from '../types';
 import { CouncilConfig, storageService } from '../services/storageService';
 import { toastService } from '../services/toastService';
 import { isMasterDeveloper } from '../utils/permissionUtils';
+import { SIGCON_LOGO } from '../constants/assets';
 
 interface NavbarProps {
   currentRole: UserRole;
@@ -157,9 +158,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           <div className="flex items-center space-x-3">
             <img 
-              src="/public/assets/aistudio/Gemini_Generated_Image_ftnohaftnohaftno_8f366e0b.jpeg" 
+              src={SIGCON_LOGO} 
               alt="SIGCON Icon" 
-              className="h-9 w-9 object-contain rounded-xl border border-slate-200 shadow-2xs p-0.5 bg-white"
+              className="h-9 w-9 object-contain rounded-xl border border-slate-200 shadow-2xs p-0.5 bg-white transition-transform hover:scale-105"
             />
             <div>
               <div className="flex items-center space-x-2">

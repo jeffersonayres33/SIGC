@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { X, Printer, Scale, ShieldCheck } from 'lucide-react';
 import { ProcessoCobranca } from '../../types';
 import { storageService } from '../../services/storageService';
+import { openDocumentInPrintTab } from '../../utils/printDocumentInNewTab';
 
 interface CdaModalProps {
   cobranca: ProcessoCobranca | null;
@@ -11,6 +12,22 @@ interface CdaModalProps {
 export const CdaModal: React.FC<CdaModalProps> = ({ cobranca, onClose }) => {
   if (!cobranca) return null;
   const council = storageService.getCouncilConfig();
+  const printableRef = useRef<HTMLDivElement>(null);
+
+  const handlePrint = () => {
+    if (printableRef.current) {
+      openDocumentInPrintTab({
+        title: `CDA Nº ${cobranca.numeroCDA || 'CDA-2026/001'}`,
+        subtitle: `Devedor: ${cobranca.targetNome}`,
+        councilSigla: council.sigla,
+        councilNome: council.nomeCompleto,
+        bodyHtml: printableRef.current.innerHTML,
+        autoPrint: true
+      });
+    } else {
+      window.print();
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
@@ -26,7 +43,7 @@ export const CdaModal: React.FC<CdaModalProps> = ({ cobranca, onClose }) => {
         </div>
 
         {/* Official Printable CDA Document */}
-        <div className="bg-slate-50 text-slate-950 p-6 sm:p-8 rounded-xl shadow-inner border border-slate-200 space-y-4 font-serif">
+        <div ref={printableRef} className="bg-slate-50 text-slate-950 p-6 sm:p-8 rounded-xl shadow-inner border border-slate-200 space-y-4 font-serif">
           <div className="text-center border-b-2 border-slate-900 pb-3">
             <div className="text-[10px] font-bold uppercase tracking-widest text-slate-700">
               REPÚBLICA FEDERATIVA DO BRASIL • AUTARQUIA REGULADORA
@@ -74,8 +91,8 @@ export const CdaModal: React.FC<CdaModalProps> = ({ cobranca, onClose }) => {
             Fechar
           </button>
           <button
-            onClick={() => window.print()}
-            className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs shadow flex items-center space-x-1.5"
+            onClick={handlePrint}
+            className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold text-xs shadow flex items-center space-x-1.5 transition-colors cursor-pointer"
           >
             <Printer className="w-4 h-4" />
             <span>Imprimir Certidão (CDA)</span>

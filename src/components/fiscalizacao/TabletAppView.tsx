@@ -44,17 +44,23 @@ import {
   Copy,
   ExternalLink,
   BatteryCharging,
-  Maximize2
+  Maximize2,
+  ChevronUp,
+  LogOut
 } from 'lucide-react';
 import { TermoFiscalizacao, Empresa, Profissional } from '../../types';
 import { storageService } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
 import { printTermoFiscalizacao } from '../../utils/printTermoFiscalizacao';
 import { ModalEnviarTermoEmail } from './ModalEnviarTermoEmail';
+import { SIGCON_LOGO } from '../../constants/assets';
 
 interface TabletAppViewProps {
   onSwitchToWebAdmin?: () => void;
   onOpenSqlModal?: () => void;
+  onExitFiscalizacao?: () => void;
+  isTopBarHidden?: boolean;
+  onToggleTopBar?: () => void;
 }
 
 type TabletScreen = 
@@ -69,7 +75,10 @@ type TabletScreen =
 
 export const TabletAppView: React.FC<TabletAppViewProps> = ({
   onSwitchToWebAdmin,
-  onOpenSqlModal
+  onOpenSqlModal,
+  onExitFiscalizacao,
+  isTopBarHidden,
+  onToggleTopBar
 }) => {
   const council = storageService.getCouncilConfig();
   const authUser = storageService.getCurrentAuthUser();
@@ -909,41 +918,55 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
       {/* ========================================================================= */}
       {/* 1. TOP TABLET SYSTEM STATUS BAR (Screen 15 Header) */}
       {/* ========================================================================= */}
-      <div className="bg-slate-900 text-slate-100 px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs shadow-md">
-        <div className="flex items-center space-x-3">
-          <div className="flex items-center space-x-1.5 bg-blue-900/60 text-blue-300 px-2 py-0.5 rounded-lg border border-blue-700/50">
-            <Tablet className="w-3.5 h-3.5 text-blue-400" />
-            <span className="font-extrabold tracking-wide">Fiscalização Eletrônica</span>
+      <div className="bg-slate-900 text-slate-100 px-3 sm:px-4 py-2 border-b border-slate-800 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+        {/* Row 1 on mobile / Left group on Desktop */}
+        <div className="flex items-center justify-between sm:justify-start gap-2 min-w-0 w-full sm:w-auto">
+          <div className="flex items-center space-x-1.5 sm:space-x-2 min-w-0">
+            <div className="flex items-center space-x-1.5 bg-blue-900/60 text-blue-300 px-2 py-0.5 rounded-lg border border-blue-700/50 shrink-0">
+              <Tablet className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <span className="font-extrabold tracking-wide text-[11px] sm:text-xs">Fiscalização Eletrônica</span>
+            </div>
+            <span className="font-bold text-slate-200 font-mono tracking-wider shrink-0 text-xs">{council.sigla}</span>
+            <span className="hidden lg:inline text-slate-500">•</span>
+            <span className="hidden lg:inline text-slate-400 truncate text-xs">Rota: <strong className="text-emerald-400">{filtroRota}</strong></span>
           </div>
-          <span className="text-slate-600">|</span>
-          <span className="font-bold text-slate-200 font-mono tracking-wider">{council.sigla}</span>
-          <span className="hidden md:inline text-slate-500">•</span>
-          <span className="hidden md:inline text-slate-400">Rota: <strong className="text-emerald-400">{filtroRota}</strong></span>
+
+          {/* Sair da Fiscalização (Shown here on mobile so it is ALWAYS visible and never cut off) */}
+          {onExitFiscalizacao && (
+            <button
+              onClick={onExitFiscalizacao}
+              className="sm:hidden flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-linear-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 active:from-rose-700 text-white border border-rose-500 shadow-xs shrink-0 cursor-pointer transition-all"
+              title="Sair da Fiscalização Eletrônica e restaurar menus e topos do SIGCON"
+            >
+              <LogOut className="w-3.5 h-3.5 shrink-0 text-rose-100" />
+              <span>Sair</span>
+            </button>
+          )}
         </div>
 
-        {/* Center / Right Tablet Indicators */}
-        <div className="flex items-center space-x-3 sm:space-x-4">
+        {/* Row 2 on mobile / Right group on Desktop */}
+        <div className="flex items-center justify-between sm:justify-end flex-wrap gap-1.5 sm:gap-2.5 w-full sm:w-auto shrink-0">
           {/* GPS Coordinates Indicator */}
           <button 
             onClick={handleCaptureGPS}
-            className="flex items-center space-x-1 bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-[11px] transition-colors"
+            className="flex items-center space-x-1 bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-[10px] sm:text-[11px] transition-colors shrink-0"
             title="Atualizar Coordenadas GPS"
           >
-            <MapPin className={`w-3 h-3 ${isGettingGps ? 'animate-bounce text-amber-400' : 'text-emerald-400'}`} />
-            <span className="font-mono">{gpsCoords ? `${gpsCoords.lat}, ${gpsCoords.lng}` : 'Sem GPS'}</span>
+            <MapPin className={`w-3 h-3 shrink-0 ${isGettingGps ? 'animate-bounce text-amber-400' : 'text-emerald-400'}`} />
+            <span className="font-mono">{gpsCoords ? `${gpsCoords.lat.toFixed(4)}, ${gpsCoords.lng.toFixed(4)}` : 'Sem GPS'}</span>
           </button>
 
           {/* Network status */}
-          <div className={`flex items-center space-x-1 px-2 py-0.5 rounded text-[11px] font-bold ${
+          <div className={`flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-bold shrink-0 ${
             network.isOnline ? 'bg-emerald-950 text-emerald-300 border border-emerald-700' : 'bg-rose-950 text-rose-300 border border-rose-700 animate-pulse'
           }`}>
-            {network.isOnline ? <Wifi className="w-3 h-3 text-emerald-400" /> : <WifiOff className="w-3 h-3 text-rose-400" />}
+            {network.isOnline ? <Wifi className="w-3 h-3 text-emerald-400 shrink-0" /> : <WifiOff className="w-3 h-3 text-rose-400 shrink-0" />}
             <span>{network.isOnline ? 'Online' : 'Offline'}</span>
           </div>
 
           {/* Battery & Time */}
-          <div className="flex items-center space-x-2 text-slate-300 font-mono text-[11px]">
-            <span className="flex items-center"><BatteryCharging className="w-3.5 h-3.5 mr-0.5 text-emerald-400" /> {batteryLevel}</span>
+          <div className="flex items-center space-x-1.5 text-slate-300 font-mono text-[10px] sm:text-[11px] shrink-0">
+            <span className="flex items-center"><BatteryCharging className="w-3 h-3 mr-0.5 text-emerald-400 shrink-0" /> {batteryLevel}</span>
             <span className="text-slate-600">•</span>
             <span className="font-bold">{currentTime}</span>
           </div>
@@ -952,11 +975,23 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
           {onSwitchToWebAdmin && (
             <button
               onClick={onSwitchToWebAdmin}
-              className="hidden sm:flex items-center space-x-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-blue-300 hover:text-blue-200 rounded-lg text-xs font-semibold border border-slate-700 transition-colors cursor-pointer"
+              className="hidden md:flex items-center space-x-1 px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-blue-300 hover:text-blue-200 rounded-lg text-xs font-semibold border border-slate-700 transition-colors cursor-pointer shrink-0"
               title="Acessar Seção Geral de Termos de Inspeção"
             >
-              <ExternalLink className="w-3 h-3" />
-              <span>Termos Lavrados</span>
+              <ExternalLink className="w-3 h-3 shrink-0" />
+              <span>Termos</span>
+            </button>
+          )}
+
+          {/* Sair da Fiscalização (Shown on sm+ screens) */}
+          {onExitFiscalizacao && (
+            <button
+              onClick={onExitFiscalizacao}
+              className="hidden sm:flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-linear-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 active:from-rose-700 text-white border border-rose-500 shadow-xs shrink-0 cursor-pointer transition-all transform hover:scale-102 active:scale-98"
+              title="Sair da Fiscalização Eletrônica e restaurar menus e topos do SIGCON"
+            >
+              <LogOut className="w-3.5 h-3.5 shrink-0 text-rose-100" />
+              <span>Sair da Fiscalização</span>
             </button>
           )}
         </div>
@@ -973,37 +1008,50 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
         {currentScreen === 'menu' && (
           <div className="flex-1 flex flex-col justify-between max-w-4xl mx-auto w-full animate-in fade-in duration-200">
             {/* Tablet App Title Card */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm mb-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center space-x-4">
-                <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-200 p-2 flex items-center justify-center shadow-xs">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-sm mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center space-x-3 sm:space-x-4 min-w-0 flex-1">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-blue-50 border border-blue-200 p-2 flex items-center justify-center shadow-xs shrink-0">
                   <img 
-                    src="/public/assets/aistudio/Gemini_Generated_Image_ftnohaftnohaftno_8f366e0b.jpeg" 
+                    src={SIGCON_LOGO} 
                     alt="SIGCON Gear" 
                     className="w-full h-full object-contain"
                   />
                 </div>
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-blue-100 text-blue-800 tracking-wider">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-blue-100 text-blue-800 tracking-wider shrink-0">
                       Módulo Fiscal de Campo
                     </span>
-                    <span className="text-slate-400 text-xs">•</span>
-                    <span className="text-xs font-semibold text-slate-500">Android / Tablet Offline</span>
+                    <span className="text-slate-400 text-xs hidden sm:inline">•</span>
+                    <span className="text-xs font-semibold text-slate-500 hidden sm:inline">Android / Tablet Offline</span>
                   </div>
-                  <h1 className="text-2xl font-black text-slate-900 tracking-tight mt-0.5">
+                  <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-0.5 break-words">
                     Fiscalização Eletrônica
                   </h1>
-                  <p className="text-sm text-slate-500">
+                  <p className="text-xs sm:text-sm text-slate-500 break-words">
                     {council.sigla} — {council.nomeCompleto}
                   </p>
                 </div>
               </div>
 
-              {/* Fiscal Logado Card */}
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-right sm:min-w-56">
-                <div className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Fiscal Autuante</div>
-                <div className="font-bold text-sm text-slate-900">{authUser?.nome || 'Dr. Marcelo Queiroz'}</div>
-                <div className="text-xs text-blue-700 font-mono font-semibold">Matrícula: {(authUser as any)?.matricula || 'MAT-402'}</div>
+              {/* Fiscal Logado Card & Sair da Fiscalização Button */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-left sm:text-right w-full sm:w-auto sm:min-w-56 shrink-0">
+                  <div className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Fiscal Autuante</div>
+                  <div className="font-bold text-sm text-slate-900 break-words">{authUser?.nome || 'Dr. Marcelo Queiroz'}</div>
+                  <div className="text-xs text-blue-700 font-mono font-semibold">Matrícula: {(authUser as any)?.matricula || 'MAT-402'}</div>
+                </div>
+
+                {onExitFiscalizacao && isTopBarHidden && (
+                  <button
+                    onClick={onExitFiscalizacao}
+                    className="flex items-center justify-center space-x-2 px-4 py-3 bg-linear-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white rounded-xl text-xs font-extrabold shadow-sm hover:shadow-md transition-all cursor-pointer transform hover:-translate-y-0.5 active:translate-y-0 shrink-0"
+                    title="Sair da Fiscalização Eletrônica e restaurar menus e topos do SIGCON"
+                  >
+                    <LogOut className="w-4 h-4 text-white" />
+                    <span className="whitespace-nowrap">Sair da Fiscalização</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1347,9 +1395,9 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                         }
                         setCurrentScreen('ficha_estabelecimento');
                       }}
-                      className="bg-white hover:bg-blue-50/40 border border-slate-200 hover:border-blue-400 rounded-xl p-3.5 shadow-2xs hover:shadow-sm transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
+                      className="bg-white hover:bg-blue-50/40 border border-slate-200 hover:border-blue-400 rounded-xl p-3 sm:p-3.5 shadow-2xs hover:shadow-sm transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3"
                     >
-                      <div className="flex items-start space-x-3">
+                      <div className="flex items-start space-x-3 min-w-0 flex-1 w-full sm:w-auto">
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-mono font-bold text-xs ${
                           fiscalizadoHoje 
                             ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
@@ -1358,39 +1406,39 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                           {emp.inscricao.slice(0, 4)}
                         </div>
 
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="font-mono text-xs font-bold text-slate-500">
+                            <span className="font-mono text-xs font-bold text-slate-500 shrink-0">
                               {emp.inscricao}
                             </span>
                             <span className="text-slate-300">•</span>
-                            <h3 className="font-black text-sm text-slate-900 hover:text-blue-600">
+                            <h3 className="font-black text-sm text-slate-900 hover:text-blue-600 break-words">
                               {emp.nomeFantasia}
                             </h3>
 
                             {fiscalizadoHoje && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0">
                                 <Check className="w-3 h-3 mr-1" /> Fiscalizada Hoje
                               </span>
                             )}
 
                             {temAuto && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300 shrink-0">
                                 <AlertOctagon className="w-3 h-3 mr-1" /> Autuado
                               </span>
                             )}
                           </div>
 
-                          <div className="text-xs text-slate-600 mt-0.5 flex flex-wrap items-center gap-2">
-                            <span>{emp.razaoSocial}</span>
-                            <span className="text-slate-300">•</span>
-                            <span className="font-mono text-slate-500">CNPJ: {emp.cnpj}</span>
+                          <div className="text-xs text-slate-600 mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <span className="break-words font-medium">{emp.razaoSocial}</span>
+                            <span className="text-slate-300 hidden sm:inline">•</span>
+                            <span className="font-mono text-slate-500 shrink-0">CNPJ: {emp.cnpj}</span>
                           </div>
 
-                          <div className="text-[11px] text-slate-500 mt-1 flex flex-wrap items-center gap-2">
-                            <span className="flex items-center"><MapPin className="w-3 h-3 mr-0.5 text-slate-400" /> {emp.endereco || 'Centro'}, {emp.bairro || 'Centro'} - {emp.cidade}</span>
-                            <span className="text-slate-300">•</span>
-                            <span>RT: <strong className="text-slate-700">{emp.responsavelTecnico || 'Não averbado'}</strong></span>
+                          <div className="text-[11px] text-slate-500 mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <span className="flex items-center break-words"><MapPin className="w-3 h-3 mr-0.5 text-slate-400 shrink-0" /> {emp.endereco || 'Centro'}, {emp.bairro || 'Centro'} - {emp.cidade}</span>
+                            <span className="text-slate-300 hidden sm:inline">•</span>
+                            <span className="break-words">RT: <strong className="text-slate-700">{emp.responsavelTecnico || 'Não averbado'}</strong></span>
                           </div>
                         </div>
                       </div>
@@ -1418,27 +1466,27 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
         {currentScreen === 'ficha_estabelecimento' && selectedEmpresa && (
           <div className="flex-1 flex flex-col space-y-4 animate-in fade-in duration-150">
             {/* Top Bar with Back and Actions */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex items-center justify-between">
-              <div className="flex items-center space-x-3">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="flex items-center space-x-3 min-w-0 flex-1">
                 <button
                   onClick={() => setCurrentScreen('estabelecimentos')}
-                  className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                  className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer shrink-0"
                   title="Voltar à lista"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shrink-0">
                       Inscrição: {selectedEmpresa.inscricao}
                     </span>
-                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase shrink-0 ${
                       selectedEmpresa.condicao === 'Regular' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                     }`}>
                       {selectedEmpresa.condicao || 'Regular'}
                     </span>
                   </div>
-                  <h1 className="text-xl font-black text-slate-900 tracking-tight mt-0.5">
+                  <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight mt-0.5 break-words">
                     {selectedEmpresa.nomeFantasia}
                   </h1>
                 </div>
@@ -1447,7 +1495,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
               {/* Primary Action: Novo Termo de Inspeção */}
               <button
                 onClick={() => setCurrentScreen('novo_termo')}
-                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold flex items-center space-x-2 shadow-xs transition-colors cursor-pointer"
+                className="w-full sm:w-auto justify-center px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold flex items-center space-x-2 shadow-xs transition-colors cursor-pointer shrink-0"
               >
                 <Plus className="w-4 h-4" />
                 <span>Iniciar Termo de Inspeção</span>
@@ -1754,7 +1802,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                       Horário de Assistência Técnica Declarado pelo Farmacêutico
                     </h3>
 
-                    <div className="overflow-hidden border border-slate-200 rounded-xl">
+                    <div className="overflow-x-auto border border-slate-200 rounded-xl">
                       <table className="w-full text-xs text-left">
                         <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold">
                           <tr>
@@ -1803,35 +1851,35 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
         {currentScreen === 'novo_termo' && selectedEmpresa && (
           <div className="flex-1 flex flex-col space-y-4 max-w-4xl mx-auto w-full pb-10 animate-in fade-in duration-150">
             {/* Header da Lavratura do Termo */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex items-center justify-between">
-              <div className="flex items-center space-x-3">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="flex items-center space-x-3 min-w-0 flex-1">
                 <button
                   onClick={() => setCurrentScreen('ficha_estabelecimento')}
-                  className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                  className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer shrink-0"
                   title="Cancelar e Voltar"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-mono text-xs font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shrink-0">
                       {selectedEmpresa.inscricao}
                     </span>
                     <span className="text-xs text-slate-400">•</span>
-                    <span className="text-xs text-slate-600 font-mono">CNPJ: {selectedEmpresa.cnpj}</span>
+                    <span className="text-xs text-slate-600 font-mono shrink-0">CNPJ: {selectedEmpresa.cnpj}</span>
                   </div>
-                  <h1 className="text-lg font-black text-slate-900 mt-0.5">
+                  <h1 className="text-base sm:text-lg font-black text-slate-900 mt-0.5 break-words">
                     {selectedEmpresa.nomeFantasia}
                   </h1>
                 </div>
               </div>
 
               {/* GPS Coordenadas & Fiscal */}
-              <div className="text-right text-xs">
-                <div className="font-bold text-slate-800">{authUser?.nome || 'Dr. Marcelo Queiroz'}</div>
-                <div className="text-[11px] font-mono text-emerald-700 flex items-center justify-end space-x-1">
-                  <MapPin className="w-3 h-3 text-emerald-600" />
-                  <span>{gpsCoords ? `${gpsCoords.lat}, ${gpsCoords.lng}` : 'Coordenadas locais'}</span>
+              <div className="text-left sm:text-right text-xs bg-slate-50 sm:bg-transparent p-2 sm:p-0 rounded-xl border sm:border-0 border-slate-200 shrink-0">
+                <div className="font-bold text-slate-800 break-words">{authUser?.nome || 'Dr. Marcelo Queiroz'}</div>
+                <div className="text-[11px] font-mono text-emerald-700 flex items-center sm:justify-end space-x-1 mt-0.5">
+                  <MapPin className="w-3 h-3 text-emerald-600 shrink-0" />
+                  <span className="truncate">{gpsCoords ? `${gpsCoords.lat}, ${gpsCoords.lng}` : 'Coordenadas locais'}</span>
                 </div>
               </div>
             </div>
@@ -2034,10 +2082,10 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
 
               {notificacaoAtiva && (
                 <div className="space-y-3 animate-in fade-in duration-150">
-                  <div className="flex items-center justify-between text-[11px] text-amber-800 font-medium">
-                    <span>Texto regulatório oficial (configurável no Painel do Administrador):</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-amber-800 font-medium gap-1.5">
+                    <span className="break-words">Texto regulatório oficial (configurável no Painel do Administrador):</span>
                     {numeroNotificacao && (
-                      <span className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-amber-200">
+                      <span className="font-mono font-bold bg-white px-2 py-0.5 rounded border border-amber-200 self-start sm:self-auto shrink-0">
                         Sequencial Anti-Duplicidade: {numeroNotificacao}
                       </span>
                     )}
@@ -2124,41 +2172,41 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
             </div>
 
             {/* SEÇÃO 4: AUTO DE INFRAÇÃO / AUTUAÇÃO (Screen 7, 8) */}
-            <div className={`rounded-2xl border p-5 transition-colors shadow-2xs ${
+            <div className={`rounded-2xl border p-4 sm:p-5 transition-colors shadow-2xs ${
               autuacaoAtiva ? 'bg-rose-50/40 border-rose-300' : 'bg-white border-slate-200'
             }`}>
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-3">
-                <div className="flex items-center space-x-2">
-                  <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 font-bold flex items-center justify-center text-[10px]">4</span>
-                  <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-2 mb-3 gap-2.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 font-bold flex items-center justify-center text-[10px] shrink-0">4</span>
+                  <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider break-words">
                     Auto de Infração (Autuação)
                   </h2>
                   {numeroAutoInfracao && (
-                    <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-md bg-rose-100 text-rose-900 border border-rose-300">
+                    <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-md bg-rose-100 text-rose-900 border border-rose-300 shrink-0">
                       Nº {numeroAutoInfracao}
                     </span>
                   )}
                 </div>
 
-                <div className="flex items-center space-x-3">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={handleVerificarHorariosVagos}
-                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-2xs transition-colors cursor-pointer"
+                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-2xs transition-colors cursor-pointer shrink-0"
                     title="Verificar horários vagos conforme módulo de assistência por município/ramo e restrições de bloqueio"
                   >
-                    <Clock className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Verificar Horários Vagos</span>
+                    <Clock className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span className="whitespace-nowrap">Verificar Horários Vagos</span>
                   </button>
 
-                  <label className="flex items-center space-x-2 cursor-pointer">
+                  <label className="flex items-center space-x-2 cursor-pointer shrink-0">
                     <input
                       type="checkbox"
                       checked={autuacaoAtiva}
                       onChange={(e) => handleToggleAutuacao(e.target.checked)}
                       className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500"
                     />
-                    <span className="text-xs font-bold text-rose-900">Lavrar Auto de Infração</span>
+                    <span className="text-xs font-bold text-rose-900 whitespace-nowrap">Lavrar Auto de Infração</span>
                   </label>
                 </div>
               </div>
@@ -2335,27 +2383,27 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                 </div>
 
                 {/* 2 ÍCONES DE AÇÃO SOLICITADOS: LIMPAR DADOS & PREENCHER COM RT TITULAR */}
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {/* Ícone 1: Preencher com dados do Farmacêutico RT Titular Selecionado */}
                   <button
                     type="button"
                     onClick={handlePreencherComDadosRt}
-                    className="px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer"
+                    className="px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer shrink-0"
                     title="Preencher todos os campos com os dados do Farmacêutico RT Titular Selecionado"
                   >
                     <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-                    <span className="text-[11px]">Puxar RT Titular</span>
+                    <span className="text-[11px] whitespace-nowrap">Puxar RT Titular</span>
                   </button>
 
                   {/* Ícone 2: Limpar dados */}
                   <button
                     type="button"
                     onClick={handleLimparDadosAtendente}
-                    className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 border border-slate-200 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer"
+                    className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 border border-slate-200 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer shrink-0"
                     title="Limpar campos: Nome completo, RG, CPF e Inscrição"
                   >
                     <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
-                    <span className="text-[11px]">Limpar Campos</span>
+                    <span className="text-[11px] whitespace-nowrap">Limpar Campos</span>
                   </button>
                 </div>
               </div>
@@ -2426,38 +2474,38 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
             </div>
 
             {/* SEÇÃO 6: ASSINATURAS DIGITAIS NA TELA DO TABLET (Screen 9) */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-2xs space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-2xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-2 gap-2">
                 <div className="flex items-center space-x-2">
-                  <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-[10px]">6</span>
-                  <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-[10px] shrink-0">6</span>
+                  <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider break-words">
                     Assinaturas Digitais na Tela do Tablet
                   </h2>
                 </div>
 
-                <label className="flex items-center space-x-2 cursor-pointer">
+                <label className="flex items-center space-x-2 cursor-pointer self-start sm:self-auto shrink-0">
                   <input
                     type="checkbox"
                     checked={recusouAssinar}
                     onChange={(e) => setRecusouAssinar(e.target.checked)}
                     className="w-4 h-4 text-rose-600 rounded border-slate-300"
                   />
-                  <span className="text-xs font-bold text-rose-700">Recusou-se a assinar</span>
+                  <span className="text-xs font-bold text-rose-700 whitespace-nowrap">Recusou-se a assinar</span>
                 </label>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* 1. Assinatura Estabelecimento / Farmacêutico (Opcional) */}
                 <div className="border border-slate-200 rounded-xl p-3 bg-slate-50 flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-800 flex items-center space-x-1">
-                      <span>Assinatura Estabelecimento/Farmacêutico</span>
-                      <span className="text-[10px] font-normal text-slate-500">(Opcional)</span>
+                  <div className="flex flex-wrap items-center justify-between gap-1 mb-2">
+                    <span className="text-xs font-bold text-slate-800 flex flex-wrap items-center gap-1 min-w-0">
+                      <span className="break-words">Assinatura Estabelecimento/Farmacêutico</span>
+                      <span className="text-[10px] font-normal text-slate-500 shrink-0">(Opcional)</span>
                     </span>
                     <button
                       type="button"
                       onClick={clearCanvasNotificado}
-                      className="text-[11px] text-rose-600 hover:text-rose-800 font-bold flex items-center space-x-1"
+                      className="text-[11px] text-rose-600 hover:text-rose-800 font-bold flex items-center space-x-1 shrink-0 ml-auto"
                     >
                       <RotateCcw className="w-3 h-3" />
                       <span>Limpar</span>
@@ -2484,31 +2532,31 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                         onTouchEnd={stopDrawingNotificado}
                       />
                       {!signatureNotificadoUrl && (
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-slate-300 text-xs font-bold">
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-slate-300 text-xs font-bold text-center px-2">
                           Assinatura opcional (deixar em branco se ausente)
                         </div>
                       )}
                     </div>
                   )}
-                  <span className="text-[10px] text-slate-400 mt-1.5 block">
+                  <span className="text-[10px] text-slate-400 mt-1.5 block break-words">
                     {atendenteNome || 'Representante do Estabelecimento'} ({atendenteCargo})
                   </span>
                 </div>
 
                 {/* 2. Assinatura do Fiscal Autuante (Obrigatório) */}
                 <div className="border border-slate-200 rounded-xl p-3 bg-slate-50 flex flex-col justify-between">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-800 flex items-center space-x-1">
-                      <span>Assinatura do Fiscal do Conselho</span>
-                      <span className="text-rose-600 font-bold">*</span>
-                      <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
+                  <div className="flex flex-wrap items-center justify-between gap-1 mb-2">
+                    <span className="text-xs font-bold text-slate-800 flex flex-wrap items-center gap-1 min-w-0">
+                      <span className="break-words">Assinatura do Fiscal</span>
+                      <span className="text-rose-600 font-bold shrink-0">*</span>
+                      <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200 shrink-0">
                         Obrigatório
                       </span>
                     </span>
                     <button
                       type="button"
                       onClick={clearCanvasFiscal}
-                      className="text-[11px] text-rose-600 hover:text-rose-800 font-bold flex items-center space-x-1"
+                      className="text-[11px] text-rose-600 hover:text-rose-800 font-bold flex items-center space-x-1 shrink-0 ml-auto"
                     >
                       <RotateCcw className="w-3 h-3" />
                       <span>Limpar</span>
@@ -2530,12 +2578,12 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                       onTouchEnd={stopDrawingFiscal}
                     />
                     {!signatureFiscalUrl && (
-                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-slate-400 text-xs font-bold">
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-slate-400 text-xs font-bold text-center px-2">
                         Desenhe a assinatura do Fiscal aqui *
                       </div>
                     )}
                   </div>
-                  <span className="text-[10px] text-slate-400 mt-1.5 block">
+                  <span className="text-[10px] text-slate-400 mt-1.5 block break-words">
                     {authUser?.nome || 'Dr. Marcelo Queiroz'} — Fiscal do {council.sigla}
                   </span>
                 </div>
@@ -2543,11 +2591,11 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
             </div>
 
             {/* BOTÕES DE GRAVAR E CONCLUIR */}
-            <div className="flex items-center justify-end space-x-3 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2.5 pt-2">
               <button
                 type="button"
                 onClick={() => setCurrentScreen('ficha_estabelecimento')}
-                className="px-4 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                className="w-full sm:w-auto text-center px-4 py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
               >
                 Cancelar
               </button>
@@ -2555,7 +2603,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
               <button
                 type="button"
                 onClick={handleSalvarTermo}
-                className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-md flex items-center space-x-2 transition-all cursor-pointer"
+                className="w-full sm:w-auto justify-center px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-black shadow-md flex items-center space-x-2 transition-all cursor-pointer"
               >
                 <Save className="w-4 h-4" />
                 <span>Salvar e Gerar Termo de Inspeção</span>
@@ -2817,10 +2865,17 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                         <div><strong>Fiscal:</strong> {selectedTermoParaVisualizar.fiscalNome} ({selectedTermoParaVisualizar.fiscalMatricula})</div>
                       </div>
 
+                      {selectedTermoParaVisualizar.observacao && (
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 text-xs">
+                          <strong className="block mb-1 text-slate-900 font-bold">Relato Fiscal / Observações:</strong>
+                          <div className="whitespace-pre-wrap leading-relaxed text-slate-700 font-sans">{selectedTermoParaVisualizar.observacao}</div>
+                        </div>
+                      )}
+
                       {selectedTermoParaVisualizar.notificacaoAtiva && (
                         <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs">
-                          <strong>Notificação Regulamentar:</strong>
-                          <p className="mt-1">{selectedTermoParaVisualizar.notificacaoTexto}</p>
+                          <strong className="block mb-1 font-bold">Notificação Regulamentar:</strong>
+                          <div className="whitespace-pre-wrap leading-relaxed text-amber-950 font-sans">{selectedTermoParaVisualizar.notificacaoTexto}</div>
                         </div>
                       )}
 

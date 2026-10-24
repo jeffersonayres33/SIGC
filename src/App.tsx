@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Navbar } from './components/Navbar';
 import { Sidebar, MainSection } from './components/Sidebar';
 import { DashboardView } from './components/dashboard/DashboardView';
@@ -53,6 +53,30 @@ export default function App() {
   const [boletoLancamento, setBoletoLancamento] = useState<LancamentoFinanceiro | null>(null);
   const [cdaProcesso, setCdaProcesso] = useState<ProcessoCobranca | null>(null);
 
+  // Immersive topbar state for Fiscalização Eletrônica
+  const [isTopBarHidden, setIsTopBarHidden] = useState(false);
+  const isFiscalizacaoEletronica = activeSection === 'fiscalizacao' && fiscalizacaoSubTab === 'eletronica';
+  const prevIsEletronicaRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    // When transitioning into Fiscalização Eletrônica, automatically slide topbars up
+    if (isFiscalizacaoEletronica && !prevIsEletronicaRef.current) {
+      setIsTopBarHidden(true);
+    } else if (!isFiscalizacaoEletronica && prevIsEletronicaRef.current) {
+      setIsTopBarHidden(false);
+    }
+    prevIsEletronicaRef.current = isFiscalizacaoEletronica;
+  }, [isFiscalizacaoEletronica]);
+
+  const handleExitFiscalizacao = () => {
+    if (isTopBarHidden) {
+      setIsTopBarHidden(false);
+      toastService.info('Topos do SIGCON Exibidos', 'Barras superiores de navegação restauradas.');
+    } else {
+      setActiveSection('dashboard');
+    }
+  };
+
   useEffect(() => {
     let lastLength = storageService.getSyncErrors().length;
     const unsubscribe = storageService.subscribe(() => {
@@ -106,32 +130,40 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
-      {/* Top Navigation */}
-      <Navbar
-        currentRole={currentUserRole}
-        onRoleChange={(role) => {
-          setCurrentUserRole(role);
-          if (!hasModulePermission(authUser, activeSection, role)) {
-            setActiveSection(getDefaultAllowedSection(authUser, role));
-          }
-        }}
-        networkStatus={networkStatus}
-        onSyncOffline={handleSyncOffline}
-        activeModule={activeSection}
-        councilConfig={councilConfig}
-        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-        onOpenSettings={() => {
-          setActiveSection('configuracoes');
-          setConfigTab('geral');
-        }}
-        onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
-        authUser={authUser}
-        onLogout={() => {
-          storageService.logout();
-          setAuthUser(null);
-          toastService.info('Sessão Encerrada', 'Você saiu do sistema com segurança.');
-        }}
-      />
+      {/* Top Navigation with smooth slide-up / slide-down animation */}
+      <div 
+        className={`transition-all duration-500 ease-in-out transform origin-top overflow-hidden z-30 shrink-0 ${
+          isTopBarHidden && isFiscalizacaoEletronica
+            ? '-translate-y-full max-h-0 opacity-0 pointer-events-none' 
+            : 'translate-y-0 max-h-48 opacity-100'
+        }`}
+      >
+        <Navbar
+          currentRole={currentUserRole}
+          onRoleChange={(role) => {
+            setCurrentUserRole(role);
+            if (!hasModulePermission(authUser, activeSection, role)) {
+              setActiveSection(getDefaultAllowedSection(authUser, role));
+            }
+          }}
+          networkStatus={networkStatus}
+          onSyncOffline={handleSyncOffline}
+          activeModule={activeSection}
+          councilConfig={councilConfig}
+          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          onOpenSettings={() => {
+            setActiveSection('configuracoes');
+            setConfigTab('geral');
+          }}
+          onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+          authUser={authUser}
+          onLogout={() => {
+            storageService.logout();
+            setAuthUser(null);
+            toastService.info('Sessão Encerrada', 'Você saiu do sistema com segurança.');
+          }}
+        />
+      </div>
 
       {/* Main Workspace Body */}
       <div className="flex-1 flex overflow-hidden relative">
@@ -166,8 +198,12 @@ export default function App() {
         />
 
         {/* Content Area */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 bg-slate-50">
-          <div className="max-w-7xl mx-auto">
+        <main className={`flex-1 overflow-y-auto bg-slate-50 transition-all duration-300 ${
+          isFiscalizacaoEletronica && isTopBarHidden 
+            ? 'p-0' 
+            : 'p-4 sm:p-6 lg:p-8'
+        }`}>
+          <div className={isFiscalizacaoEletronica && isTopBarHidden ? 'w-full' : 'max-w-7xl mx-auto'}>
             {!hasModulePermission(authUser, activeSection) ? (
               <AccessDeniedView
                 attemptedSection={activeSection}
@@ -208,6 +244,9 @@ export default function App() {
                   <FiscalizacaoView 
                     initialTab={fiscalizacaoSubTab}
                     onTabChange={setFiscalizacaoSubTab}
+                    onExitFiscalizacao={handleExitFiscalizacao}
+                    isTopBarHidden={isTopBarHidden}
+                    onToggleTopBar={() => setIsTopBarHidden(prev => !prev)}
                   />
                 )}
 

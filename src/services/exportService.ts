@@ -153,42 +153,24 @@ export function exportToPDF({
   doc.save(`${filename}.pdf`);
 }
 
-export function printElement(elementId: string) {
+import { openDocumentInPrintTab } from '../utils/printDocumentInNewTab';
+
+export function printElement(elementId: string, title: string = 'Impressão Oficial - SIGCON') {
   const elem = document.getElementById(elementId);
   if (!elem) {
     window.print();
     return;
   }
 
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    window.print();
-    return;
-  }
-
-  printWindow.document.write(`
-    <html>
-      <head>
-        <title>Impressão Oficial - SISCON Cloud</title>
-        <style>
-          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 24px; color: #111; }
-          table { width: 100%; border-collapse: collapse; margin-top: 16px; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
-          th { background-color: #f2f2f2; font-weight: bold; }
-          .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 20px; }
-          .footer { margin-top: 30px; font-size: 10px; text-align: center; color: #666; }
-          @page { margin: 1.5cm; }
-        </style>
-      </head>
-      <body>
-        ${elem.innerHTML}
-      </body>
-    </html>
-  `);
-  printWindow.document.close();
-  printWindow.focus();
-  setTimeout(() => {
-    printWindow.print();
-    printWindow.close();
-  }, 300);
+  openDocumentInPrintTab({
+    title,
+    subtitle: 'Relatório Oficial do Sistema',
+    bodyHtml: elem.innerHTML,
+    customStyles: `
+      table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+      th, td { border: 1px solid #cbd5e1; padding: 8px; text-align: left; font-size: 11px; }
+      th { background-color: #f1f5f9; font-weight: bold; }
+    `,
+    autoPrint: true
+  });
 }

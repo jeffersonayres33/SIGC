@@ -529,22 +529,22 @@ export const TermosInspecaoView: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden max-h-[92vh]">
             {/* Header */}
-            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-600/30 border border-blue-500/50 flex items-center justify-center text-blue-400">
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-slate-900 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800">
+              <div className="flex items-center space-x-3 min-w-0 flex-1">
+                <div className="w-10 h-10 rounded-xl bg-blue-600/30 border border-blue-500/50 flex items-center justify-center text-blue-400 shrink-0">
                   <FileText className="w-5 h-5" />
                 </div>
-                <div>
-                  <h2 className="text-base font-black text-white flex items-center space-x-2">
-                    <span>Termo de Inspeção nº {selectedTermoForDetails.numeroTermo}</span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-sm sm:text-base font-black text-white flex items-center space-x-2">
+                    <span className="break-words">Termo de Inspeção nº {selectedTermoForDetails.numeroTermo}</span>
                   </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="text-xs text-slate-400 mt-0.5 break-words">
                     {selectedTermoForDetails.empresaNome} • {selectedTermoForDetails.cidade}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center flex-wrap gap-2 justify-end shrink-0">
                 <button
                   onClick={() => printTermoFiscalizacao(selectedTermoForDetails, council)}
                   className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-lg flex items-center space-x-1.5 cursor-pointer"
@@ -565,7 +565,7 @@ export const TermosInspecaoView: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setSelectedTermoForDetails(null)}
-                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer"
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 cursor-pointer ml-1"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -573,7 +573,7 @@ export const TermosInspecaoView: React.FC = () => {
             </div>
 
             {/* Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 text-xs text-slate-700">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 text-xs text-slate-700">
               {/* Card Identificação */}
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                 <h3 className="font-bold text-slate-900 uppercase tracking-wider text-[11px] mb-2 flex items-center">
@@ -601,9 +601,11 @@ export const TermosInspecaoView: React.FC = () => {
                   <div><strong>Quem Atendeu:</strong> {selectedTermoForDetails.atendenteNome || selectedTermoForDetails.nomeSignatarioNotificado || 'Responsável'}</div>
                   <div><strong>Cargo do Atendente:</strong> {selectedTermoForDetails.atendenteCargo || selectedTermoForDetails.cargoSignatarioNotificado || '---'}</div>
                   {selectedTermoForDetails.observacao && (
-                    <div className="sm:col-span-2 mt-1">
-                      <strong>Relato Fiscal:</strong>
-                      <p className="mt-0.5 text-slate-600">{selectedTermoForDetails.observacao}</p>
+                    <div className="sm:col-span-2 mt-2 pt-2 border-t border-slate-200">
+                      <strong className="block text-slate-800 font-bold mb-1">Relato Fiscal:</strong>
+                      <div className="text-slate-700 whitespace-pre-wrap leading-relaxed font-sans bg-white p-2.5 rounded-lg border border-slate-200 text-xs">
+                        {selectedTermoForDetails.observacao}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -616,7 +618,7 @@ export const TermosInspecaoView: React.FC = () => {
                     <AlertTriangle className="w-4 h-4 text-amber-600" />
                     <span>Notificação nº {selectedTermoForDetails.numeroNotificacao || 'S/N'}</span>
                   </div>
-                  <p className="mt-1 text-xs">{selectedTermoForDetails.notificacaoTexto}</p>
+                  <div className="mt-2 text-xs whitespace-pre-wrap leading-relaxed font-sans">{selectedTermoForDetails.notificacaoTexto}</div>
                 </div>
               )}
 

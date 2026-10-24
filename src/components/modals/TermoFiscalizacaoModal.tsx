@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { TermoFiscalizacao } from '../../types';
 import { storageService } from '../../services/storageService';
+import { printTermoFiscalizacao } from '../../utils/printTermoFiscalizacao';
 
 interface TermoFiscalizacaoModalProps {
   termo: TermoFiscalizacao | null;
@@ -301,8 +302,8 @@ export const TermoFiscalizacaoModal: React.FC<TermoFiscalizacaoModalProps> = ({
             </button>
 
             <button
-              onClick={() => window.print()}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs shadow-xs flex items-center space-x-1.5 transition-colors"
+              onClick={() => printTermoFiscalizacao(termo, council)}
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl text-xs shadow-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               <span>Imprimir Termo / Auto</span>

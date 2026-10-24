@@ -1,8 +1,15 @@
 @import "tailwindcss";
 
 @layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    letter-spacing: -0.011em;
   }
   
   code, kbd, samp, pre {
@@ -10,23 +17,67 @@
   }
 }
 
-/* Custom modern scrollbar for clean light UI */
+/* FinancaPessoalDJ Inspired Modern Visual Enhancements */
+@keyframes fadeInSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInSlideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Glassmorphism surfaces */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.glass-panel-dark {
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Elevated interactive buttons with micro-press */
+.btn-elegant {
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-elegant:hover {
+  transform: translateY(-1px);
+}
+
+.btn-elegant:active {
+  transform: translateY(0.5px) scale(0.99);
+}
+
+/* Custom modern scrollbar for clean UI */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(241, 245, 249, 0.9);
+  background: rgba(241, 245, 249, 0.7);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(203, 213, 225, 0.9);
+  background: rgba(203, 213, 225, 0.8);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.9);
+  background: rgba(148, 163, 184, 0.95);
 }
 
 /* Print styles for official certificates and terms */

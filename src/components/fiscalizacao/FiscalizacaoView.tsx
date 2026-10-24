@@ -5,11 +5,17 @@ import { TermosInspecaoView } from './TermosInspecaoView';
 interface FiscalizacaoViewProps {
   initialTab?: 'eletronica' | 'termo_inspecao';
   onTabChange?: (tab: 'eletronica' | 'termo_inspecao') => void;
+  onExitFiscalizacao?: () => void;
+  isTopBarHidden?: boolean;
+  onToggleTopBar?: () => void;
 }
 
 export const FiscalizacaoView: React.FC<FiscalizacaoViewProps> = ({
   initialTab = 'eletronica',
-  onTabChange
+  onTabChange,
+  onExitFiscalizacao,
+  isTopBarHidden,
+  onToggleTopBar
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'eletronica' | 'termo_inspecao'>(initialTab);
 
@@ -40,6 +46,9 @@ export const FiscalizacaoView: React.FC<FiscalizacaoViewProps> = ({
     <div className="relative animate-in fade-in duration-150">
       <TabletAppView 
         onSwitchToWebAdmin={() => handleTabSelect('termo_inspecao')}
+        onExitFiscalizacao={onExitFiscalizacao}
+        isTopBarHidden={isTopBarHidden}
+        onToggleTopBar={onToggleTopBar}
       />
     </div>
   );

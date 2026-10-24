@@ -23,6 +23,7 @@ import { storageService, CouncilConfig } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
 import { maskCPF, maskCNPJ, validateCPF, validateCNPJ } from '../../utils/documentUtils';
 import { AuthUser, UserRole } from '../../types';
+import { SIGCON_LOGO } from '../../constants/assets';
 
 interface LoginViewProps {
   onLoginSuccess: (user: AuthUser) => void;
@@ -350,9 +351,9 @@ END $$;
         {/* Header Oficial do Conselho com Logo */}
         <div className="p-6 text-center border-b border-slate-100 bg-white">
           <img 
-            src="/public/assets/aistudio/Gemini_Generated_Image_ftnohaftnohaftno_8f366e0b.jpeg" 
+            src={SIGCON_LOGO} 
             alt="SIGCON Icon" 
-            className="h-14 w-14 object-contain mx-auto mb-3 shadow-2xs rounded-2xl p-1 bg-white border border-slate-200"
+            className="h-14 w-14 object-contain mx-auto mb-3 shadow-sm rounded-2xl p-1 bg-white border border-slate-200 transition-transform hover:scale-105"
           />
           <h1 className="text-xl font-extrabold tracking-tight text-slate-900">
             SIGCON <span className="text-blue-600 font-semibold text-sm">Enterprise</span>

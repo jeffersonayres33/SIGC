@@ -29,6 +29,7 @@ import {
 import { UserRole, AuthUser } from '../types';
 import { CouncilConfig, storageService } from '../services/storageService';
 import { hasModulePermission, isMasterDeveloper } from '../utils/permissionUtils';
+import { SIGCON_LOGO } from '../constants/assets';
 
 export type MainSection = 
   | 'dashboard'
@@ -116,9 +117,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
           <div className="flex items-center space-x-2.5">
             <img 
-              src="/public/assets/aistudio/Gemini_Generated_Image_ftnohaftnohaftno_8f366e0b.jpeg" 
+              src={SIGCON_LOGO} 
               alt="SIGCON Icon" 
-              className="h-8 w-8 object-contain rounded-lg p-0.5 bg-white border border-slate-200"
+              className="h-8 w-8 object-contain rounded-xl p-0.5 bg-white border border-slate-200 shadow-2xs"
             />
             <div>
               <div className="font-bold text-xs text-slate-900 leading-tight flex items-center space-x-1.5">

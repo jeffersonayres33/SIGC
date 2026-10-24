@@ -301,82 +301,82 @@ export const AssinaturaTabletModal: React.FC<AssinaturaTabletModalProps> = ({
     <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
       <div className="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full max-h-[94vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         {/* Modal Header */}
-        <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shadow-xs">
+        <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
+          <div className="flex items-center space-x-3 min-w-0 flex-1">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shadow-xs shrink-0">
               <Tablet className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h2 className="text-sm sm:text-base font-bold text-slate-900">
-                  Captura de Assinatura Digital no Tablet
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <h2 className="text-xs sm:text-base font-bold text-slate-900 break-words">
+                  Captura de Assinatura Digital
                 </h2>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+                <span className="px-1.5 sm:px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9px] sm:text-[10px] font-bold shrink-0">
                   Campo / Offline
                 </span>
               </div>
-              <p className="text-xs text-slate-500">
+              <p className="text-[11px] sm:text-xs text-slate-500 truncate mt-0.5">
                 {termo.empresaNome} • {termo.numeroTermo} {termo.numeroAutoInfracao ? `(${termo.numeroAutoInfracao})` : ''}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors"
+            className="p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200 transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab Navigation: Notificado vs Fiscal */}
-        <div className="flex border-b border-slate-200 bg-white px-5 pt-3 gap-2">
+        <div className="flex overflow-x-auto border-b border-slate-200 bg-white px-3 sm:px-5 pt-3 gap-2">
           <button
             type="button"
             onClick={() => setActiveSigner('notificado')}
-            className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold rounded-t-xl border-b-2 transition-all ${
+            className={`flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs font-bold rounded-t-xl border-b-2 transition-all shrink-0 whitespace-nowrap ${
               activeSigner === 'notificado'
                 ? 'border-purple-600 text-purple-700 bg-purple-50/50'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <UserCheck className="w-4 h-4" />
-            <span>1. Assinatura do Notificado / Profissional / Representante</span>
+            <UserCheck className="w-4 h-4 shrink-0" />
+            <span>1. Assinatura do Notificado</span>
             {assinaturaNotificadoUrl && (
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 ml-1" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 ml-1 shrink-0" />
             )}
             {tipoSignatario === 'Recusa de Assinatura' && (
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 ml-1" />
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 ml-1 shrink-0" />
             )}
           </button>
 
           <button
             type="button"
             onClick={() => setActiveSigner('fiscal')}
-            className={`flex items-center space-x-2 px-4 py-2.5 text-xs font-bold rounded-t-xl border-b-2 transition-all ${
+            className={`flex items-center space-x-1.5 sm:space-x-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs font-bold rounded-t-xl border-b-2 transition-all shrink-0 whitespace-nowrap ${
               activeSigner === 'fiscal'
                 ? 'border-purple-600 text-purple-700 bg-purple-50/50'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            <ShieldCheck className="w-4 h-4" />
+            <ShieldCheck className="w-4 h-4 shrink-0" />
             <span>2. Assinatura do Agente Fiscal</span>
             {assinaturaFiscalUrl && (
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 ml-1" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 ml-1 shrink-0" />
             )}
           </button>
         </div>
 
         {/* Modal Scrollable Body */}
-        <div className="p-5 overflow-y-auto space-y-4 flex-1 text-xs">
+        <div className="p-3.5 sm:p-5 overflow-y-auto space-y-4 flex-1 text-xs">
           {activeSigner === 'notificado' ? (
             <div className="space-y-4">
               {/* Role Selection */}
-              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-3">
-                <div className="flex items-center justify-between">
+              <div className="bg-slate-50 p-3 sm:p-3.5 rounded-xl border border-slate-200 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                   <label className="font-bold text-slate-900 flex items-center space-x-1.5">
                     <span>Papel / Qualificação do Signatário no Local</span>
                   </label>
-                  <span className="text-[11px] text-slate-500">
+                  <span className="text-[10px] sm:text-[11px] text-slate-500">
                     Selecione quem está recebendo e assinando o auto
                   </span>
                 </div>
@@ -705,21 +705,21 @@ export const AssinaturaTabletModal: React.FC<AssinaturaTabletModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-5 py-3.5 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+        <div className="px-4 sm:px-5 py-3 border-t border-slate-200 bg-slate-50 flex flex-col-reverse sm:flex-row sm:items-center justify-between gap-2.5">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-xl text-xs transition-colors"
+            className="w-full sm:w-auto text-center px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-xl text-xs transition-colors cursor-pointer"
           >
             Cancelar
           </button>
 
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
             {activeSigner === 'notificado' ? (
               <button
                 type="button"
                 onClick={() => setActiveSigner('fiscal')}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center space-x-1.5 transition-colors"
+                className="w-full sm:w-auto justify-center px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl text-xs flex items-center space-x-1.5 transition-colors cursor-pointer"
               >
                 <span>Avançar para Fiscal</span>
                 <ChevronRight className="w-4 h-4" />
@@ -728,7 +728,7 @@ export const AssinaturaTabletModal: React.FC<AssinaturaTabletModalProps> = ({
               <button
                 type="button"
                 onClick={() => setActiveSigner('notificado')}
-                className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs"
+                className="w-full sm:w-auto text-center px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer"
               >
                 Voltar
               </button>
@@ -737,10 +737,10 @@ export const AssinaturaTabletModal: React.FC<AssinaturaTabletModalProps> = ({
             <button
               type="button"
               onClick={handleSaveAndAuthenticate}
-              className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md shadow-purple-600/20 flex items-center space-x-1.5 transition-all"
+              className="w-full sm:w-auto justify-center px-4 sm:px-5 py-2.5 sm:py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md shadow-purple-600/20 flex items-center space-x-1.5 transition-all cursor-pointer"
             >
-              <CheckCircle2 className="w-4 h-4" />
-              <span>Gravar & Autenticar Termo no Tablet</span>
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span className="whitespace-nowrap">Gravar & Autenticar</span>
             </button>
           </div>
         </div>

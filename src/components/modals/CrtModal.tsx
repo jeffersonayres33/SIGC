@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { X, Printer, ShieldCheck, AlertTriangle, Lock } from 'lucide-react';
 import { Empresa, HorarioFuncionamentoItem, HorarioTrabalhoRT } from '../../types';
 import { storageService } from '../../services/storageService';
+import { openDocumentInPrintTab } from '../../utils/printDocumentInNewTab';
 
 interface CrtModalProps {
   empresa: Empresa | null;
@@ -33,7 +34,22 @@ export const CrtModal: React.FC<CrtModalProps> = ({ empresa, onClose }) => {
 
   const handlePrint = () => {
     if (!isRegular) return;
-    window.print();
+    if (documentRef.current) {
+      openDocumentInPrintTab({
+        title: `CRT Oficial - ${empresa.nomeFantasia}`,
+        subtitle: `Certidão de Regularidade Técnica • Inscrição ${empresa.inscricao}`,
+        councilSigla: council.sigla,
+        councilNome: council.nomeCompleto,
+        bodyHtml: documentRef.current.innerHTML,
+        customStyles: `
+          table { width: 100%; border-collapse: collapse; }
+          th, td { border: 1px solid #334155; padding: 4px; font-size: 8pt; }
+        `,
+        autoPrint: true
+      });
+    } else {
+      window.print();
+    }
   };
 
   const hoje = new Date();
