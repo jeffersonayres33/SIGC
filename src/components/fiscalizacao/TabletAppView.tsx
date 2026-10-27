@@ -84,6 +84,22 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
   const authUser = storageService.getCurrentAuthUser();
   const cadastrosBasicos = storageService.getCadastrosBasicos();
 
+  const allFuncionarios = storageService.getFuncionarios();
+  const funcionarioFiscal = allFuncionarios.find(f => 
+    (authUser?.documento && f.cpf.replace(/\D/g, '') === authUser.documentoLimpo) ||
+    f.id === authUser?.id ||
+    (f.cargoNome || '').toLowerCase().includes('fiscal')
+  );
+  const prefixoPf = council.prefixoInscricaoProfissional || council.sigla || 'CRF-AM';
+  const rawInscricao = authUser?.numeroInscricao || funcionarioFiscal?.numeroInscricao || '4150';
+  // Garante o formato PREFIXO_NUMERO sem duplicar o prefixo caso já venha incluído
+  const fiscalInscricaoFormatada = rawInscricao.toUpperCase().includes(prefixoPf.toUpperCase())
+    ? rawInscricao.toUpperCase()
+    : `${prefixoPf} ${rawInscricao}`;
+
+  const fiscalMatricula = authUser?.matricula || funcionarioFiscal?.matricula || 'MAT-402';
+  const fiscalNome = authUser?.nome || funcionarioFiscal?.nome || 'Dr. Marcelo Queiroz';
+
   // Screen State
   const [currentScreen, setCurrentScreen] = useState<TabletScreen>('menu');
   const [selectedEmpresa, setSelectedEmpresa] = useState<Empresa | null>(null);
@@ -123,7 +139,9 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
   const [filtroFiscalizadas, setFiltroFiscalizadas] = useState<'todos' | 'sim' | 'nao'>('todos');
 
   // Histórico de Termos Filters
-  const [filtroHistoricoPeriodo, setFiltroHistoricoPeriodo] = useState<'todos' | '1_ano' | '2_anos' | '3_anos'>('todos');
+  const [filtroHistoricoPeriodo, setFiltroHistoricoPeriodo] = useState<'todos' | '1_ano' | '2_anos' | '3_anos' | 'personalizado'>('todos');
+  const [filtroDataInicio, setFiltroDataInicio] = useState<string>('');
+  const [filtroDataFim, setFiltroDataFim] = useState<string>('');
   const [filtroHistoricoTipo, setFiltroHistoricoTipo] = useState<'todos' | 'intimada' | 'notificada' | 'autuada' | 'regular'>('todos');
 
   // Form State for Novo Termo (Screens 3, 4, 6, 7, 8, 9)
@@ -544,8 +562,23 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (encontrava === 'Fechada') {
+      setRtSituacao('Fechado');
+      setNotificacaoAtiva(false);
+      setIntimacaoAtiva(false);
+      setAutuacaoAtiva(false);
+      setAtendenteCargo('Fechado');
+      setAtendenteNome('Fechado sem atendimento');
+      setAtendenteRg('---');
+      setAtendenteCpf('---');
+      setAtendenteInscricao('---');
+    }
+  }, [encontrava]);
+
   // Adjust Atendente role based on RT Situacao
   useEffect(() => {
+    if (encontrava === 'Fechada') return;
     if (rtSituacao === 'Presente') {
       setAtendenteCargo('Farmacêutico Responsável Técnico');
     } else {
@@ -556,7 +589,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
     if (rtSituacao !== 'Ausente') {
       setAutuacaoAusente(false);
     }
-  }, [rtSituacao]);
+  }, [rtSituacao, encontrava]);
 
   // Filter establishments
   const filteredEmpresas = allEmpresas.filter(emp => {
@@ -799,12 +832,13 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
       cidade: selectedEmpresa.cidade || 'Canutama',
       rota: filtroRota,
 
-      fiscalId: authUser?.id || 'fisc-01',
-      fiscalNome: authUser?.nome || 'Dr. Marcelo Queiroz',
-      fiscalMatricula: (authUser as any)?.matricula || 'MAT-402',
+      fiscalId: authUser?.id || funcionarioFiscal?.id || 'fisc-01',
+      fiscalNome: fiscalNome,
+      fiscalMatricula: fiscalMatricula,
+      fiscalNumeroInscricao: fiscalInscricaoFormatada,
 
-      latitude: gpsCoords?.lat,
-      longitude: gpsCoords?.lng,
+      latitude: council.geolocalizacaoAtiva === false ? null : (gpsCoords?.lat ?? null),
+      longitude: council.geolocalizacaoAtiva === false ? null : (gpsCoords?.lng ?? null),
       status: 'Concluído e Assinado',
       tipoVisita: 'Rotina',
       presencaRT: rtSituacao === 'Presente',
@@ -947,14 +981,16 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
         {/* Row 2 on mobile / Right group on Desktop */}
         <div className="flex items-center justify-between sm:justify-end flex-wrap gap-1.5 sm:gap-2.5 w-full sm:w-auto shrink-0">
           {/* GPS Coordinates Indicator */}
-          <button 
-            onClick={handleCaptureGPS}
-            className="flex items-center space-x-1 bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-[10px] sm:text-[11px] transition-colors shrink-0"
-            title="Atualizar Coordenadas GPS"
-          >
-            <MapPin className={`w-3 h-3 shrink-0 ${isGettingGps ? 'animate-bounce text-amber-400' : 'text-emerald-400'}`} />
-            <span className="font-mono">{gpsCoords ? `${gpsCoords.lat.toFixed(4)}, ${gpsCoords.lng.toFixed(4)}` : 'Sem GPS'}</span>
-          </button>
+          {council.geolocalizacaoAtiva !== false && (
+            <button 
+              onClick={handleCaptureGPS}
+              className="flex items-center space-x-1 bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-0.5 rounded text-[10px] sm:text-[11px] transition-colors shrink-0"
+              title="Atualizar Coordenadas GPS"
+            >
+              <MapPin className={`w-3 h-3 shrink-0 ${isGettingGps ? 'animate-bounce text-amber-400' : 'text-emerald-400'}`} />
+              <span className="font-mono">{gpsCoords ? `${gpsCoords.lat.toFixed(4)}, ${gpsCoords.lng.toFixed(4)}` : 'Sem GPS'}</span>
+            </button>
+          )}
 
           {/* Network status */}
           <div className={`flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-bold shrink-0 ${
@@ -1038,8 +1074,8 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
                 <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 text-left sm:text-right w-full sm:w-auto sm:min-w-56 shrink-0">
                   <div className="text-[11px] text-slate-500 uppercase tracking-wider font-semibold">Fiscal Autuante</div>
-                  <div className="font-bold text-sm text-slate-900 break-words">{authUser?.nome || 'Dr. Marcelo Queiroz'}</div>
-                  <div className="text-xs text-blue-700 font-mono font-semibold">Matrícula: {(authUser as any)?.matricula || 'MAT-402'}</div>
+                  <div className="font-bold text-sm text-slate-900 break-words">{fiscalNome}</div>
+                  <div className="text-xs text-blue-700 font-mono font-semibold">{fiscalInscricaoFormatada}</div>
                 </div>
 
                 {onExitFiscalizacao && isTopBarHidden && (
@@ -1079,21 +1115,39 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
 
               {/* Card 2: Sincronização */}
               <button
-                onClick={() => setCurrentScreen('sincronizacao')}
-                className="group bg-white hover:bg-emerald-50/50 border-2 border-slate-200 hover:border-emerald-500 rounded-2xl p-6 sm:p-8 flex flex-col items-center text-center transition-all shadow-sm hover:shadow-md cursor-pointer"
+                onClick={() => {
+                  if (network.queueSize > 0) {
+                    setCurrentScreen('sincronizacao');
+                  } else {
+                    toastService.info('Fila Vazia', 'Nenhum termo pendente na fila offline para sincronizar.');
+                  }
+                }}
+                className={`group border-2 rounded-2xl p-6 sm:p-8 flex flex-col items-center text-center transition-all ${
+                  network.queueSize > 0
+                    ? 'bg-white hover:bg-emerald-50/50 border-slate-200 hover:border-emerald-500 shadow-sm hover:shadow-md cursor-pointer'
+                    : 'bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed'
+                }`}
               >
-                <div className="w-20 h-20 rounded-2xl bg-emerald-100 group-hover:bg-emerald-600 text-emerald-700 group-hover:text-white flex items-center justify-center transition-colors mb-4 shadow-xs">
+                <div className={`w-20 h-20 rounded-2xl flex items-center justify-center transition-colors mb-4 shadow-xs ${
+                  network.queueSize > 0
+                    ? 'bg-emerald-100 group-hover:bg-emerald-600 text-emerald-700 group-hover:text-white'
+                    : 'bg-slate-200 text-slate-400'
+                }`}>
                   <RefreshCw className="w-10 h-10" />
                 </div>
-                <h2 className="text-xl font-black text-slate-900 group-hover:text-emerald-900">
+                <h2 className={`text-xl font-black ${network.queueSize > 0 ? 'text-slate-900 group-hover:text-emerald-900' : 'text-slate-500'}`}>
                   Sincronização
                 </h2>
                 <p className="text-xs text-slate-500 mt-2 leading-relaxed">
                   Enviar termos de inspeção lavrados no tablet e baixar cadastros atualizados de empresas e RTs.
                 </p>
-                <div className="mt-5 inline-flex items-center space-x-1.5 px-4 py-1.5 rounded-full bg-emerald-50 group-hover:bg-emerald-600 text-emerald-700 group-hover:text-white font-bold text-xs transition-colors">
+                <div className={`mt-5 inline-flex items-center space-x-1.5 px-4 py-1.5 rounded-full font-bold text-xs transition-colors ${
+                  network.queueSize > 0
+                    ? 'bg-emerald-50 group-hover:bg-emerald-600 text-emerald-700 group-hover:text-white'
+                    : 'bg-slate-200 text-slate-500'
+                }`}>
                   <span>{network.queueSize} na Fila Offline</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
+                  {network.queueSize > 0 && <ArrowRight className="w-3.5 h-3.5" />}
                 </div>
               </button>
 
@@ -1494,7 +1548,13 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
 
               {/* Primary Action: Novo Termo de Inspeção */}
               <button
-                onClick={() => setCurrentScreen('novo_termo')}
+                onClick={() => {
+                  if (!currentTermoNum) {
+                    const num = storageService.getNextNumeroTermo();
+                    setCurrentTermoNum(num);
+                  }
+                  setCurrentScreen('novo_termo');
+                }}
                 className="w-full sm:w-auto justify-center px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-extrabold flex items-center space-x-2 shadow-xs transition-colors cursor-pointer shrink-0"
               >
                 <Plus className="w-4 h-4" />
@@ -1874,12 +1934,24 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                 </div>
               </div>
 
-              {/* GPS Coordenadas & Fiscal */}
+              {/* GPS Coordenadas & Fiscal & Termo Number */}
               <div className="text-left sm:text-right text-xs bg-slate-50 sm:bg-transparent p-2 sm:p-0 rounded-xl border sm:border-0 border-slate-200 shrink-0">
-                <div className="font-bold text-slate-800 break-words">{authUser?.nome || 'Dr. Marcelo Queiroz'}</div>
-                <div className="text-[11px] font-mono text-emerald-700 flex items-center sm:justify-end space-x-1 mt-0.5">
-                  <MapPin className="w-3 h-3 text-emerald-600 shrink-0" />
-                  <span className="truncate">{gpsCoords ? `${gpsCoords.lat}, ${gpsCoords.lng}` : 'Coordenadas locais'}</span>
+                <div className="font-bold text-slate-800 break-words">
+                  {fiscalNome}
+                  {fiscalInscricaoFormatada && (
+                    <span className="text-blue-700 font-mono text-[11px] font-semibold ml-1.5">
+                      ({fiscalInscricaoFormatada})
+                    </span>
+                  )}
+                </div>
+                {council.geolocalizacaoAtiva !== false && (
+                  <div className="text-[11px] font-mono text-emerald-700 flex items-center sm:justify-end space-x-1 mt-0.5">
+                    <MapPin className="w-3 h-3 text-emerald-600 shrink-0" />
+                    <span className="truncate">{gpsCoords ? `${gpsCoords.lat}, ${gpsCoords.lng}` : 'Coordenadas locais'}</span>
+                  </div>
+                )}
+                <div className="text-[11px] font-mono font-bold text-blue-700 mt-1">
+                  Termo nº: {currentTermoNum || 'TI-2026/8804'}
                 </div>
               </div>
             </div>
@@ -1952,6 +2024,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   </label>
                   <select
                     value={rtSituacao}
+                    disabled={encontrava === 'Fechada'}
                     onChange={(e) => {
                       const val = e.target.value;
                       setRtSituacao(val);
@@ -1962,7 +2035,9 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                         setAutuacaoAusente(false);
                       }
                     }}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full px-3 py-2 border rounded-xl text-xs font-bold text-slate-800 ${
+                      encontrava === 'Fechada' ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-slate-50 border-slate-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500'
+                    }`}
                   >
                     <option value="Presente">Presente</option>
                     <option value="Ausente">Ausente</option>
@@ -1970,12 +2045,13 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                     <option value="Não possui Farm.Sub ou A.T">Não possui Farm.Sub ou A.T</option>
                     <option value="Fiscalização Realizada fora do HAT">Fiscalização Realizada fora do HAT</option>
                     <option value="Dentro do prazo de 30 dias">Dentro do prazo de 30 dias</option>
+                    <option value="Fechado">Fechado</option>
                   </select>
                 </div>
               </div>
 
-              {/* RT Titular Declarado no Cadastro: Ocultar automaticamente se for "Não Possui", "Não Possui farm. Sub ou A.T" ou "Dentro do prazo de 30 dias" */}
-              {!(
+              {/* RT Titular Declarado no Cadastro (Renomeado para Responsável Técnico): Ocultar automaticamente se for "Não Possui", etc. ou se encontrava for Fechada */}
+              {encontrava !== 'Fechada' && !(
                 rtSituacao === 'Não possui' || 
                 rtSituacao === 'Não Possui' || 
                 rtSituacao === 'Não possui Farm.Sub ou A.T' || 
@@ -1986,7 +2062,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                     <label className="font-bold text-slate-700 flex items-center space-x-1.5">
                       <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-                      <span>RT Titular Declarado no Cadastro:</span>
+                      <span>Responsável Técnico:</span>
                     </label>
                     <span className="text-[10px] text-slate-400">
                       Selecione o farmacêutico vinculado que irá atendê-lo
@@ -2069,18 +2145,19 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   )}
                 </div>
 
-                <label className="flex items-center space-x-2 cursor-pointer self-start sm:self-auto">
+                <label className={`flex items-center space-x-2 ${encontrava === 'Fechada' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} self-start sm:self-auto`}>
                   <input
                     type="checkbox"
+                    disabled={encontrava === 'Fechada'}
                     checked={notificacaoAtiva}
                     onChange={(e) => handleToggleNotificacao(e.target.checked)}
-                    className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500"
+                    className="w-4 h-4 text-amber-600 rounded border-slate-300 focus:ring-amber-500 disabled:opacity-50"
                   />
                   <span className="text-xs font-bold text-amber-900">Lavrar Notificação</span>
                 </label>
               </div>
 
-              {notificacaoAtiva && (
+              {notificacaoAtiva && encontrava !== 'Fechada' && (
                 <div className="space-y-3 animate-in fade-in duration-150">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[11px] text-amber-800 font-medium gap-1.5">
                     <span className="break-words">Texto regulatório oficial (configurável no Painel do Administrador):</span>
@@ -2117,18 +2194,19 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   )}
                 </div>
 
-                <label className="flex items-center space-x-2 cursor-pointer self-start sm:self-auto">
+                <label className={`flex items-center space-x-2 ${encontrava === 'Fechada' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} self-start sm:self-auto`}>
                   <input
                     type="checkbox"
+                    disabled={encontrava === 'Fechada'}
                     checked={intimacaoAtiva}
                     onChange={(e) => handleToggleIntimacao(e.target.checked)}
-                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                    className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 disabled:opacity-50"
                   />
                   <span className="text-xs font-bold text-blue-900">Lavrar Intimação</span>
                 </label>
               </div>
 
-              {intimacaoAtiva && (
+              {intimacaoAtiva && encontrava !== 'Fechada' && (
                 <div className="space-y-2.5 animate-in fade-in duration-150">
                   <label className="flex items-center space-x-2 text-xs text-slate-800 cursor-pointer">
                     <input
@@ -2191,20 +2269,24 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
+                    disabled={encontrava === 'Fechada'}
                     onClick={handleVerificarHorariosVagos}
-                    className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-2xs transition-colors cursor-pointer shrink-0"
+                    className={`px-3 py-1.5 border rounded-xl text-xs font-bold flex items-center space-x-1.5 shadow-2xs transition-colors shrink-0 ${
+                      encontrava === 'Fechada' ? 'bg-slate-200 text-slate-400 border-slate-300 cursor-not-allowed' : 'bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700 cursor-pointer'
+                    }`}
                     title="Verificar horários vagos conforme módulo de assistência por município/ramo e restrições de bloqueio"
                   >
-                    <Clock className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <Clock className="w-3.5 h-3.5 shrink-0" />
                     <span className="whitespace-nowrap">Verificar Horários Vagos</span>
                   </button>
 
-                  <label className="flex items-center space-x-2 cursor-pointer shrink-0">
+                  <label className={`flex items-center space-x-2 ${encontrava === 'Fechada' ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} shrink-0`}>
                     <input
                       type="checkbox"
+                      disabled={encontrava === 'Fechada'}
                       checked={autuacaoAtiva}
                       onChange={(e) => handleToggleAutuacao(e.target.checked)}
-                      className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500"
+                      className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500 disabled:opacity-50"
                     />
                     <span className="text-xs font-bold text-rose-900 whitespace-nowrap">Lavrar Auto de Infração</span>
                   </label>
@@ -2382,30 +2464,32 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   </h2>
                 </div>
 
-                {/* 2 ÍCONES DE AÇÃO SOLICITADOS: LIMPAR DADOS & PREENCHER COM RT TITULAR */}
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Ícone 1: Preencher com dados do Farmacêutico RT Titular Selecionado */}
-                  <button
-                    type="button"
-                    onClick={handlePreencherComDadosRt}
-                    className="px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer shrink-0"
-                    title="Preencher todos os campos com os dados do Farmacêutico RT Titular Selecionado"
-                  >
-                    <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-                    <span className="text-[11px] whitespace-nowrap">Puxar RT Titular</span>
-                  </button>
+                {/* 2 ÍCONES DE AÇÃO SOLICITADOS: LIMPAR DADOS & PREENCHER COM RT TITULAR (Inativos se Fechada) */}
+                {encontrava !== 'Fechada' && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Ícone 1: Preencher com dados do Farmacêutico RT Titular Selecionado */}
+                    <button
+                      type="button"
+                      onClick={handlePreencherComDadosRt}
+                      className="px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer shrink-0"
+                      title="Preencher todos os campos com os dados do Farmacêutico RT Titular Selecionado"
+                    >
+                      <UserCheck className="w-3.5 h-3.5 text-blue-600" />
+                      <span className="text-[11px] whitespace-nowrap">Puxar RT Titular</span>
+                    </button>
 
-                  {/* Ícone 2: Limpar dados */}
-                  <button
-                    type="button"
-                    onClick={handleLimparDadosAtendente}
-                    className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 border border-slate-200 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer shrink-0"
-                    title="Limpar campos: Nome completo, RG, CPF e Inscrição"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
-                    <span className="text-[11px] whitespace-nowrap">Limpar Campos</span>
-                  </button>
-                </div>
+                    {/* Ícone 2: Limpar dados */}
+                    <button
+                      type="button"
+                      onClick={handleLimparDadosAtendente}
+                      className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 border border-slate-200 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer shrink-0"
+                      title="Limpar campos: Nome completo, RG, CPF e Inscrição"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+                      <span className="text-[11px] whitespace-nowrap">Limpar Campos</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -2413,13 +2497,17 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   <label className="block text-xs font-bold text-slate-700 mb-1">Cargo / Função:</label>
                   <select
                     value={atendenteCargo}
+                    disabled={encontrava === 'Fechada'}
                     onChange={(e) => setAtendenteCargo(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full px-3 py-2 border rounded-xl text-xs font-medium ${
+                      encontrava === 'Fechada' ? 'bg-slate-200 text-slate-600 cursor-not-allowed font-bold' : 'bg-slate-50 border-slate-200 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500'
+                    }`}
                   >
                     <option value="Farmacêutico">Farmacêutico</option>
                     <option value="Gerente / Administrador">Gerente / Administrador</option>
                     <option value="Balconista / Atendente">Balconista / Atendente</option>
                     <option value="Proprietário / Sócio">Proprietário / Sócio</option>
+                    <option value="Fechado">Fechado sem atendimento</option>
                     <option value="Outro">Outro Representante</option>
                   </select>
                 </div>
@@ -2428,15 +2516,18 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   <label className="block text-xs font-bold text-slate-700 mb-1">Nome Completo:</label>
                   <input
                     type="text"
+                    disabled={encontrava === 'Fechada'}
                     value={atendenteNome}
                     onChange={(e) => setAtendenteNome(e.target.value)}
                     placeholder="Nome do atendente"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full px-3 py-2 border rounded-xl text-xs ${
+                      encontrava === 'Fechada' ? 'bg-slate-200 text-slate-600 cursor-not-allowed font-bold' : 'bg-slate-50 border-slate-200 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500'
+                    }`}
                   />
                 </div>
 
                 {/* CAMPO NÚMERO DE INSCRIÇÃO: SÓ APARECE SE O CARGO FOR FARMACÊUTICO */}
-                {atendenteCargo === 'Farmacêutico' && (
+                {atendenteCargo === 'Farmacêutico' && encontrava !== 'Fechada' && (
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">Número de Inscrição (CRF):</label>
                     <input
@@ -2453,10 +2544,13 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   <label className="block text-xs font-bold text-slate-700 mb-1">RG:</label>
                   <input
                     type="text"
+                    disabled={encontrava === 'Fechada'}
                     value={atendenteRg}
                     onChange={(e) => setAtendenteRg(e.target.value)}
                     placeholder="Ex: 1234567 SSP/AM"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full px-3 py-2 border rounded-xl text-xs ${
+                      encontrava === 'Fechada' ? 'bg-slate-200 text-slate-600 cursor-not-allowed font-mono' : 'bg-slate-50 border-slate-200 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500'
+                    }`}
                   />
                 </div>
 
@@ -2464,10 +2558,13 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   <label className="block text-xs font-bold text-slate-700 mb-1">CPF:</label>
                   <input
                     type="text"
+                    disabled={encontrava === 'Fechada'}
                     value={atendenteCpf}
                     onChange={(e) => setAtendenteCpf(e.target.value)}
                     placeholder="000.000.000-00"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full px-3 py-2 border rounded-xl text-xs ${
+                      encontrava === 'Fechada' ? 'bg-slate-200 text-slate-600 cursor-not-allowed font-mono' : 'bg-slate-50 border-slate-200 text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500'
+                    }`}
                   />
                 </div>
               </div>
@@ -2483,36 +2580,44 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   </h2>
                 </div>
 
-                <label className="flex items-center space-x-2 cursor-pointer self-start sm:self-auto shrink-0">
-                  <input
-                    type="checkbox"
-                    checked={recusouAssinar}
-                    onChange={(e) => setRecusouAssinar(e.target.checked)}
-                    className="w-4 h-4 text-rose-600 rounded border-slate-300"
-                  />
-                  <span className="text-xs font-bold text-rose-700 whitespace-nowrap">Recusou-se a assinar</span>
-                </label>
+                {encontrava !== 'Fechada' && (
+                  <label className="flex items-center space-x-2 cursor-pointer self-start sm:self-auto shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={recusouAssinar}
+                      onChange={(e) => setRecusouAssinar(e.target.checked)}
+                      className="w-4 h-4 text-rose-600 rounded border-slate-300"
+                    />
+                    <span className="text-xs font-bold text-rose-700 whitespace-nowrap">Recusou-se a assinar</span>
+                  </label>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* 1. Assinatura Estabelecimento / Farmacêutico (Opcional) */}
-                <div className="border border-slate-200 rounded-xl p-3 bg-slate-50 flex flex-col justify-between">
+                <div className={`border rounded-xl p-3 flex flex-col justify-between ${encontrava === 'Fechada' ? 'bg-slate-200 border-slate-300 opacity-80 cursor-not-allowed' : 'bg-slate-50 border-slate-200'}`}>
                   <div className="flex flex-wrap items-center justify-between gap-1 mb-2">
                     <span className="text-xs font-bold text-slate-800 flex flex-wrap items-center gap-1 min-w-0">
                       <span className="break-words">Assinatura Estabelecimento/Farmacêutico</span>
-                      <span className="text-[10px] font-normal text-slate-500 shrink-0">(Opcional)</span>
+                      <span className="text-[10px] font-normal text-slate-500 shrink-0">{encontrava === 'Fechada' ? '(Inativo - Fechado)' : '(Opcional)'}</span>
                     </span>
-                    <button
-                      type="button"
-                      onClick={clearCanvasNotificado}
-                      className="text-[11px] text-rose-600 hover:text-rose-800 font-bold flex items-center space-x-1 shrink-0 ml-auto"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      <span>Limpar</span>
-                    </button>
+                    {encontrava !== 'Fechada' && (
+                      <button
+                        type="button"
+                        onClick={clearCanvasNotificado}
+                        className="text-[11px] text-rose-600 hover:text-rose-800 font-bold flex items-center space-x-1 shrink-0 ml-auto"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Limpar</span>
+                      </button>
+                    )}
                   </div>
 
-                  {recusouAssinar ? (
+                  {encontrava === 'Fechada' ? (
+                    <div className="h-32 border-2 border-dashed border-slate-400 rounded-lg bg-slate-300 flex items-center justify-center text-xs text-slate-700 font-bold p-3 text-center">
+                      Fechado sem atendimento — Assinatura inativa.
+                    </div>
+                  ) : recusouAssinar ? (
                     <div className="h-32 border-2 border-dashed border-rose-300 rounded-lg bg-rose-50 flex items-center justify-center text-xs text-rose-700 font-bold p-3 text-center">
                       Notificado recusou-se a apor sua assinatura na tela deste dispositivo tablet. Lavrado com a observação formal: "Recusou-se a assinar".
                     </div>
@@ -2538,8 +2643,8 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                       )}
                     </div>
                   )}
-                  <span className="text-[10px] text-slate-400 mt-1.5 block break-words">
-                    {atendenteNome || 'Representante do Estabelecimento'} ({atendenteCargo})
+                  <span className="text-[10px] text-slate-500 mt-1.5 block break-words">
+                    {encontrava === 'Fechada' ? 'Fechado sem atendimento' : `${atendenteNome || 'Representante do Estabelecimento'} (${atendenteCargo})`}
                   </span>
                 </div>
 
@@ -2583,8 +2688,8 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                       </div>
                     )}
                   </div>
-                  <span className="text-[10px] text-slate-400 mt-1.5 block break-words">
-                    {authUser?.nome || 'Dr. Marcelo Queiroz'} — Fiscal do {council.sigla}
+                  <span className="text-[10px] text-slate-500 mt-1.5 block break-words font-mono font-medium">
+                    {fiscalNome} — {fiscalInscricaoFormatada}
                   </span>
                 </div>
               </div>
@@ -2624,6 +2729,29 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
           const twoYearsAgo = new Date(now.getFullYear() - 2, now.getMonth(), now.getDate());
           const threeYearsAgo = new Date(now.getFullYear() - 3, now.getMonth(), now.getDate());
 
+          const parseTermoDate = (str?: string): Date | null => {
+            if (!str) return null;
+            const datePart = str.split(' ')[0];
+            if (datePart.includes('/')) {
+              const parts = datePart.split('/');
+              if (parts.length === 3) {
+                const d = parseInt(parts[0], 10);
+                const m = parseInt(parts[1], 10) - 1;
+                const y = parseInt(parts[2], 10);
+                return new Date(y, m, d);
+              }
+            } else if (datePart.includes('-')) {
+              const parts = datePart.split('-');
+              if (parts.length === 3) {
+                const y = parseInt(parts[0], 10);
+                const m = parseInt(parts[1], 10) - 1;
+                const d = parseInt(parts[2], 10);
+                return new Date(y, m, d);
+              }
+            }
+            return null;
+          };
+
           const termosFiltrados = termosDaEmpresa.filter(termo => {
             // Occurrence filter
             if (filtroHistoricoTipo === 'autuada' && !termo.autoInfracaoGerado) return false;
@@ -2631,20 +2759,27 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
             if (filtroHistoricoTipo === 'intimada' && !termo.intimacaoAtiva) return false;
             if (filtroHistoricoTipo === 'regular' && (termo.autoInfracaoGerado || termo.notificacaoAtiva || termo.intimacaoAtiva)) return false;
 
-            // Period filter
-            if (filtroHistoricoPeriodo !== 'todos') {
-              const datePart = termo.dataHora ? termo.dataHora.split(' ')[0] : '';
-              const parts = datePart.split('/');
-              if (parts.length === 3) {
-                const d = parseInt(parts[0], 10);
-                const m = parseInt(parts[1], 10) - 1;
-                const y = parseInt(parts[2], 10);
-                const termoDate = new Date(y, m, d);
+            const termoDate = parseTermoDate(termo.dataHora);
 
-                if (filtroHistoricoPeriodo === '1_ano' && termoDate < oneYearAgo) return false;
-                if (filtroHistoricoPeriodo === '2_anos' && termoDate < twoYearsAgo) return false;
-                if (filtroHistoricoPeriodo === '3_anos' && termoDate < threeYearsAgo) return false;
-              }
+            // Filtro por Data Inicial específica
+            if (filtroDataInicio && termoDate) {
+              const parts = filtroDataInicio.split('-');
+              const dIni = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 0, 0, 0);
+              if (termoDate < dIni) return false;
+            }
+
+            // Filtro por Data Final específica
+            if (filtroDataFim && termoDate) {
+              const parts = filtroDataFim.split('-');
+              const dFim = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 23, 59, 59);
+              if (termoDate > dFim) return false;
+            }
+
+            // Period presets (se não houver intervalo personalizado preenchido)
+            if (!filtroDataInicio && !filtroDataFim && filtroHistoricoPeriodo !== 'todos' && termoDate) {
+              if (filtroHistoricoPeriodo === '1_ano' && termoDate < oneYearAgo) return false;
+              if (filtroHistoricoPeriodo === '2_anos' && termoDate < twoYearsAgo) return false;
+              if (filtroHistoricoPeriodo === '3_anos' && termoDate < threeYearsAgo) return false;
             }
 
             return true;
@@ -2658,6 +2793,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   <button
                     onClick={() => setCurrentScreen('ficha_estabelecimento')}
                     className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                    title="Voltar para a ficha do estabelecimento"
                   >
                     <ChevronLeft className="w-5 h-5" />
                   </button>
@@ -2666,7 +2802,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                       Histórico de Termos Lavrados
                     </h2>
                     <p className="text-xs text-slate-500">
-                      {selectedEmpresa ? selectedEmpresa.nomeFantasia : 'Todos os Estabelecimentos'} • {termosFiltrados.length} termo(s) exibido(s)
+                      {selectedEmpresa ? selectedEmpresa.nomeFantasia : 'Todos os Estabelecimentos'} • {termosFiltrados.length} termo(s) encontrado(s)
                     </p>
                   </div>
                 </div>
@@ -2674,7 +2810,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                 {selectedEmpresa && (
                   <button
                     onClick={() => setCurrentScreen('novo_termo')}
-                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 cursor-pointer self-start sm:self-auto"
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 cursor-pointer self-start sm:self-auto shadow-xs"
                   >
                     <Plus className="w-4 h-4" />
                     <span>Iniciar Termo de Inspeção</span>
@@ -2682,236 +2818,508 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                 )}
               </div>
 
-              {/* Filtros por Período e Tipo (Pré-definidos 1, 2, 3 anos e ocorrências) */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-3.5 shadow-2xs flex flex-wrap items-center justify-between gap-3 text-xs">
-                {/* Período Pré-definido */}
-                <div className="flex items-center space-x-2">
-                  <span className="font-bold text-slate-700 flex items-center space-x-1">
-                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Período:</span>
-                  </span>
-                  <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl">
-                    <button
-                      type="button"
-                      onClick={() => setFiltroHistoricoPeriodo('todos')}
-                      className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors ${
-                        filtroHistoricoPeriodo === 'todos' ? 'bg-white text-blue-700 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
-                      }`}
+              {/* Barra de Filtros com Período (Data Inicial e Data Final) e Ocorrências */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-2xs space-y-3 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  {/* Período Pré-definido */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-bold text-slate-700 flex items-center space-x-1">
+                      <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Atalhos:</span>
+                    </span>
+                    <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFiltroHistoricoPeriodo('todos');
+                          setFiltroDataInicio('');
+                          setFiltroDataFim('');
+                        }}
+                        className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors cursor-pointer ${
+                          filtroHistoricoPeriodo === 'todos' && !filtroDataInicio && !filtroDataFim
+                            ? 'bg-white text-blue-700 shadow-2xs font-bold' 
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Todos
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFiltroHistoricoPeriodo('1_ano');
+                          setFiltroDataInicio('');
+                          setFiltroDataFim('');
+                        }}
+                        className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors cursor-pointer ${
+                          filtroHistoricoPeriodo === '1_ano' && !filtroDataInicio && !filtroDataFim
+                            ? 'bg-white text-blue-700 shadow-2xs font-bold' 
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Último 1 ano
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFiltroHistoricoPeriodo('2_anos');
+                          setFiltroDataInicio('');
+                          setFiltroDataFim('');
+                        }}
+                        className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors cursor-pointer ${
+                          filtroHistoricoPeriodo === '2_anos' && !filtroDataInicio && !filtroDataFim
+                            ? 'bg-white text-blue-700 shadow-2xs font-bold' 
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        2 anos
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFiltroHistoricoPeriodo('3_anos');
+                          setFiltroDataInicio('');
+                          setFiltroDataFim('');
+                        }}
+                        className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors cursor-pointer ${
+                          filtroHistoricoPeriodo === '3_anos' && !filtroDataInicio && !filtroDataFim
+                            ? 'bg-white text-blue-700 shadow-2xs font-bold' 
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        3 anos
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Filtro Ocorrência: intimada, notificada, autuada, todos */}
+                  <div className="flex items-center space-x-2">
+                    <span className="font-bold text-slate-700 flex items-center space-x-1">
+                      <Filter className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Ocorrência:</span>
+                    </span>
+                    <select
+                      value={filtroHistoricoTipo}
+                      onChange={(e) => setFiltroHistoricoTipo(e.target.value as any)}
+                      className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:bg-white text-xs cursor-pointer"
                     >
-                      Todos
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFiltroHistoricoPeriodo('1_ano')}
-                      className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors ${
-                        filtroHistoricoPeriodo === '1_ano' ? 'bg-white text-blue-700 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      Último 1 ano
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFiltroHistoricoPeriodo('2_anos')}
-                      className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors ${
-                        filtroHistoricoPeriodo === '2_anos' ? 'bg-white text-blue-700 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      2 anos
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFiltroHistoricoPeriodo('3_anos')}
-                      className={`px-2.5 py-1 rounded-lg font-semibold text-[11px] transition-colors ${
-                        filtroHistoricoPeriodo === '3_anos' ? 'bg-white text-blue-700 shadow-2xs font-bold' : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      3 anos
-                    </button>
+                      <option value="todos">Todas as Inspeções</option>
+                      <option value="intimada">Apenas Intimada</option>
+                      <option value="notificada">Apenas Notificada</option>
+                      <option value="autuada">Apenas Autuada (Auto de Infração)</option>
+                      <option value="regular">Apenas Conforme / Regular</option>
+                    </select>
                   </div>
                 </div>
 
-                {/* Filtro Ocorrência: intimada, notificada, autuada, todos */}
-                <div className="flex items-center space-x-2">
-                  <span className="font-bold text-slate-700 flex items-center space-x-1">
-                    <Filter className="w-3.5 h-3.5 text-blue-600" />
-                    <span>Ocorrência:</span>
-                  </span>
-                  <select
-                    value={filtroHistoricoTipo}
-                    onChange={(e) => setFiltroHistoricoTipo(e.target.value as any)}
-                    className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:bg-white text-xs"
-                  >
-                    <option value="todos">Todas as Inspeções</option>
-                    <option value="intimada">Apenas Intimada</option>
-                    <option value="notificada">Apenas Notificada</option>
-                    <option value="autuada">Apenas Autuada (Auto de Infração)</option>
-                    <option value="regular">Apenas Conforme / Regular</option>
-                  </select>
+                {/* Filtro Específico por Data Inicial e Data Final */}
+                <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center gap-3">
+                  <div className="flex items-center space-x-2">
+                    <label className="text-[11px] font-bold text-slate-600 whitespace-nowrap">
+                      Data Inicial:
+                    </label>
+                    <input
+                      type="date"
+                      value={filtroDataInicio}
+                      onChange={(e) => {
+                        setFiltroDataInicio(e.target.value);
+                        setFiltroHistoricoPeriodo('personalizado');
+                      }}
+                      className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center space-x-2">
+                    <label className="text-[11px] font-bold text-slate-600 whitespace-nowrap">
+                      Data Final:
+                    </label>
+                    <input
+                      type="date"
+                      value={filtroDataFim}
+                      onChange={(e) => {
+                        setFiltroDataFim(e.target.value);
+                        setFiltroHistoricoPeriodo('personalizado');
+                      }}
+                      className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  {(filtroDataInicio || filtroDataFim) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFiltroDataInicio('');
+                        setFiltroDataFim('');
+                        setFiltroHistoricoPeriodo('todos');
+                      }}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-[11px] font-bold flex items-center space-x-1 transition-colors cursor-pointer"
+                      title="Limpar filtro de datas"
+                    >
+                      <X className="w-3 h-3 text-slate-500" />
+                      <span>Limpar Datas</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* List or Selected Preview */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* List */}
-                <div className="space-y-2.5">
-                  {termosFiltrados.length === 0 ? (
-                    <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center text-xs text-slate-500">
-                      <FileText className="w-10 h-10 mx-auto mb-2 text-slate-300" />
-                      <p className="font-bold text-slate-700">Nenhum termo encontrado para os filtros selecionados.</p>
-                      <p className="text-[11px] mt-0.5">Altere o período ou o filtro de ocorrência.</p>
-                    </div>
-                  ) : (
-                    termosFiltrados.map(termo => (
-                      <div
-                        key={termo.id}
-                        onClick={() => setSelectedTermoParaVisualizar(termo)}
-                        className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                          selectedTermoParaVisualizar?.id === termo.id 
-                            ? 'bg-blue-50/70 border-blue-400 ring-2 ring-blue-200 shadow-xs' 
-                            : 'bg-white border-slate-200 hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-mono font-black text-sm text-blue-700">
-                            {termo.numeroTermo}
-                          </span>
-                          <span className="text-[11px] text-slate-500 font-mono">
-                            {termo.dataHora}
-                          </span>
+              {/* Lista Completa de Termos (Cards Responsivos) */}
+              <div className="space-y-3">
+                {termosFiltrados.length === 0 ? (
+                  <div className="bg-white rounded-2xl p-12 border border-slate-200 text-center text-xs text-slate-500">
+                    <FileText className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+                    <p className="font-bold text-slate-800 text-sm">Nenhum termo encontrado para os filtros selecionados.</p>
+                    <p className="text-xs text-slate-400 mt-1">Ajuste o período, data inicial, data final ou o tipo de ocorrência.</p>
+                  </div>
+                ) : (
+                  termosFiltrados.map(termo => (
+                    <div
+                      key={termo.id}
+                      onClick={() => setSelectedTermoParaVisualizar(termo)}
+                      className="bg-white hover:bg-blue-50/40 border border-slate-200 hover:border-blue-400 rounded-2xl p-4 sm:p-5 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 group"
+                    >
+                      <div className="flex items-start space-x-3.5 min-w-0 flex-1">
+                        <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                          <FileText className="w-5 h-5" />
                         </div>
 
-                        <div className="mt-1 text-xs text-slate-700 flex flex-wrap items-center gap-1.5">
-                          <span className="font-bold">{termo.empresaNome}</span>
-                          <span className="text-slate-300">•</span>
-                          <span>Fiscal: {termo.fiscalNome}</span>
-                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono font-black text-sm text-blue-700">
+                              {termo.numeroTermo}
+                            </span>
+                            <span className="text-slate-300">•</span>
+                            <span className="text-xs text-slate-500 font-mono flex items-center space-x-1">
+                              <Calendar className="w-3 h-3 text-slate-400" />
+                              <span>{termo.dataHora}</span>
+                            </span>
+                          </div>
 
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          {termo.autoInfracaoGerado ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800">
-                              Auto de Infração: {termo.numeroAutoInfracao}
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                              Sem Auto de Infração
-                            </span>
-                          )}
+                          <div className="mt-1 text-xs text-slate-700 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <strong className="text-slate-900">{termo.empresaNome}</strong>
+                            <span className="text-slate-300 hidden sm:inline">•</span>
+                            <span className="font-mono text-slate-500">CNPJ: {termo.cnpj}</span>
+                            <span className="text-slate-300 hidden sm:inline">•</span>
+                            <span className="text-slate-600">Fiscal: <strong>{termo.fiscalNome}</strong></span>
+                          </div>
 
-                          {termo.notificacaoAtiva && (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
-                              Notificado
-                            </span>
-                          )}
+                          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                            {termo.autoInfracaoGerado ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                                Auto de Infração: {termo.numeroAutoInfracao}
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                Sem Auto de Infração
+                              </span>
+                            )}
 
-                          {termo.intimacaoAtiva && (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
-                              Intimado
-                            </span>
-                          )}
+                            {termo.notificacaoAtiva && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                Notificação: {termo.numeroNotificacao || 'Ativa'}
+                              </span>
+                            )}
+
+                            {termo.intimacaoAtiva && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                                Intimação: {termo.numeroIntimacao || 'Ativa'}
+                              </span>
+                            )}
+
+                            {termo.encontrava === 'Fechada' && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                Empresa Fechada
+                              </span>
+                            )}
+
+                            {council.geolocalizacaoAtiva !== false && termo.latitude != null && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-slate-50 text-slate-600 border border-slate-200 flex items-center space-x-1">
+                                <MapPin className="w-2.5 h-2.5 text-slate-400" />
+                                <span>{termo.latitude.toFixed(4)}, {termo.longitude?.toFixed(4)}</span>
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    ))
-                  )}
-                </div>
 
-                {/* Preview Document Panel */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-2xs">
-                  {selectedTermoParaVisualizar ? (
-                    <div className="space-y-4 text-xs">
-                      <div className="border-b border-slate-200 pb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center space-x-2 self-end sm:self-center shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedTermoParaVisualizar(termo);
+                          }}
+                          className="px-3.5 py-2 bg-slate-100 hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer shadow-2xs"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Ver Detalhes</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* MODAL COM FUNDO ESCURO: Detalhes do Termo Selecionado */}
+              {selectedTermoParaVisualizar && (
+                <div 
+                  className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200 overflow-y-auto"
+                  onClick={() => setSelectedTermoParaVisualizar(null)}
+                >
+                  <div 
+                    className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-200 flex flex-col max-h-[90vh] overflow-hidden my-auto"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* Modal Header */}
+                    <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800 shrink-0">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-600/30 border border-blue-500/50 flex items-center justify-center text-blue-400 shrink-0">
+                          <FileText className="w-5 h-5" />
+                        </div>
                         <div>
-                          <span className="font-mono font-bold text-xs text-blue-700">
-                            {selectedTermoParaVisualizar.numeroTermo}
-                          </span>
-                          <h3 className="font-black text-slate-900 text-sm">
-                            Termo de Inspeção e Visita Fiscal
+                          <div className="flex items-center space-x-2">
+                            <span className="font-mono text-sm font-black text-blue-300">
+                              {selectedTermoParaVisualizar.numeroTermo}
+                            </span>
+                            <span className="text-slate-400">•</span>
+                            <span className="text-xs text-slate-300">
+                              {selectedTermoParaVisualizar.dataHora}
+                            </span>
+                          </div>
+                          <h3 className="text-base font-black text-white mt-0.5">
+                            {selectedTermoParaVisualizar.empresaNome}
                           </h3>
                         </div>
+                      </div>
 
-                        <div className="flex items-center space-x-1.5">
-                          {/* Botão Imprimir corrigido com template oficial e iframe */}
-                          <button
-                            type="button"
-                            onClick={() => printTermoFiscalizacao(selectedTermoParaVisualizar, council)}
-                            className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center space-x-1 transition-colors cursor-pointer"
-                            title="Imprimir Termo em papel ou salvar PDF via navegador"
-                          >
-                            <Printer className="w-3.5 h-3.5 text-blue-600" />
-                            <span>Imprimir</span>
-                          </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTermoParaVisualizar(null)}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                        title="Fechar modal"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
 
-                          {/* Botão Transformar em PDF e Enviar por E-mail */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setTermoParaEmail(selectedTermoParaVisualizar);
-                              setIsEmailModalOpen(true);
-                            }}
-                            className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center space-x-1 shadow-2xs transition-colors cursor-pointer"
-                            title="Gerar PDF oficial e enviar por e-mail para RT e empresa"
-                          >
-                            <Mail className="w-3.5 h-3.5" />
-                            <span>PDF / E-mail</span>
-                          </button>
+                    {/* Modal Body (Scrollable) */}
+                    <div className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
+                      {/* Meta Information Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-slate-700">
+                        <div>
+                          <span className="text-[11px] text-slate-400 block font-semibold">Razão Social:</span>
+                          <span className="font-bold text-slate-900">{selectedTermoParaVisualizar.razaoSocial || selectedTermoParaVisualizar.empresaNome}</span>
+                        </div>
+                        <div>
+                          <span className="text-[11px] text-slate-400 block font-semibold">CNPJ / Inscrição:</span>
+                          <span className="font-mono font-bold text-slate-900">{selectedTermoParaVisualizar.cnpj} • Inscrição: {selectedTermoParaVisualizar.empresaInscricao || '---'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[11px] text-slate-400 block font-semibold">Fiscal Responsável:</span>
+                          <span className="font-bold text-slate-900">{selectedTermoParaVisualizar.fiscalNome} (Matrícula: {selectedTermoParaVisualizar.fiscalMatricula || 'MAT-402'})</span>
+                        </div>
+                        <div>
+                          <span className="text-[11px] text-slate-400 block font-semibold">Município / UF:</span>
+                          <span className="font-bold text-slate-900">{selectedTermoParaVisualizar.cidade || 'Canutama'} / {council.uf || 'AM'}</span>
+                        </div>
+
+                        {/* Geolocalização GPS: Exibida apenas quando ativada */}
+                        {council.geolocalizacaoAtiva !== false && selectedTermoParaVisualizar.latitude != null && (
+                          <div className="sm:col-span-2 pt-2 border-t border-slate-200/60 flex items-center space-x-2">
+                            <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                            <span className="text-[11px] text-slate-600">
+                              <strong>Geolocalização GPS:</strong> Lat: {selectedTermoParaVisualizar.latitude}, Lng: {selectedTermoParaVisualizar.longitude}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Situação no Momento da Fiscalização */}
+                      <div className="p-3.5 bg-white border border-slate-200 rounded-xl space-y-2">
+                        <div className="font-bold text-slate-900 uppercase tracking-wide text-[11px] flex items-center space-x-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
+                          <span>Situação do Estabelecimento & Responsabilidade Técnica</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={`px-2.5 py-1 rounded-lg font-bold text-xs ${
+                            selectedTermoParaVisualizar.encontrava === 'Fechada' 
+                              ? 'bg-slate-100 text-slate-800 border border-slate-300' 
+                              : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          }`}>
+                            Estabelecimento: {selectedTermoParaVisualizar.encontrava || 'Aberta'}
+                          </span>
+
+                          <span className={`px-2.5 py-1 rounded-lg font-bold text-xs ${
+                            selectedTermoParaVisualizar.rtSituacao === 'Presente'
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              : selectedTermoParaVisualizar.rtSituacao === 'Fechado'
+                              ? 'bg-slate-100 text-slate-700 border border-slate-300'
+                              : 'bg-rose-100 text-rose-800 border border-rose-300'
+                          }`}>
+                            RT: {selectedTermoParaVisualizar.rtSituacao || (selectedTermoParaVisualizar.encontrava === 'Fechada' ? 'Fechado' : 'Ausente')}
+                          </span>
+
+                          {selectedTermoParaVisualizar.respTecnicoSelecionadoNome && (
+                            <span className="text-slate-600 text-xs">
+                              • Farmacêutico Titular: <strong>{selectedTermoParaVisualizar.respTecnicoSelecionadoNome}</strong> ({selectedTermoParaVisualizar.respTecnicoSelecionadoInscricao})
+                            </span>
+                          )}
                         </div>
                       </div>
 
-                      <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200 font-mono text-[11px]">
-                        <div><strong>Estabelecimento:</strong> {selectedTermoParaVisualizar.empresaNome}</div>
-                        <div><strong>CNPJ:</strong> {selectedTermoParaVisualizar.cnpj}</div>
-                        <div><strong>Inscrição CRF:</strong> {selectedTermoParaVisualizar.empresaInscricao}</div>
-                        <div><strong>Data/Hora:</strong> {selectedTermoParaVisualizar.dataHora}</div>
-                        <div><strong>Localização:</strong> Lat: {selectedTermoParaVisualizar.latitude}, Lng: {selectedTermoParaVisualizar.longitude}</div>
-                        <div><strong>Fiscal:</strong> {selectedTermoParaVisualizar.fiscalNome} ({selectedTermoParaVisualizar.fiscalMatricula})</div>
-                      </div>
-
+                      {/* Relato Fiscal / Observações */}
                       {selectedTermoParaVisualizar.observacao && (
-                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 text-xs">
-                          <strong className="block mb-1 text-slate-900 font-bold">Relato Fiscal / Observações:</strong>
-                          <div className="whitespace-pre-wrap leading-relaxed text-slate-700 font-sans">{selectedTermoParaVisualizar.observacao}</div>
+                        <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 space-y-1.5">
+                          <strong className="block text-slate-900 font-bold uppercase tracking-wider text-[11px]">
+                            Relato e Constatações da Fiscalização:
+                          </strong>
+                          <div className="whitespace-pre-wrap leading-relaxed text-slate-700 font-sans">
+                            {selectedTermoParaVisualizar.observacao}
+                          </div>
                         </div>
                       )}
 
+                      {/* Notificação Regulamentar */}
                       {selectedTermoParaVisualizar.notificacaoAtiva && (
-                        <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs">
-                          <strong className="block mb-1 font-bold">Notificação Regulamentar:</strong>
-                          <div className="whitespace-pre-wrap leading-relaxed text-amber-950 font-sans">{selectedTermoParaVisualizar.notificacaoTexto}</div>
+                        <div className="p-4 bg-amber-50/70 rounded-xl border border-amber-300 text-amber-950 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <strong className="font-black text-amber-900 text-xs uppercase">
+                              Notificação Regulamentar nº {selectedTermoParaVisualizar.numeroNotificacao || 'S/N'}
+                            </strong>
+                            <span className="text-[10px] font-bold bg-amber-200 text-amber-900 px-2 py-0.5 rounded">
+                              Prazo de 05 dias
+                            </span>
+                          </div>
+                          <div className="whitespace-pre-wrap leading-relaxed text-slate-800 font-sans text-xs">
+                            {selectedTermoParaVisualizar.notificacaoTexto}
+                          </div>
                         </div>
                       )}
 
+                      {/* Intimação */}
+                      {selectedTermoParaVisualizar.intimacaoAtiva && (
+                        <div className="p-4 bg-blue-50/70 rounded-xl border border-blue-300 text-blue-950 space-y-1.5">
+                          <strong className="font-black text-blue-900 text-xs uppercase block">
+                            Termo de Intimação nº {selectedTermoParaVisualizar.numeroIntimacao || 'S/N'}
+                          </strong>
+                          <p className="text-xs text-slate-700">
+                            Fica o estabelecimento intimado a sanar as exigências regulamentares no prazo estipulado.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Auto de Infração */}
                       {selectedTermoParaVisualizar.autoInfracaoGerado && (
-                        <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-rose-900 text-xs">
-                          <strong className="text-rose-800">Auto de Infração nº {selectedTermoParaVisualizar.numeroAutoInfracao}:</strong>
-                          <ul className="mt-1 list-disc list-inside space-y-0.5">
-                            {selectedTermoParaVisualizar.infracoesIdentificadas?.map((inf, idx) => (
-                              <li key={idx}>{inf}</li>
-                            ))}
+                        <div className="p-4 bg-rose-50/80 rounded-xl border border-rose-300 text-rose-950 space-y-2">
+                          <strong className="font-black text-rose-900 text-xs uppercase block">
+                            Auto de Infração nº {selectedTermoParaVisualizar.numeroAutoInfracao}
+                          </strong>
+                          <ul className="list-disc list-inside space-y-1 text-xs text-rose-900">
+                            {selectedTermoParaVisualizar.infracoesIdentificadas && selectedTermoParaVisualizar.infracoesIdentificadas.length > 0 ? (
+                              selectedTermoParaVisualizar.infracoesIdentificadas.map((inf, idx) => (
+                                <li key={idx}>{inf}</li>
+                              ))
+                            ) : (
+                              <li>Ausência do responsável técnico durante o horário de assistência</li>
+                            )}
                           </ul>
                         </div>
                       )}
 
-                      {selectedTermoParaVisualizar.assinaturaEstabelecimento && (
-                        <div className="border border-slate-200 rounded-xl p-3 bg-white">
-                          <span className="text-[11px] text-slate-500 block mb-1">Assinatura do Notificado:</span>
-                          <img 
-                            src={selectedTermoParaVisualizar.assinaturaEstabelecimento} 
-                            alt="Assinatura" 
-                            className="h-16 object-contain"
-                          />
-                          <span className="text-[10px] text-slate-400 block mt-1 font-mono">
-                            {selectedTermoParaVisualizar.atendenteNome} ({selectedTermoParaVisualizar.atendenteCargo})
+                      {/* Assinaturas Digitais */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                        {/* Fiscal Assinatura */}
+                        <div className="p-3 bg-white border border-slate-200 rounded-xl">
+                          <span className="text-[11px] font-bold text-slate-600 block mb-1">
+                            Assinatura Digital do Fiscal:
+                          </span>
+                          {selectedTermoParaVisualizar.assinaturaFiscal ? (
+                            <img 
+                              src={selectedTermoParaVisualizar.assinaturaFiscal} 
+                              alt="Assinatura Fiscal" 
+                              className="h-16 object-contain"
+                            />
+                          ) : (
+                            <div className="h-12 border-b border-slate-400 flex items-end text-[11px] text-slate-400">
+                              Assinatura registrada digitalmente
+                            </div>
+                          )}
+                          <span className="text-[11px] font-bold text-slate-900 block mt-1">
+                            {selectedTermoParaVisualizar.fiscalNome}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            Fiscal {council.sigla} • Matrícula {selectedTermoParaVisualizar.fiscalMatricula || 'MAT-402'}
                           </span>
                         </div>
-                      )}
+
+                        {/* Notificado Assinatura */}
+                        <div className="p-3 bg-white border border-slate-200 rounded-xl">
+                          <span className="text-[11px] font-bold text-slate-600 block mb-1">
+                            Assinatura do Responsável no Atendimento:
+                          </span>
+                          {selectedTermoParaVisualizar.recusaAssinatura ? (
+                            <div className="h-14 flex items-center text-rose-700 font-bold text-xs">
+                              RECUSOU-SE A ASSINAR
+                            </div>
+                          ) : selectedTermoParaVisualizar.assinaturaEstabelecimento ? (
+                            <img 
+                              src={selectedTermoParaVisualizar.assinaturaEstabelecimento} 
+                              alt="Assinatura Notificado" 
+                              className="h-16 object-contain"
+                            />
+                          ) : (
+                            <div className="h-12 border-b border-slate-400 flex items-end text-[11px] text-slate-400">
+                              {selectedTermoParaVisualizar.encontrava === 'Fechada' ? 'Sem atendimento (Empresa fechada)' : 'Assinado'}
+                            </div>
+                          )}
+                          <span className="text-[11px] font-bold text-slate-900 block mt-1">
+                            {selectedTermoParaVisualizar.atendenteNome || (selectedTermoParaVisualizar.encontrava === 'Fechada' ? 'Sem Atendimento' : 'Atendente')}
+                          </span>
+                          <span className="text-[10px] text-slate-500 font-mono">
+                            {selectedTermoParaVisualizar.atendenteCargo || 'Estabelecimento'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="h-64 flex flex-col items-center justify-center text-slate-400 text-xs">
-                      <FileText className="w-10 h-10 mb-2 text-slate-300" />
-                      <span>Selecione um termo na lista ao lado para visualizar os detalhes.</span>
+
+                    {/* Modal Footer Actions */}
+                    <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
+                      <div className="flex items-center space-x-2">
+                        {/* Imprimir Termo */}
+                        <button
+                          type="button"
+                          onClick={() => printTermoFiscalizacao(selectedTermoParaVisualizar, council)}
+                          className="px-3.5 py-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl font-bold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer text-xs"
+                          title="Imprimir Termo em papel ou salvar PDF via navegador"
+                        >
+                          <Printer className="w-4 h-4 text-blue-600" />
+                          <span>Imprimir</span>
+                        </button>
+
+                        {/* PDF / E-mail */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTermoParaEmail(selectedTermoParaVisualizar);
+                            setIsEmailModalOpen(true);
+                          }}
+                          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold flex items-center justify-center space-x-1.5 shadow-sm transition-colors cursor-pointer text-xs"
+                          title="Gerar PDF oficial e enviar por e-mail para RT e empresa"
+                        >
+                          <Mail className="w-4 h-4" />
+                          <span>Gerar PDF & Enviar por E-mail</span>
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedTermoParaVisualizar(null)}
+                        className="px-5 py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl transition-colors cursor-pointer text-xs text-center"
+                      >
+                        Fechar
+                      </button>
                     </div>
-                  )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           );
         })()}

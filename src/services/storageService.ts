@@ -126,6 +126,7 @@ export interface CouncilConfig {
   proximoNumeroIntimacao?: number;
   proximoNumeroTermo?: number;
   proximoNumeroAutuacao?: number;
+  geolocalizacaoAtiva?: boolean;
 }
 
 export const DEFAULT_COUNCIL_CONFIG: CouncilConfig = {
@@ -191,7 +192,8 @@ export const DEFAULT_COUNCIL_CONFIG: CouncilConfig = {
   proximoNumeroNotificacao: 1,
   proximoNumeroIntimacao: 1,
   proximoNumeroTermo: 1,
-  proximoNumeroAutuacao: 1
+  proximoNumeroAutuacao: 1,
+  geolocalizacaoAtiva: true
 };
 
 export const DEFAULT_HORARIOS_FUNCIONAMENTO: HorarioFuncionamentoItem[] = [
@@ -635,6 +637,7 @@ export const INITIAL_FUNCIONARIOS: Funcionario[] = [
     fotoUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=256',
     cargoId: 'crg-1',
     cargoNome: 'Fiscal de Farmácia',
+    numeroInscricao: 'CRF-AM 4150',
     setorId: 'setlot-1',
     setorNome: 'Departamento de Fiscalização (DEFIS)',
     permissoesModulos: ['dashboard', 'fiscalizacao', 'empresas', 'profissionais', 'formularios'],
@@ -5588,6 +5591,8 @@ class StorageService {
         documentoLimpo: cleanDoc,
         email: func.email,
         cargoOuTitulo: `${func.cargoNome} (${func.setorNome})`,
+        numeroInscricao: func.numeroInscricao,
+        matricula: func.matricula,
         role: assignedRole,
         fotoUrl: func.fotoUrl,
         permissoes: effectivePerms,
@@ -5726,6 +5731,207 @@ class StorageService {
       return { success: true, message: 'Senha redefinida com sucesso para a empresa.' };
     }
     return { success: false, message: 'Documento não localizado para redefinição.' };
+  }
+
+  public solicitarPrimeiroAcesso(email: string): {
+    success: boolean;
+    message: string;
+    token?: string;
+    targetNome?: string;
+    targetTipo?: 'FUNCIONARIO' | 'PROFISSIONAL' | 'EMPRESA';
+    targetDoc?: string;
+    email?: string;
+  } {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      return { success: false, message: 'Informe o endereço de e-mail.' };
+    }
+
+    // 1. Verificar em Funcionários
+    const func = this.funcionarios.find(f => f.email && f.email.trim().toLowerCase() === cleanEmail);
+    if (func) {
+      const token = 'tok_func_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+      func.tokenPrimeiroAcesso = token;
+      func.expiracaoTokenPrimeiroAcesso = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      this.saveFuncionario(func);
+      return {
+        success: true,
+        message: 'Link de primeiro acesso enviado para o e-mail cadastrado.',
+        token,
+        targetNome: func.nome,
+        targetTipo: 'FUNCIONARIO',
+        targetDoc: func.cpf,
+        email: cleanEmail
+      };
+    }
+
+    // 2. Verificar em Profissionais
+    const prof = this.customProfissionais.find(p => 
+      (p.emailPessoal && p.emailPessoal.trim().toLowerCase() === cleanEmail) ||
+      (p.emailComercial && p.emailComercial.trim().toLowerCase() === cleanEmail)
+    );
+    if (prof) {
+      const token = 'tok_prof_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+      prof.tokenPrimeiroAcesso = token;
+      prof.expiracaoTokenPrimeiroAcesso = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      this.saveProfissional(prof);
+      return {
+        success: true,
+        message: 'Link de primeiro acesso enviado para o e-mail cadastrado.',
+        token,
+        targetNome: prof.nome,
+        targetTipo: 'PROFISSIONAL',
+        targetDoc: prof.cpf,
+        email: cleanEmail
+      };
+    }
+
+    // 3. Verificar em Empresas
+    const emp = this.empresas.find(e => e.email && e.email.trim().toLowerCase() === cleanEmail);
+    if (emp) {
+      const token = 'tok_emp_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+      emp.tokenPrimeiroAcesso = token;
+      emp.expiracaoTokenPrimeiroAcesso = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      this.saveEmpresa(emp);
+      return {
+        success: true,
+        message: 'Link de primeiro acesso enviado para o e-mail cadastrado.',
+        token,
+        targetNome: emp.nomeFantasia || emp.razaoSocial,
+        targetTipo: 'EMPRESA',
+        targetDoc: emp.cnpj,
+        email: cleanEmail
+      };
+    }
+
+    // Se o e-mail não estiver cadastrado em nenhuma das bases:
+    return {
+      success: false,
+      message: 'E-mail não localizado na base de dados.'
+    };
+  }
+
+  public validarTokenPrimeiroAcesso(token: string): {
+    success: boolean;
+    message: string;
+    token?: string;
+    targetNome?: string;
+    targetTipo?: 'FUNCIONARIO' | 'PROFISSIONAL' | 'EMPRESA';
+    targetDoc?: string;
+    email?: string;
+  } {
+    const cleanKey = (token || '').trim();
+    if (!cleanKey) return { success: false, message: 'Token não fornecido.' };
+
+    const func = this.funcionarios.find(f => f.tokenPrimeiroAcesso && f.tokenPrimeiroAcesso === cleanKey);
+    if (func) {
+      return {
+        success: true,
+        message: 'Token válido',
+        token: cleanKey,
+        targetNome: func.nome,
+        targetTipo: 'FUNCIONARIO',
+        targetDoc: func.cpf,
+        email: func.email
+      };
+    }
+    const prof = this.customProfissionais.find(p => p.tokenPrimeiroAcesso && p.tokenPrimeiroAcesso === cleanKey);
+    if (prof) {
+      return {
+        success: true,
+        message: 'Token válido',
+        token: cleanKey,
+        targetNome: prof.nome,
+        targetTipo: 'PROFISSIONAL',
+        targetDoc: prof.cpf,
+        email: prof.emailPessoal || prof.emailComercial
+      };
+    }
+    const emp = this.empresas.find(e => e.tokenPrimeiroAcesso && e.tokenPrimeiroAcesso === cleanKey);
+    if (emp) {
+      return {
+        success: true,
+        message: 'Token válido',
+        token: cleanKey,
+        targetNome: emp.nomeFantasia || emp.razaoSocial,
+        targetTipo: 'EMPRESA',
+        targetDoc: emp.cnpj,
+        email: emp.email
+      };
+    }
+    return { success: false, message: 'Link de primeiro acesso inválido, expirado ou já utilizado.' };
+  }
+
+  public concluirPrimeiroAcesso(tokenOuEmail: string, novaSenha: string): {
+    success: boolean;
+    message: string;
+    documento?: string;
+  } {
+    if (!novaSenha || novaSenha.length < 6) {
+      return {
+        success: false,
+        message: 'A senha deve conter no mínimo 6 caracteres.'
+      };
+    }
+
+    const cleanKey = (tokenOuEmail || '').trim().toLowerCase();
+
+    // 1. Procurar em Funcionários
+    const func = this.funcionarios.find(f => 
+      (f.tokenPrimeiroAcesso && f.tokenPrimeiroAcesso.toLowerCase() === cleanKey) ||
+      (f.email && f.email.trim().toLowerCase() === cleanKey)
+    );
+    if (func) {
+      this.definirSenha('FUNCIONARIO', func.id, novaSenha);
+      func.tokenPrimeiroAcesso = undefined;
+      func.expiracaoTokenPrimeiroAcesso = undefined;
+      this.saveFuncionario(func);
+      return {
+        success: true,
+        message: 'Senha cadastrada com sucesso! Realize o login com seu CPF.',
+        documento: func.cpf
+      };
+    }
+
+    // 2. Procurar em Profissionais
+    const prof = this.customProfissionais.find(p => 
+      (p.tokenPrimeiroAcesso && p.tokenPrimeiroAcesso.toLowerCase() === cleanKey) ||
+      (p.emailPessoal && p.emailPessoal.trim().toLowerCase() === cleanKey) ||
+      (p.emailComercial && p.emailComercial.trim().toLowerCase() === cleanKey)
+    );
+    if (prof) {
+      this.definirSenha('PROFISSIONAL', prof.id, novaSenha);
+      prof.tokenPrimeiroAcesso = undefined;
+      prof.expiracaoTokenPrimeiroAcesso = undefined;
+      this.saveProfissional(prof);
+      return {
+        success: true,
+        message: 'Senha cadastrada com sucesso! Realize o login com seu CPF.',
+        documento: prof.cpf
+      };
+    }
+
+    // 3. Procurar em Empresas
+    const emp = this.empresas.find(e => 
+      (e.tokenPrimeiroAcesso && e.tokenPrimeiroAcesso.toLowerCase() === cleanKey) ||
+      (e.email && e.email.trim().toLowerCase() === cleanKey)
+    );
+    if (emp) {
+      this.definirSenha('EMPRESA', emp.id, novaSenha);
+      emp.tokenPrimeiroAcesso = undefined;
+      emp.expiracaoTokenPrimeiroAcesso = undefined;
+      this.saveEmpresa(emp);
+      return {
+        success: true,
+        message: 'Senha cadastrada com sucesso! Realize o login com seu CNPJ.',
+        documento: emp.cnpj
+      };
+    }
+
+    return {
+      success: false,
+      message: 'Token ou e-mail de primeiro acesso inválido ou expirado.'
+    };
   }
 
   public getCurrentAuthUser(): AuthUser | null {

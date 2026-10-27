@@ -3,7 +3,6 @@ import {
   Building2, 
   Lock, 
   User, 
-  ShieldCheck, 
   Eye, 
   EyeOff, 
   ArrowRight, 
@@ -12,17 +11,17 @@ import {
   Key, 
   HelpCircle, 
   Sparkles,
-  Users,
-  Compass,
-  Scale,
-  Briefcase,
-  Check,
-  X
+  Mail,
+  Send,
+  X,
+  ExternalLink,
+  Copy,
+  Check
 } from 'lucide-react';
 import { storageService, CouncilConfig } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
-import { maskCPF, maskCNPJ, validateCPF, validateCNPJ } from '../../utils/documentUtils';
-import { AuthUser, UserRole } from '../../types';
+import { maskCPF, maskCNPJ } from '../../utils/documentUtils';
+import { AuthUser } from '../../types';
 import { SIGCON_LOGO } from '../../constants/assets';
 
 interface LoginViewProps {
@@ -39,24 +38,32 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, councilCon
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Modal de Primeiro Acesso / Troca Obrigatória de Senha
-  const [showFirstAccessModal, setShowFirstAccessModal] = useState(false);
-  const [pendingUser, setPendingUser] = useState<AuthUser | null>(null);
-  const [novaSenha, setNovaSenha] = useState('');
-  const [confirmaSenha, setConfirmaSenha] = useState('');
-  const [showNewPassword, setShowNewPassword] = useState(false);
+  // Modal de Primeiro Acesso por E-mail (Funcionários, Profissionais e Empresas)
+  const [showPrimeiroAcessoModal, setShowPrimeiroAcessoModal] = useState(false);
+  const [primeiroAcessoStep, setPrimeiroAcessoStep] = useState<'email' | 'link_enviado' | 'senha'>('email');
+  const [primeiroAcessoEmail, setPrimeiroAcessoEmail] = useState('');
+  const [primeiroAcessoLoading, setPrimeiroAcessoLoading] = useState(false);
+  const [primeiroAcessoErro, setPrimeiroAcessoErro] = useState('');
+  const [generatedActivationLink, setGeneratedActivationLink] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [primeiroAcessoData, setPrimeiroAcessoData] = useState<{
+    token: string;
+    targetNome: string;
+    targetTipo: string;
+    targetDoc: string;
+    email: string;
+  } | null>(null);
+  const [primeiroAcessoNovaSenha, setPrimeiroAcessoNovaSenha] = useState('');
+  const [primeiroAcessoConfirmaSenha, setPrimeiroAcessoConfirmaSenha] = useState('');
+  const [showPrimeiroAcessoPass, setShowPrimeiroAcessoPass] = useState(false);
 
   // Modal de Esqueci Minha Senha
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotDoc, setForgotDoc] = useState('');
   const [forgotSent, setForgotSent] = useState(false);
 
-  // Modal de Script SQL para o Desenvolvedor
-  const [showSqlModal, setShowSqlModal] = useState(false);
-  const [copiedSql, setCopiedSql] = useState(false);
-
   useEffect(() => {
-    // Carregar documento salvo se houver
+    // 1. Carregar documento salvo se houver
     const saved = storageService.getRememberedDoc();
     if (saved) {
       const clean = saved.replace(/\D/g, '');
@@ -68,6 +75,34 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, councilCon
         setDocumento(maskCPF(saved));
       }
       setSalvarDoc(true);
+    }
+
+    // 2. Verificar se a página foi acessada via link de e-mail com token de primeiro acesso (?token=... ou ?action=primeiro-acesso&token=...)
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
+      if (token) {
+        const validation = storageService.validarTokenPrimeiroAcesso(token);
+        if (validation.success && validation.token) {
+          setPrimeiroAcessoData({
+            token: validation.token,
+            targetNome: validation.targetNome || '',
+            targetTipo: validation.targetTipo || '',
+            targetDoc: validation.targetDoc || '',
+            email: validation.email || ''
+          });
+          setPrimeiroAcessoStep('senha');
+          setShowPrimeiroAcessoModal(true);
+          toastService.info(
+            'Link de Primeiro Acesso Validado',
+            `Identificado: ${validation.targetNome}. Crie sua senha de no mínimo 6 caracteres.`
+          );
+        } else {
+          toastService.error('Link Inválido', validation.message);
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao ler token da URL:', e);
     }
   }, []);
 
@@ -110,25 +145,18 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, councilCon
 
     setTimeout(() => {
       const result = storageService.login(documento, senha, salvarDoc);
+      setIsLoading(false);
 
       if (!result.success) {
-        setIsLoading(false);
         setErrorMessage(result.message);
         return;
       }
 
-      if (result.precisaTrocarSenha && result.user) {
-        setIsLoading(false);
-        setPendingUser(result.user);
-        setShowFirstAccessModal(true);
-        toastService.info(
-          'Primeiro Acesso Detectado',
-          'Por segurança, cadastre sua senha pessoal de acesso para continuar.'
-        );
+      if (result.precisaTrocarSenha) {
+        setErrorMessage('Senha não cadastrada ou primeiro acesso pendente. Utilize a opção "Primeiro Acesso ao Sistema" abaixo para cadastrar sua senha por e-mail com segurança.');
         return;
       }
 
-      setIsLoading(false);
       if (result.user) {
         toastService.success(
           `Bem-vindo(a), ${result.user.nome}!`,
@@ -139,203 +167,128 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, councilCon
     }, 350);
   };
 
-  const handleSaveFirstAccessPassword = (e: React.FormEvent) => {
+  const handleSolicitarPrimeiroAcesso = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!pendingUser) return;
+    setPrimeiroAcessoErro('');
 
-    if (!novaSenha || novaSenha.length < 4) {
-      toastService.warning('Senha Curta', 'A nova senha deve ter no mínimo 4 caracteres.');
+    const cleanEmail = (primeiroAcessoEmail || '').trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@') || !cleanEmail.includes('.')) {
+      setPrimeiroAcessoErro('Informe um e-mail válido para continuar.');
       return;
     }
 
-    if (novaSenha !== confirmaSenha) {
-      toastService.warning('Senhas Não Conferem', 'A confirmação de senha não coincide com a nova senha digitada.');
+    setPrimeiroAcessoLoading(true);
+
+    setTimeout(() => {
+      const res = storageService.solicitarPrimeiroAcesso(cleanEmail);
+      setPrimeiroAcessoLoading(false);
+
+      if (!res.success) {
+        setPrimeiroAcessoErro(res.message);
+        return;
+      }
+
+      const token = res.token || '';
+      const activationLink = `${window.location.origin}${window.location.pathname}?token=${token}&action=primeiro-acesso`;
+
+      setPrimeiroAcessoData({
+        token,
+        targetNome: res.targetNome || '',
+        targetTipo: res.targetTipo || '',
+        targetDoc: res.targetDoc || '',
+        email: res.email || cleanEmail
+      });
+      setGeneratedActivationLink(activationLink);
+      
+      // NÃO abre a tela de senha imediatamente! Avança para o aviso de e-mail enviado com o link
+      setPrimeiroAcessoStep('link_enviado');
+      
+      toastService.success(
+        'E-mail Enviado!',
+        `Link para criação de senha enviado para ${cleanEmail}.`
+      );
+    }, 450);
+  };
+
+  const handleCopyActivationLink = () => {
+    if (!generatedActivationLink) return;
+    navigator.clipboard.writeText(generatedActivationLink);
+    setCopiedLink(true);
+    toastService.success('Link Copiado', 'Link de primeiro acesso copiado para a área de transferência.');
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  const handleOpenInGmail = () => {
+    if (!primeiroAcessoData?.email || !generatedActivationLink) return;
+    const subject = 'SIGCON - Primeiro Acesso e Criação de Senha';
+    const body = `Olá, ${primeiroAcessoData.targetNome}!\n\nVocê solicitou o primeiro acesso ao sistema SIGCON (${primeiroAcessoData.targetTipo} - Doc: ${primeiroAcessoData.targetDoc}).\n\nPara cadastrar sua nova senha pessoal de acesso (mínimo de 6 caracteres), clique no link de segurança abaixo:\n\n${generatedActivationLink}\n\nSe você não solicitou este acesso, desconsidere esta mensagem.`;
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(primeiroAcessoData.email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(gmailUrl, '_blank');
+  };
+
+  const handleOpenLinkFromEmail = () => {
+    // Simula a ação do usuário ao clicar no link recebido em seu e-mail
+    if (primeiroAcessoData?.token) {
+      const validation = storageService.validarTokenPrimeiroAcesso(primeiroAcessoData.token);
+      if (validation.success) {
+        setPrimeiroAcessoStep('senha');
+        toastService.info(
+          'Link do E-mail Acessado',
+          'Identidade confirmada! Crie agora a sua nova senha pessoal de no mínimo 6 caracteres.'
+        );
+      } else {
+        setPrimeiroAcessoErro(validation.message);
+      }
+    }
+  };
+
+  const handleConcluirPrimeiroAcesso = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPrimeiroAcessoErro('');
+
+    if (!primeiroAcessoNovaSenha || primeiroAcessoNovaSenha.length < 6) {
+      setPrimeiroAcessoErro('A nova senha deve conter no mínimo 6 caracteres.');
       return;
     }
 
-    const res = storageService.redefinirSenha(pendingUser.documento, novaSenha);
+    if (primeiroAcessoNovaSenha !== primeiroAcessoConfirmaSenha) {
+      setPrimeiroAcessoErro('A confirmação de senha não coincide com a nova senha digitada.');
+      return;
+    }
+
+    const key = primeiroAcessoData?.token || primeiroAcessoEmail;
+    const res = storageService.concluirPrimeiroAcesso(key, primeiroAcessoNovaSenha);
+
     if (!res.success) {
-      toastService.warning('Falha ao Salvar Senha', res.message);
+      setPrimeiroAcessoErro(res.message);
       return;
     }
 
-    // Atualiza o objeto de autenticação
-    const updatedUser: AuthUser = {
-      ...pendingUser,
-      precisaTrocarSenha: false,
-      ultimoAcesso: new Date().toLocaleString('pt-BR')
-    };
+    // Limpar parâmetros da URL se houver token
+    try {
+      if (window.location.search.includes('token=')) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    } catch (e) {}
 
-    storageService.setCurrentAuthUser(updatedUser);
-    setShowFirstAccessModal(false);
     toastService.success(
       'Senha Cadastrada com Sucesso!',
-      'Sua credencial de acesso foi ativada. Bem-vindo(a) ao sistema.'
+      'Sua senha de no mínimo 6 caracteres foi salva. Você já pode fazer login no sistema.'
     );
-    onLoginSuccess(updatedUser);
-  };
 
-  const handleQuickLogin = (cpfOrCnpj: string, pass: string, type: 'CPF' | 'CNPJ') => {
-    setDocType(type);
-    setDocumento(type === 'CPF' ? maskCPF(cpfOrCnpj) : maskCNPJ(cpfOrCnpj));
-    setSenha(pass);
-    setErrorMessage('');
-  };
-
-  const SQL_UPDATE_SCRIPT = `-- ==============================================================================
--- ATUALIZAÇÃO DO BANCO DE DADOS: USUÁRIO DESENVOLVEDOR MASTER & AUTENTICAÇÃO
--- Banco Alvo: PostgreSQL / Supabase
--- Autor: Sistema Integrado de Gestão de Conselho (SIGCON)
--- CPF do Desenvolvedor: 934.135.302-59
--- Compatibilidade: 100% resiliente com colunas id tipo UUID ou TEXT/VARCHAR
--- ==============================================================================
-
--- Extensões necessárias para UUID e criptografia
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
--- 1. Criação ou adaptação da tabela de Funcionários e Colaboradores
-CREATE TABLE IF NOT EXISTS public.funcionarios (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    nome VARCHAR(250) NOT NULL,
-    cpf VARCHAR(14) NOT NULL UNIQUE,
-    rg VARCHAR(50),
-    matricula VARCHAR(50) NOT NULL,
-    email VARCHAR(150) NOT NULL,
-    telefone VARCHAR(50),
-    celular VARCHAR(50),
-    foto_url TEXT,
-    cargo_id VARCHAR(50),
-    cargo_nome VARCHAR(150),
-    setor_id VARCHAR(50),
-    setor_nome VARCHAR(150),
-    permissoes_modulos TEXT[] DEFAULT '{}',
-    ativo BOOLEAN NOT NULL DEFAULT TRUE,
-    data_admissao VARCHAR(20),
-    senha_hash VARCHAR(255),
-    primeiro_acesso_pendente BOOLEAN NOT NULL DEFAULT TRUE,
-    zerar_senha_pendente BOOLEAN NOT NULL DEFAULT FALSE,
-    ultimo_acesso VARCHAR(50),
-    observacoes TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Garante que todas as colunas necessárias existam caso a tabela já tenha sido criada anteriormente
-ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS foto_url TEXT;
-ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS cargo_id VARCHAR(50);
-ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS cargo_nome VARCHAR(150);
-ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS setor_id VARCHAR(50);
-ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS setor_nome VARCHAR(150);
-ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS permissoes_modulos TEXT[] DEFAULT '{}';
-ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
-ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS data_admissao VARCHAR(20);
-ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS senha_hash VARCHAR(255);
-ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS primeiro_acesso_pendente BOOLEAN DEFAULT TRUE;
-ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS zerar_senha_pendente BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS ultimo_acesso VARCHAR(50);
-ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS observacoes TEXT;
-
--- 2. Inserção / Atualização idempotente do Usuário DESENVOLVEDOR MASTER (Jefferson Ayres)
--- Acesso Supremo Irrestrito acima do Administrador Geral
--- Nota: Usa UUID padronizado '00000000-0000-4000-a000-000000000001' (compatível tanto com coluna UUID quanto VARCHAR/TEXT)
-DO $$
-BEGIN
-    IF EXISTS (SELECT 1 FROM public.funcionarios WHERE cpf = '934.135.302-59') THEN
-        UPDATE public.funcionarios SET
-            nome = 'Jefferson Ayres (Desenvolvedor)',
-            cargo_nome = 'Desenvolvedor Master / Arquiteto de Software',
-            permissoes_modulos = ARRAY['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'],
-            ativo = TRUE,
-            observacoes = 'Superusuário Desenvolvedor com autoridade máxima e acesso irrestrito acima do Administrador.'
-        WHERE cpf = '934.135.302-59';
-    ELSE
-        INSERT INTO public.funcionarios (
-            id, nome, cpf, rg, matricula, email, telefone, celular, foto_url,
-            cargo_id, cargo_nome, setor_id, setor_nome,
-            permissoes_modulos, ativo, data_admissao, senha_hash,
-            primeiro_acesso_pendente, zerar_senha_pendente, ultimo_acesso, observacoes
-        ) VALUES (
-            '00000000-0000-4000-a000-000000000001',
-            'Jefferson Ayres (Desenvolvedor)',
-            '934.135.302-59',
-            'DEV-SYSTEM-MASTER',
-            'DEV-001',
-            'jeffersonayresjefferson@gmail.com',
-            '(92) 99999-9999',
-            '(92) 99999-9999',
-            'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=256',
-            'crg-dev',
-            'Desenvolvedor Master / Arquiteto de Software',
-            'setlot-7',
-            'Tecnologia da Informação e Engenharia de Software',
-            'DEVELOPER',
-            ARRAY['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'],
-            TRUE,
-            '2020-01-01',
-            NULL, -- Senha a ser cadastrada no 1º acesso
-            TRUE,
-            FALSE,
-            'Aguardando primeiro acesso',
-            'Superusuário Desenvolvedor com autoridade máxima e acesso irrestrito acima do Administrador.'
-        );
-    END IF;
-END $$;
-
--- 3. Adiciona campos de autenticação web e primeiro acesso nas tabelas de profissionais e empresas
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS senha_hash VARCHAR(255);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS primeiro_acesso_pendente BOOLEAN DEFAULT TRUE;
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS zerar_senha_pendente BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS ultimo_acesso VARCHAR(50);
-
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS senha_hash VARCHAR(255);
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS primeiro_acesso_pendente BOOLEAN DEFAULT TRUE;
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS zerar_senha_pendente BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS ultimo_acesso VARCHAR(50);
-
--- 4. Habilita RLS e permissões de segurança na tabela funcionarios
-ALTER TABLE public.funcionarios ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Public access funcionarios" ON public.funcionarios;
-CREATE POLICY "Public access funcionarios" ON public.funcionarios FOR ALL USING (true) WITH CHECK (true);
-
--- 5. Registro seguro de auditoria (compatível com qualquer versão da tabela historico_auditoria)
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM information_schema.tables 
-        WHERE table_schema = 'public' AND table_name = 'historico_auditoria'
-    ) THEN
-        BEGIN
-            INSERT INTO public.historico_auditoria (
-                id, timestamp, target_id, target_tipo, target_nome, target_doc, 
-                usuario_nome, usuario_papel, acao, campo_alterado, valor_anterior, valor_novo, motivo
-            ) VALUES (
-                gen_random_uuid()::text,
-                TO_CHAR(NOW(), 'DD/MM/YYYY HH24:MI:SS'),
-                '00000000-0000-4000-a000-000000000001',
-                'FUNCIONARIO',
-                'Jefferson Ayres (Desenvolvedor)',
-                '934.135.302-59',
-                'SISTEMA / SQL MIGRATION',
-                'DEVELOPER',
-                'CRIACAO_USUARIO_DEV',
-                'USUARIO_DESENVOLVEDOR',
-                NULL,
-                'Usuário Desenvolvedor Jefferson Ayres configurado com sucesso',
-                'Configuração do Usuário Supremo Desenvolvedor'
-            );
-        EXCEPTION WHEN others THEN
-            NULL;
-        END;
-    END IF;
-END $$;
-`;
-
-  const handleCopySql = () => {
-    navigator.clipboard.writeText(SQL_UPDATE_SCRIPT);
-    setCopiedSql(true);
-    toastService.success('SQL Copiado', 'Script SQL copiado para a área de transferência.');
-    setTimeout(() => setCopiedSql(false), 3000);
+    // Ajusta o documento no formulário de login
+    if (res.documento) {
+      const cleanDoc = res.documento.replace(/\D/g, '');
+      if (cleanDoc.length === 14) {
+        setDocType('CNPJ');
+        setDocumento(maskCNPJ(res.documento));
+      } else {
+        setDocType('CPF');
+        setDocumento(maskCPF(res.documento));
+      }
+    }
+    setSenha('');
+    setShowPrimeiroAcessoModal(false);
   };
 
   return (
@@ -441,13 +394,33 @@ END $$;
                 <label className="block text-slate-700 font-bold uppercase text-[10px]">
                   Senha de Acesso *
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setShowForgotModal(true)}
-                  className="text-[10px] text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer"
-                >
-                  Esqueci minha senha
-                </button>
+                <div className="flex items-center space-x-2 text-[10px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPrimeiroAcessoEmail('');
+                      setPrimeiroAcessoErro('');
+                      setPrimeiroAcessoStep('email');
+                      setPrimeiroAcessoData(null);
+                      setGeneratedActivationLink('');
+                      setPrimeiroAcessoNovaSenha('');
+                      setPrimeiroAcessoConfirmaSenha('');
+                      setShowPrimeiroAcessoModal(true);
+                    }}
+                    className="text-emerald-700 hover:text-emerald-900 font-extrabold hover:underline cursor-pointer flex items-center space-x-0.5"
+                  >
+                    <Sparkles className="w-3 h-3 text-emerald-600" />
+                    <span>Primeiro Acesso</span>
+                  </button>
+                  <span className="text-slate-300">•</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotModal(true)}
+                    className="text-blue-600 hover:text-blue-800 font-bold hover:underline cursor-pointer"
+                  >
+                    Esqueci minha senha
+                  </button>
+                </div>
               </div>
               <div className="relative">
                 <input
@@ -501,93 +474,26 @@ END $$;
                 </>
               )}
             </button>
-          </form>
 
-          {/* Quick Demo Access Bar */}
-          <div className="pt-3 border-t border-slate-100 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
-                Acessos Rápidos de Demonstração:
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowSqlModal(true)}
-                className="text-[10px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 px-2 py-0.5 rounded-md border border-purple-200 flex items-center space-x-1 cursor-pointer"
-                title="Visualizar script SQL para o banco de dados"
-              >
-                <span>📜 Ver SQL Atualização</span>
-              </button>
-            </div>
-
-            {/* Destaque para o Desenvolvedor Jefferson Ayres */}
+            {/* Botão Destaque: Primeiro Acesso por E-mail */}
             <button
               type="button"
-              onClick={() => handleQuickLogin('93413530259', '', 'CPF')}
-              className="w-full p-2.5 rounded-xl bg-linear-to-r from-purple-50 via-indigo-50 to-blue-50 border-2 border-purple-300 text-left hover:border-purple-500 transition-all cursor-pointer flex items-center justify-between shadow-2xs group"
+              onClick={() => {
+                setPrimeiroAcessoEmail('');
+                setPrimeiroAcessoErro('');
+                setPrimeiroAcessoStep('email');
+                setPrimeiroAcessoData(null);
+                setGeneratedActivationLink('');
+                setPrimeiroAcessoNovaSenha('');
+                setPrimeiroAcessoConfirmaSenha('');
+                setShowPrimeiroAcessoModal(true);
+              }}
+              className="w-full py-2.5 px-3 rounded-xl bg-linear-to-r from-emerald-50 via-teal-50 to-blue-50 hover:from-emerald-100 hover:to-blue-100 border border-emerald-300 text-emerald-900 text-xs font-bold transition-all flex items-center justify-center space-x-2 cursor-pointer shadow-2xs group"
             >
-              <div className="flex items-center space-x-2">
-                <span className="w-7 h-7 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
-                  👑
-                </span>
-                <div>
-                  <div className="text-xs font-extrabold text-purple-900 group-hover:text-purple-700">
-                    Desenvolvedor Master (Jefferson Ayres)
-                  </div>
-                  <div className="text-[10px] text-purple-700 font-mono font-semibold">
-                    CPF: 934.135.302-59 • 1º Acesso Obrigatório
-                  </div>
-                </div>
-              </div>
-              <span className="px-2 py-0.5 rounded bg-purple-200 text-purple-900 font-extrabold text-[9px] uppercase">
-                Acesso Total
-              </span>
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600 group-hover:scale-110 transition-transform" />
+              <span>Primeiro Acesso ao Sistema? Criar Minha Senha</span>
             </button>
-
-            {/* Outros perfis demo */}
-            <div className="grid grid-cols-2 gap-1.5 text-[10px]">
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('00000000000', 'admin', 'CPF')}
-                className="p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-left cursor-pointer flex items-center space-x-1.5"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                <span className="truncate">Admin Geral</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickLogin('11111111111', '123456', 'CPF')}
-                className="p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-left cursor-pointer flex items-center space-x-1.5"
-              >
-                <Compass className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                <span className="truncate">Fiscal Campo</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  const prof = storageService.getProfissionais()[0];
-                  if (prof) handleQuickLogin(prof.cpf, '123456', 'CPF');
-                }}
-                className="p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-left cursor-pointer flex items-center space-x-1.5"
-              >
-                <Users className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                <span className="truncate">Profissional (PF)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  const emp = storageService.getEmpresas()[0];
-                  if (emp) handleQuickLogin(emp.cnpj, '123456', 'CNPJ');
-                }}
-                className="p-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 font-semibold text-left cursor-pointer flex items-center space-x-1.5"
-              >
-                <Building2 className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                <span className="truncate">Empresa (PJ)</span>
-              </button>
-            </div>
-          </div>
+          </form>
         </div>
 
         {/* Footer info */}
@@ -596,99 +502,315 @@ END $$;
         </div>
       </div>
 
-      {/* MODAL 1: PRIMEIRO ACESSO / CADASTRO OBRIGATÓRIO DE SENHA */}
-      {showFirstAccessModal && pendingUser && (
+      {/* MODAL: PRIMEIRO ACESSO POR E-MAIL (PROFISSIONAIS, FUNCIONÁRIOS E EMPRESAS) */}
+      {showPrimeiroAcessoModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden">
-            <div className="bg-gradient-to-r from-amber-600 via-amber-700 to-orange-700 p-5 text-white">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden">
+            {/* Modal Header */}
+            <div className="bg-linear-to-r from-emerald-600 via-teal-600 to-blue-700 p-5 text-white flex items-center justify-between">
               <div className="flex items-center space-x-2.5">
                 <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-white">
-                  <Key className="w-5 h-5" />
+                  <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="text-sm font-extrabold uppercase tracking-wider">
-                    Definição Obrigatória de Senha
+                    Primeiro Acesso ao Sistema
                   </h3>
-                  <p className="text-[11px] text-amber-100">
-                    Primeiro Acesso ou Senha Zerada pelo Administrador
+                  <p className="text-[11px] text-emerald-100">
+                    {primeiroAcessoStep === 'email' && 'Etapa 1 de 2: Validação de E-mail'}
+                    {primeiroAcessoStep === 'link_enviado' && 'Link de Ativação Enviado'}
+                    {primeiroAcessoStep === 'senha' && 'Etapa 2 de 2: Criação da Senha de Acesso'}
                   </p>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setShowPrimeiroAcessoModal(false)}
+                className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <form onSubmit={handleSaveFirstAccessPassword} className="p-6 space-y-4">
-              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed">
-                <div className="font-bold uppercase text-[11px] mb-1 flex items-center space-x-1">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Olá, {pendingUser.nome}!</span>
+            {/* Modal Body */}
+            <div className="p-6">
+              {/* ETAPA 1: DIGITAÇÃO DO E-MAIL */}
+              {primeiroAcessoStep === 'email' && (
+                <form onSubmit={handleSolicitarPrimeiroAcesso} className="space-y-4">
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 text-xs leading-relaxed space-y-1">
+                    <p className="font-bold text-slate-900 text-[11px] uppercase flex items-center space-x-1">
+                      <Mail className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Informe seu e-mail cadastrado</span>
+                    </p>
+                    <p>
+                      Para realizar o primeiro acesso com segurança, informe o e-mail cadastrado junto ao conselho. O sistema validará se o e-mail consta na base de dados e enviará um link seguro para você cadastrar sua senha.
+                    </p>
+                  </div>
+
+                  {primeiroAcessoErro && (
+                    <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start space-x-2 animate-in fade-in">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      <div className="font-bold leading-snug">{primeiroAcessoErro}</div>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-slate-700 font-bold uppercase text-[10px] mb-1">
+                      E-mail Cadastrado no Conselho *
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="email"
+                        required
+                        autoFocus
+                        value={primeiroAcessoEmail}
+                        onChange={(e) => {
+                          setPrimeiroAcessoEmail(e.target.value);
+                          setPrimeiroAcessoErro('');
+                        }}
+                        placeholder="exemplo@dominio.com.br"
+                        className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs font-semibold focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                      />
+                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    </div>
+                    <span className="text-[10px] text-slate-400 mt-1 block">
+                      Válido para Funcionários/Fiscais, Profissionais Inscritos (PF) e Empresas (PJ).
+                    </span>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-end space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowPrimeiroAcessoModal(false)}
+                      className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 font-bold text-xs uppercase hover:bg-slate-100 cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={primeiroAcessoLoading}
+                      className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase shadow-md shadow-emerald-500/25 transition-all cursor-pointer flex items-center space-x-1.5 disabled:opacity-70 disabled:cursor-not-allowed"
+                    >
+                      {primeiroAcessoLoading ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Verificando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-3.5 h-3.5" />
+                          <span>Enviar Link para o E-mail</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* ETAPA INTERMEDIÁRIA: LINK ENVIADO AO E-MAIL */}
+              {primeiroAcessoStep === 'link_enviado' && (
+                <div className="space-y-4 animate-in fade-in">
+                  <div className="text-center py-2 space-y-2">
+                    <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+                      <Mail className="w-7 h-7" />
+                    </div>
+                    <h4 className="text-base font-extrabold text-slate-900">
+                      Link de Ativação Enviado!
+                    </h4>
+                    <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
+                      Enviamos um link com código de segurança para o e-mail:
+                    </p>
+                    <div className="inline-block px-3 py-1 rounded-lg bg-slate-100 border border-slate-200 text-xs font-mono font-bold text-slate-800">
+                      {primeiroAcessoData?.email}
+                    </div>
+                  </div>
+
+                  {/* Informações do Cadastro Localizado */}
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+                    <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                      Titular Identificado na Base de Dados:
+                    </div>
+                    <div className="font-bold text-slate-900">{primeiroAcessoData?.targetNome}</div>
+                    <div className="text-[11px] text-slate-600">
+                      {primeiroAcessoData?.targetTipo === 'FUNCIONARIO' && 'Colaborador / Fiscal do Conselho'}
+                      {primeiroAcessoData?.targetTipo === 'PROFISSIONAL' && 'Profissional Inscrito (Pessoa Física)'}
+                      {primeiroAcessoData?.targetTipo === 'EMPRESA' && 'Empresa / Estabelecimento (Pessoa Jurídica)'}
+                      {' • Documento: '}<span className="font-mono">{primeiroAcessoData?.targetDoc}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs leading-relaxed space-y-1">
+                    <p className="font-bold text-[11px] uppercase flex items-center space-x-1 text-amber-800">
+                      <span>⚠️ Como prosseguir:</span>
+                    </p>
+                    <p>
+                      Abra a caixa de entrada do seu e-mail e <strong>clique no link recebido</strong> para validar sua titularidade e criar a sua nova senha pessoal de <strong>no mínimo 6 caracteres</strong>.
+                    </p>
+                  </div>
+
+                  {/* Acesso Direto / Simulação do Clique do E-mail */}
+                  <div className="p-3 bg-linear-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-extrabold uppercase text-emerald-800 tracking-wider flex items-center space-x-1">
+                        <ExternalLink className="w-3 h-3 text-emerald-600" />
+                        <span>Acessar Link Recebido no E-mail</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleCopyActivationLink}
+                        className="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 flex items-center space-x-1 cursor-pointer"
+                        title="Copiar URL do link de ativação"
+                      >
+                        {copiedLink ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedLink ? 'Copiado!' : 'Copiar Link'}</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={handleOpenInGmail}
+                        className="py-2 px-3 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold text-xs shadow-2xs transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
+                        title="Abrir o Gmail com a mensagem e o link preenchidos"
+                      >
+                        <Mail className="w-3.5 h-3.5 text-rose-600" />
+                        <span>Abrir no Gmail Web</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleOpenLinkFromEmail}
+                        className="py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase shadow-sm transition-all flex items-center justify-center space-x-1 cursor-pointer"
+                        title="Simular o clique no link recebido por e-mail"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Criar Senha Agora</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="pt-1 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPrimeiroAcessoStep('email');
+                        setPrimeiroAcessoErro('');
+                      }}
+                      className="text-xs text-slate-500 hover:text-slate-700 font-bold hover:underline cursor-pointer"
+                    >
+                      ← Enviar para outro e-mail
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowPrimeiroAcessoModal(false)}
+                      className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs uppercase hover:bg-slate-100 cursor-pointer"
+                    >
+                      Fechar
+                    </button>
+                  </div>
                 </div>
-                <p>
-                  Por diretriz de segurança do conselho, o seu usuário é o seu <strong>{pendingUser.documento}</strong>. 
-                  Você deve agora cadastrar uma senha pessoal definitiva para utilizar o sistema.
-                </p>
-              </div>
+              )}
 
-              <div>
-                <label className="block text-slate-700 font-bold uppercase text-[10px] mb-1">
-                  Nova Senha Pessoal * (mínimo 4 caracteres)
-                </label>
-                <div className="relative">
-                  <input
-                    type={showNewPassword ? 'text' : 'password'}
-                    required
-                    minLength={4}
-                    value={novaSenha}
-                    onChange={(e) => setNovaSenha(e.target.value)}
-                    placeholder="Digite sua nova senha"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs font-semibold focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-amber-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
-                  >
-                    {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  </button>
-                </div>
-              </div>
+              {/* ETAPA 2: CRIAÇÃO DA NOVA SENHA (APÓS CLICAR NO LINK) */}
+              {primeiroAcessoStep === 'senha' && (
+                <form onSubmit={handleConcluirPrimeiroAcesso} className="space-y-4 animate-in fade-in">
+                  {/* Confirmação e dados identificados */}
+                  <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs space-y-1.5">
+                    <div className="flex items-center space-x-1.5 font-black text-xs text-emerald-800 uppercase">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Link do E-mail Validado com Sucesso</span>
+                    </div>
+                    <div className="text-[11px] leading-relaxed text-slate-700 bg-white/80 p-2.5 rounded-lg border border-emerald-100">
+                      <div><strong>Titular:</strong> {primeiroAcessoData?.targetNome}</div>
+                      <div><strong>Categoria:</strong> <span className="font-mono text-emerald-800 font-bold">{primeiroAcessoData?.targetTipo}</span></div>
+                      <div><strong>Documento:</strong> <span className="font-mono font-bold">{primeiroAcessoData?.targetDoc}</span></div>
+                      <div><strong>E-mail:</strong> <span className="font-mono">{primeiroAcessoData?.email}</span></div>
+                    </div>
+                    <p className="text-[11px] text-emerald-800 font-semibold">
+                      Defina sua senha pessoal definitiva abaixo (mínimo de 6 caracteres):
+                    </p>
+                  </div>
 
-              <div>
-                <label className="block text-slate-700 font-bold uppercase text-[10px] mb-1">
-                  Confirmação da Nova Senha *
-                </label>
-                <input
-                  type={showNewPassword ? 'text' : 'password'}
-                  required
-                  minLength={4}
-                  value={confirmaSenha}
-                  onChange={(e) => setConfirmaSenha(e.target.value)}
-                  placeholder="Repita a nova senha para confirmação"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs font-semibold focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-amber-500"
-                />
-              </div>
+                  {primeiroAcessoErro && (
+                    <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start space-x-2 animate-in fade-in">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      <div className="font-bold leading-snug">{primeiroAcessoErro}</div>
+                    </div>
+                  )}
 
-              <div className="pt-2 flex justify-end space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setShowFirstAccessModal(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 font-bold text-xs uppercase hover:bg-slate-100 cursor-pointer"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs uppercase shadow-md shadow-amber-500/25 transition-all cursor-pointer flex items-center space-x-1.5"
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Salvar Senha & Entrar</span>
-                </button>
-              </div>
-            </form>
+                  <div>
+                    <label className="block text-slate-700 font-bold uppercase text-[10px] mb-1">
+                      Nova Senha Pessoal * (no mínimo 6 caracteres)
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPrimeiroAcessoPass ? 'text' : 'password'}
+                        required
+                        minLength={6}
+                        autoFocus
+                        value={primeiroAcessoNovaSenha}
+                        onChange={(e) => {
+                          setPrimeiroAcessoNovaSenha(e.target.value);
+                          setPrimeiroAcessoErro('');
+                        }}
+                        placeholder="Mínimo de 6 caracteres"
+                        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs font-semibold focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPrimeiroAcessoPass(!showPrimeiroAcessoPass)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                      >
+                        {showPrimeiroAcessoPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <span className="text-[10px] text-slate-400 mt-1 block">
+                      A senha deve conter pelo menos 6 caracteres para garantir a segurança da sua conta.
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-bold uppercase text-[10px] mb-1">
+                      Confirmação da Nova Senha *
+                    </label>
+                    <input
+                      type={showPrimeiroAcessoPass ? 'text' : 'password'}
+                      required
+                      minLength={6}
+                      value={primeiroAcessoConfirmaSenha}
+                      onChange={(e) => {
+                        setPrimeiroAcessoConfirmaSenha(e.target.value);
+                        setPrimeiroAcessoErro('');
+                      }}
+                      placeholder="Repita a senha de no mínimo 6 caracteres"
+                      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs font-semibold focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-end space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowPrimeiroAcessoModal(false)}
+                      className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 font-bold text-xs uppercase hover:bg-slate-100 cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase shadow-md shadow-emerald-500/25 transition-all cursor-pointer flex items-center space-x-1.5"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Cadastrar Senha & Ativar Conta</span>
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
           </div>
         </div>
       )}
 
-      {/* MODAL 2: ESQUECI MINHA SENHA */}
+      {/* MODAL: ESQUECI MINHA SENHA */}
       {showForgotModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-xs animate-in fade-in">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-slate-200 overflow-hidden">
@@ -739,7 +861,7 @@ END $$;
                     <button
                       type="button"
                       onClick={() => setShowForgotModal(false)}
-                      className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 font-bold uppercase"
+                      className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 font-bold uppercase cursor-pointer"
                     >
                       Fechar
                     </button>
@@ -752,7 +874,7 @@ END $$;
                         }
                         setForgotSent(true);
                       }}
-                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase shadow-xs"
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold uppercase shadow-xs cursor-pointer"
                     >
                       Solicitar Redefinição
                     </button>
@@ -766,8 +888,7 @@ END $$;
                   <h4 className="font-bold text-slate-900 text-sm">Solicitação Enviada!</h4>
                   <p className="text-slate-600 leading-relaxed">
                     A solicitação para o documento <strong>{forgotDoc}</strong> foi encaminhada ao setor de TI/Cadastro. 
-                    Se preferir redefinição imediata, solicite a um operador que clique no botão <strong>"Zerar Senha"</strong> 
-                    na aba de Login da sua ficha cadastral.
+                    Se preferir redefinição imediata, utilize a opção <strong>"Primeiro Acesso ao Sistema"</strong> informando seu e-mail cadastrado.
                   </p>
                   <button
                     type="button"
@@ -778,57 +899,6 @@ END $$;
                   </button>
                 </div>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 3: SCRIPT SQL PARA O DESENVOLVEDOR */}
-      {showSqlModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-200 overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="bg-slate-900 p-4 text-white flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <span className="text-lg">📜</span>
-                <div>
-                  <h3 className="text-xs font-extrabold uppercase">Script SQL de Atualização do Banco</h3>
-                  <p className="text-[10px] text-slate-400">PostgreSQL / Supabase • Usuário Desenvolvedor Master & Autenticação</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowSqlModal(false)}
-                className="text-slate-400 hover:text-white cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-4 bg-slate-950 text-slate-200 font-mono text-[11px] overflow-y-auto flex-1 leading-relaxed">
-              <pre>{SQL_UPDATE_SCRIPT}</pre>
-            </div>
-
-            <div className="p-3 bg-slate-100 border-t border-slate-200 flex items-center justify-between">
-              <span className="text-[11px] text-slate-500 font-medium">
-                Script pronto para execução no SQL Editor do Supabase ou PostgreSQL.
-              </span>
-              <div className="flex items-center space-x-2">
-                <button
-                  type="button"
-                  onClick={handleCopySql}
-                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs uppercase shadow-xs flex items-center space-x-1.5 cursor-pointer"
-                >
-                  {copiedSql ? <Check className="w-4 h-4" /> : <Key className="w-4 h-4" />}
-                  <span>{copiedSql ? 'Copiado!' : 'Copiar Script SQL'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowSqlModal(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold text-xs uppercase hover:bg-slate-200 cursor-pointer"
-                >
-                  Fechar
-                </button>
-              </div>
             </div>
           </div>
         </div>

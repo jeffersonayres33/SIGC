@@ -292,6 +292,7 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
       fotoUrl: editingFunc.fotoUrl || '',
       cargoId: editingFunc.cargoId || '',
       cargoNome: editingFunc.cargoNome || 'Não informado',
+      numeroInscricao: editingFunc.numeroInscricao ? editingFunc.numeroInscricao.trim().toUpperCase() : undefined,
       setorId: editingFunc.setorId || '',
       setorNome: editingFunc.setorNome || 'Não informado',
       permissoesModulos: editingFunc.permissoesModulos && editingFunc.permissoesModulos.length > 0 
@@ -553,7 +554,14 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <div className="font-bold text-slate-800">{func.cargoNome}</div>
+                        <div className="font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                          <span>{func.cargoNome}</span>
+                          {func.numeroInscricao && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                              {func.numeroInscricao}
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[11px] text-slate-500 flex items-center gap-1">
                           <Network className="w-3 h-3 text-slate-400" />
                           <span>{func.setorNome}</span>
@@ -960,6 +968,32 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
                         </select>
                       </div>
                     </div>
+
+                    {/* Campo Exclusivo: Número de Inscrição / CRF do Fiscal */}
+                    {((editingFunc.cargoNome || '').toLowerCase().includes('fiscal') || (editingFunc.setorNome || '').toLowerCase().includes('fiscal')) && (
+                      <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl space-y-1.5 animate-in fade-in duration-200">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-emerald-950 font-bold uppercase text-[11px] flex items-center space-x-1.5">
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+                            <span>Número de Inscrição / CRF do Fiscal *</span>
+                          </label>
+                          <span className="text-[10px] font-bold text-emerald-800 bg-white px-2 py-0.5 rounded border border-emerald-200">
+                            Exibido na Assinatura dos Termos
+                          </span>
+                        </div>
+                        <input
+                          type="text"
+                          required
+                          placeholder="EX: CRF-AM 4150"
+                          value={editingFunc.numeroInscricao || ''}
+                          onChange={(e) => setEditingFunc({ ...editingFunc, numeroInscricao: e.target.value.toUpperCase() })}
+                          className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-lg font-mono font-bold text-xs text-emerald-950 uppercase focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                        />
+                        <p className="text-[10px] text-emerald-800">
+                          Este número de inscrição do Farmacêutico Fiscal será inserido automaticamente na assinatura digital dos Termos de Inspeção, Notificações e Autos de Infração.
+                        </p>
+                      </div>
+                    )}
 
                     {/* Indicador em tempo real dos Módulos Pré-Definidos Vinculados */}
                     {(() => {

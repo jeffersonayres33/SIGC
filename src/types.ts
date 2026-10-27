@@ -247,6 +247,8 @@ export interface Profissional {
   senhaHash?: string;
   primeiroAcessoPendente?: boolean;
   zerarSenhaPendente?: boolean;
+  tokenPrimeiroAcesso?: string;
+  expiracaoTokenPrimeiroAcesso?: string;
   ultimoAcesso?: string;
 }
 
@@ -317,6 +319,8 @@ export interface Empresa {
   senhaHash?: string;
   primeiroAcessoPendente?: boolean;
   zerarSenhaPendente?: boolean;
+  tokenPrimeiroAcesso?: string;
+  expiracaoTokenPrimeiroAcesso?: string;
   ultimoAcesso?: string;
 }
 
@@ -398,8 +402,9 @@ export interface TermoFiscalizacao {
   matriculaFiscal?: string;
   fiscalAssinanteNome?: string;
   fiscalAssinanteMatricula?: string;
-  latitude: number;
-  longitude: number;
+  fiscalNumeroInscricao?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   enderecoGeo?: string;
   presencaRT?: boolean;
   rtPresente?: boolean;
@@ -618,6 +623,7 @@ export interface Funcionario {
   fotoUrl?: string;
   cargoId: string;
   cargoNome: string;
+  numeroInscricao?: string; // Número de Inscrição / CRF do Fiscal
   setorId: string;
   setorNome: string;
   permissoesModulos: string[];
@@ -626,6 +632,8 @@ export interface Funcionario {
   senhaHash?: string;
   primeiroAcessoPendente?: boolean;
   zerarSenhaPendente?: boolean;
+  tokenPrimeiroAcesso?: string;
+  expiracaoTokenPrimeiroAcesso?: string;
   ultimoAcesso?: string;
   observacoes?: string;
 }
@@ -638,6 +646,8 @@ export interface AuthUser {
   documentoLimpo: string; // apenas dígitos
   email?: string;
   cargoOuTitulo?: string;
+  numeroInscricao?: string;
+  matricula?: string;
   role: UserRole;
   fotoUrl?: string;
   permissoes?: string[];
