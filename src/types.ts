@@ -79,6 +79,8 @@ export type CategoriaCadastroBasico =
   | 'STATUS_PROTOCOLO'
   | 'MOTIVO_SITUACAO_EMPRESA'
   | 'MOTIVO_SITUACAO_PROFISSIONAL'
+  | 'ASSUNTO_REQUERIMENTO_PF'
+  | 'ASSUNTO_REQUERIMENTO_PJ'
   | 'CARGO_FUNCIONARIO'
   | 'SETOR_LOTACAO'
   | 'GRUPO_ACESSO_FUNCIONARIO'
@@ -250,6 +252,8 @@ export interface Profissional {
   tokenPrimeiroAcesso?: string;
   expiracaoTokenPrimeiroAcesso?: string;
   ultimoAcesso?: string;
+  eColaboradorCRF?: boolean;
+  matriculaColaborador?: string;
 }
 
 export interface Empresa {
@@ -514,6 +518,7 @@ export interface ProtocoloProcesso {
   id: string;
   numeroProtocolo: string;
   tipo: string;
+  assunto?: string;
   interessado: string;
   documentoInteressado: string;
   tipoInteressado?: 'PROFISSIONAL' | 'EMPRESA' | 'PUBLICO';
@@ -611,6 +616,35 @@ export interface HistoricoAuditoria {
   valorNovo: string | null;
 }
 
+export interface PermissoesAcoesModulo {
+  visualizar: boolean;
+  editar: boolean;
+  deletar: boolean;
+}
+
+export interface RegraAcessoInscrito {
+  permiteAcessoAoPortal: boolean;
+  modulosPermitidos: string[];
+  permissoesAcoes: Record<string, PermissoesAcoesModulo>;
+  recursosPermitidos: {
+    emissaoCertidaoRegularidade?: boolean;
+    emissaoCertidaoQuitacao?: boolean;
+    emissaoDeclaracaoInscricao?: boolean;
+    emissaoCrt?: boolean; // Principalmente para PJ
+    solicitacaoAnotacaoRT?: boolean;
+    baixaResponsabilidadeTecnica?: boolean;
+    emissaoBoletosAnuidade?: boolean;
+    geracaoPixInstantaneo?: boolean;
+    parcelamentoAnuidade?: boolean;
+    atualizacaoCadastralEndereco?: boolean;
+    atualizacaoCadastralContato?: boolean;
+    carteiraDigitalVirtual?: boolean;
+    envioProtocolosRequerimentos?: boolean;
+    preenchimentoFormularios?: boolean;
+    [key: string]: boolean | undefined;
+  };
+}
+
 export interface Funcionario {
   id: string;
   nome: string;
@@ -627,6 +661,7 @@ export interface Funcionario {
   setorId: string;
   setorNome: string;
   permissoesModulos: string[];
+  permissoesAcoes?: Record<string, PermissoesAcoesModulo>; // Controle granular de Visualizar, Editar e Deletar por módulo
   ativo: boolean;
   dataAdmissao: string;
   senhaHash?: string;
@@ -636,6 +671,22 @@ export interface Funcionario {
   expiracaoTokenPrimeiroAcesso?: string;
   ultimoAcesso?: string;
   observacoes?: string;
+  possuiInscricaoProfissional?: boolean;
+  numeroInscricaoProfissional?: string;
+}
+
+export interface AuthProfile {
+  id: string;
+  tipo: 'FUNCIONARIO' | 'PROFISSIONAL' | 'EMPRESA' | 'ADMIN';
+  titulo: string; // Ex: 'Colaborador do Conselho' ou 'Profissional Inscrito (PF)'
+  subtitulo: string; // Ex: 'Fiscal de Farmácia - DEFIS' ou 'Farmacêutico - Reg. CRF-AM 4150'
+  identificacao: string; // Ex: 'Matrícula: FISC-042' ou 'Inscrição: 4150'
+  badge: string; // Ex: 'FISCALIZAÇÃO' ou 'PORTAL DO INSCRITO'
+  role: UserRole;
+  permissoes: string[];
+  permissoesAcoes?: Record<string, PermissoesAcoesModulo>;
+  fotoUrl?: string;
+  ativo?: boolean;
 }
 
 export interface AuthUser {
@@ -651,6 +702,10 @@ export interface AuthUser {
   role: UserRole;
   fotoUrl?: string;
   permissoes?: string[];
+  permissoesAcoes?: Record<string, PermissoesAcoesModulo>; // Controle granular ativo para a sessão
   precisaTrocarSenha?: boolean;
   ultimoAcesso?: string;
+  perfisDisponiveis?: AuthProfile[]; // Preenchido quando o mesmo CPF possui vínculo de Funcionário e Profissional
 }
+
+

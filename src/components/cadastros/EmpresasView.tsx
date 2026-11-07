@@ -42,7 +42,8 @@ import {
   History,
   Key,
   RotateCcw,
-  User
+  User,
+  Eraser
 } from 'lucide-react';
 import { Empresa, CondicaoFirma, Socio, ResponsavelTecnico, Profissional, HorarioFuncionamentoItem, HorarioAssistenciaItem } from '../../types';
 import { storageService, DEFAULT_HORARIOS_FUNCIONAMENTO, DEFAULT_HORARIOS_ASSISTENCIA, calculateIntervalHours, calculateDayTotalHours } from '../../services/storageService';
@@ -436,6 +437,50 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
     setIsModalOpen(true);
   };
 
+  const handleClearForm = () => {
+    if (!editingEmpresa) return;
+    const currentInsc = editingEmpresa.inscricao;
+    setEditingEmpresa({
+      id: editingEmpresa.id || '',
+      inscricao: currentInsc,
+      cnpj: '',
+      razaoSocial: '',
+      nomeFantasia: '',
+      categoria: 'Comércio Varejista',
+      categoriaEmpresa: 'Micro empresa',
+      tipoEstabelecimento: (cadastrosTiposEmpresa[0]?.nome as any) || 'Drogaria',
+      tipoEmpresa: 'PRIVADO',
+      naturezaAtividade: 'FARMÁCIA SEM MANIPULAÇÃO OU DROGARIA',
+      condicao: 'Regular',
+      situacao: 'Definitiva',
+      motivoSituacao: '',
+      isentoAnuidade: false,
+      anuidadeReduzida: false,
+      recadastrado: true,
+      dataRecadastramento: new Date().toLocaleDateString('pt-BR'),
+      isentoTaxaCertificado: false,
+      horarioPlantao: '08:00 ÀS 18:00',
+      horasTolerancia: 0,
+      dataInscricao: new Date().toLocaleDateString('pt-BR'),
+      validadeCRT: `31/12/${new Date().getFullYear()}`,
+      numeroCRT: `CRT-${Math.floor(1000 + Math.random() * 9000)}/${new Date().getFullYear()}`,
+      assistenciaPlena: true,
+      capitalSocial: 150000,
+      email: '',
+      telefone: '',
+      uf: councilConfig.uf || 'AM',
+      cidade: (cadastrosMunicipios[0]?.nome as string) || councilConfig.cidadeSede || 'MANAUS',
+      cep: '',
+      endereco: '',
+      bairro: '',
+      horariosFuncionamento: [...DEFAULT_HORARIOS_FUNCIONAMENTO],
+      horariosAssistencia: [...DEFAULT_HORARIOS_ASSISTENCIA],
+      socios: [],
+      responsaveisTecnicos: []
+    });
+    toastService.info('Formulário Limpo', 'Todos os campos do estabelecimento foram limpos.');
+  };
+
   const handleOpenEditModal = (empresa: Empresa) => {
     const cloned = JSON.parse(JSON.stringify(empresa)) as Empresa;
     const situacoesDisponiveis = ['Definitiva', 'Provisória', 'Ilegal Fechada', 'Fechada Motivo Desconhecido', 'Temporária', 'Ilegal Aberta', 'Cancelada'];
@@ -487,6 +532,28 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
     } finally {
       setIsSearchingCep(false);
     }
+  };
+
+  const handleCnpjChange = (val: string) => {
+    const masked = maskCNPJ(val);
+    const digits = val.replace(/\D/g, '');
+    setEditingEmpresa(prev => (prev ? { ...prev, cnpj: masked } : null));
+
+    if (digits.length === 14) {
+      const existing = storageService.getEmpresas().find(e =>
+        e.id !== editingEmpresa?.id && (e.cnpj || '').replace(/\D/g, '') === digits
+      );
+      if (existing) {
+        toastService.warning(
+          'CNPJ Já Cadastrado',
+          `Já existe uma empresa cadastrada com este CNPJ: ${existing.razaoSocial} (Inscrição: ${existing.inscricao}).`
+        );
+      }
+    }
+  };
+
+  const handleEmailBlur = (_emailVal: string) => {
+    // E-mail compartilhado permitido para matriz e filiais
   };
 
   const handleSaveEmpresa = (e: React.FormEvent) => {
@@ -2186,10 +2253,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                         required
                         maxLength={18}
                         value={editingEmpresa.cnpj || ''}
-                        onChange={(e) => {
-                          const masked = maskCNPJ(e.target.value);
-                          setEditingEmpresa(prev => ({ ...prev, cnpj: masked }));
-                        }}
+                        onChange={(e) => handleCnpjChange(e.target.value)}
                         placeholder="00.000.000/0001-00"
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-mono font-bold"
                       />
@@ -2764,6 +2828,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                         type="email"
                         value={editingEmpresa.email || ''}
                         onChange={(e) => setEditingEmpresa(prev => ({ ...prev, email: e.target.value }))}
+                        onBlur={(e) => handleEmailBlur(e.target.value)}
                         placeholder="contato@drogaria.com.br"
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-mono"
                       />
@@ -2936,16 +3001,27 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
 
               {/* Botões do Rodapé */}
               <div className="flex justify-between items-center pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsModalOpen(false);
-                    setEditingEmpresa(null);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold uppercase cursor-pointer"
-                >
-                  CANCELAR
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsModalOpen(false);
+                      setEditingEmpresa(null);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold uppercase cursor-pointer"
+                  >
+                    CANCELAR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearForm}
+                    className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 font-bold uppercase transition-colors cursor-pointer"
+                    title="Limpar todos os campos digitados"
+                  >
+                    <Eraser className="w-3.5 h-3.5" />
+                    <span>LIMPAR FORMULÁRIO</span>
+                  </button>
+                </div>
                 <button
                   type="submit"
                   className="flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-500/20 uppercase cursor-pointer"

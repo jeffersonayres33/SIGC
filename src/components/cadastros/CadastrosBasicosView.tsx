@@ -98,6 +98,15 @@ const SUBGROUPS_PROFISSIONAIS: SubGroupConfig[] = [
     description: 'Motivos cadastrais de alteração de situação dos profissionais (ex: Falecimento, Transferência, Jubilação).',
     linkInfo: 'Vinculado ao formulário de Cadastro de Profissionais.',
     badgeColor: 'bg-purple-50 text-purple-700 border-purple-200'
+  },
+  {
+    key: 'ASSUNTO_REQUERIMENTO_PF',
+    label: 'Assuntos de Peticionamento (PF)',
+    icon: FileText,
+    singular: 'Assunto de Requerimento PF',
+    description: 'Assuntos oficiais de peticionamento online do Portal do Profissional (PF).',
+    linkInfo: 'Vinculado ao campo "Assunto" no Peticionamento Eletrônico do Portal do Profissional.',
+    badgeColor: 'bg-blue-50 text-blue-700 border-blue-200'
   }
 ];
 
@@ -155,6 +164,15 @@ const SUBGROUPS_EMPRESAS: SubGroupConfig[] = [
     description: 'Municípios pertencentes ao estado da jurisdição cadastrado nas configurações do conselho.',
     linkInfo: 'Base de dados para cálculo de carga horária mínima de Assistência Farmacêutica e endereçamento de empresas.',
     badgeColor: 'bg-teal-50 text-teal-700 border-teal-200'
+  },
+  {
+    key: 'ASSUNTO_REQUERIMENTO_PJ',
+    label: 'Assuntos de Peticionamento (PJ)',
+    icon: FileText,
+    singular: 'Assunto de Requerimento PJ',
+    description: 'Assuntos oficiais de peticionamento online do Portal da Empresa (PJ).',
+    linkInfo: 'Vinculado ao campo "Assunto" no Peticionamento Eletrônico do Portal da Empresa.',
+    badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200'
   }
 ];
 

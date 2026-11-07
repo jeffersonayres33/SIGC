@@ -16,14 +16,18 @@ class ToastManager {
 
   public subscribe(listener: ToastListener): () => void {
     this.listeners.add(listener);
-    listener(this.toasts);
+    setTimeout(() => {
+      listener([...this.toasts]);
+    }, 0);
     return () => {
       this.listeners.delete(listener);
     };
   }
 
   private notify() {
-    this.listeners.forEach(l => l([...this.toasts]));
+    setTimeout(() => {
+      this.listeners.forEach(l => l([...this.toasts]));
+    }, 0);
   }
 
   public show(type: ToastType, title: string, description: string, duration = 4000) {

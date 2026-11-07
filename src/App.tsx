@@ -162,6 +162,21 @@ export default function App() {
             setAuthUser(null);
             toastService.info('Sessão Encerrada', 'Você saiu do sistema com segurança.');
           }}
+          onSwitchProfile={(targetTipo) => {
+            const updatedUser = storageService.alternarPerfil(targetTipo);
+            if (updatedUser) {
+              setAuthUser(updatedUser);
+              setCurrentUserRole(updatedUser.role);
+              const nextSection: MainSection = targetTipo === 'PROFISSIONAL' ? 'portal_inscrito' : getDefaultAllowedSection(updatedUser, updatedUser.role);
+              setActiveSection(nextSection);
+              toastService.success(
+                'Perfil Alternado com Sucesso!',
+                targetTipo === 'PROFISSIONAL'
+                  ? 'Você agora está operando no Portal do Profissional Inscrito (PF).'
+                  : `Você agora está operando como ${updatedUser.cargoOuTitulo || 'Colaborador do Conselho'}.`
+              );
+            }
+          }}
         />
       </div>
 
@@ -190,6 +205,27 @@ export default function App() {
             }
           }}
           currentRole={currentUserRole}
+          onRoleChange={(role) => {
+            setCurrentUserRole(role);
+            if (!hasModulePermission(authUser, activeSection, role)) {
+              setActiveSection(getDefaultAllowedSection(authUser, role));
+            }
+          }}
+          onSwitchProfile={(targetTipo) => {
+            const updatedUser = storageService.alternarPerfil(targetTipo);
+            if (updatedUser) {
+              setAuthUser(updatedUser);
+              setCurrentUserRole(updatedUser.role);
+              const nextSection: MainSection = targetTipo === 'PROFISSIONAL' ? 'portal_inscrito' : getDefaultAllowedSection(updatedUser, updatedUser.role);
+              setActiveSection(nextSection);
+              toastService.success(
+                'Perfil Alternado com Sucesso!',
+                targetTipo === 'PROFISSIONAL'
+                  ? 'Você agora está operando no Portal do Profissional Inscrito (PF).'
+                  : `Você agora está operando como ${updatedUser.cargoOuTitulo || 'Colaborador do Conselho'}.`
+              );
+            }
+          }}
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
           councilConfig={councilConfig}
@@ -262,8 +298,17 @@ export default function App() {
                   <ProtocolosView />
                 )}
 
-                {activeSection === 'portal_inscrito' && (
+                {(activeSection === 'portal_inscrito' || activeSection === 'portal_inscrito_pf') && (
                   <PortalView
+                    defaultTab="PROFISSIONAL"
+                    onOpenBoletoPix={setBoletoLancamento}
+                    onOpenCrtModal={setCrtEmpresa}
+                  />
+                )}
+
+                {activeSection === 'portal_inscrito_pj' && (
+                  <PortalView
+                    defaultTab="EMPRESA"
                     onOpenBoletoPix={setBoletoLancamento}
                     onOpenCrtModal={setCrtEmpresa}
                   />

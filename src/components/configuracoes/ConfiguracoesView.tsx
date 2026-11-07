@@ -38,6 +38,7 @@ import { AssistenciaFarmaceuticaConfig } from './AssistenciaFarmaceuticaConfig';
 import { ImpedimentosArtConfig } from './ImpedimentosArtConfig';
 import { BackupRestoreConfig } from './BackupRestoreConfig';
 import { FiscalizacaoEletronicaConfig } from './FiscalizacaoEletronicaConfig';
+import { InscritosConfig } from './InscritosConfig';
 import { 
   maskCNPJ, 
   validateCNPJ, 
@@ -48,7 +49,7 @@ import {
   formatInscricaoCompleta 
 } from '../../utils/documentUtils';
 
-export type ConfigTab = 'geral' | 'fiscalizacao' | 'assistencia' | 'impedimentos_art' | 'backup_restore';
+export type ConfigTab = 'geral' | 'fiscalizacao' | 'assistencia' | 'impedimentos_art' | 'backup_restore' | 'inscrito' | 'inscrito_pf' | 'inscrito_pj';
 
 interface ConfiguracoesViewProps {
   initialTab?: ConfigTab;
@@ -244,6 +245,7 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
           <span className="font-bold text-blue-700 uppercase">
             {activeTab === 'geral' && 'Configuração > Geral (Dados do Conselho, Numeração & Validações)'}
             {activeTab === 'fiscalizacao' && 'Configuração > Fiscalização Eletrônica (Módulo Tablet & Campo)'}
+            {(activeTab === 'inscrito' || activeTab === 'inscrito_pf' || activeTab === 'inscrito_pj') && 'Configuração > Inscrito (Acessos e Permissões PF / PJ)'}
             {activeTab === 'assistencia' && 'Assistência Farmacêutica por Município'}
             {activeTab === 'impedimentos_art' && 'Impedimentos de ART / RT'}
             {activeTab === 'backup_restore' && 'Backup & Restore de Dados'}
@@ -254,7 +256,9 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
         </span>
       </div>
 
-      {activeTab === 'fiscalizacao' ? (
+      {(activeTab === 'inscrito' || activeTab === 'inscrito_pf' || activeTab === 'inscrito_pj') ? (
+        <InscritosConfig initialSubTab={activeTab === 'inscrito_pj' ? 'PJ' : 'PF'} />
+      ) : activeTab === 'fiscalizacao' ? (
         <FiscalizacaoEletronicaConfig />
       ) : activeTab === 'assistencia' ? (
         <AssistenciaFarmaceuticaConfig />

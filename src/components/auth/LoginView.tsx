@@ -16,12 +16,17 @@ import {
   X,
   ExternalLink,
   Copy,
-  Check
+  Check,
+  Compass,
+  Briefcase,
+  Layers,
+  ArrowRightLeft,
+  ShieldCheck
 } from 'lucide-react';
 import { storageService, CouncilConfig } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
 import { maskCPF, maskCNPJ } from '../../utils/documentUtils';
-import { AuthUser } from '../../types';
+import { AuthUser, AuthProfile } from '../../types';
 import { SIGCON_LOGO } from '../../constants/assets';
 
 interface LoginViewProps {
@@ -61,6 +66,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, councilCon
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotDoc, setForgotDoc] = useState('');
   const [forgotSent, setForgotSent] = useState(false);
+
+  // Modal de Seleção de Perfil para Usuários com Duplo Vínculo (Colaborador + Profissional)
+  const [showMultiProfileModal, setShowMultiProfileModal] = useState(false);
+  const [availableProfiles, setAvailableProfiles] = useState<AuthProfile[]>([]);
+  const [multiProfileDocumento, setMultiProfileDocumento] = useState('');
+  const [multiProfileSenha, setMultiProfileSenha] = useState('');
 
   useEffect(() => {
     // 1. Carregar documento salvo se houver
@@ -157,6 +168,19 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, councilCon
         return;
       }
 
+      // Se o usuário possui duplo vínculo ativo (Colaborador + Profissional Inscrito)
+      if (result.multiProfile && result.availableProfiles && result.availableProfiles.length > 1) {
+        setAvailableProfiles(result.availableProfiles);
+        setMultiProfileDocumento(documento);
+        setMultiProfileSenha(senha);
+        setShowMultiProfileModal(true);
+        toastService.info(
+          'Múltiplos Perfis Identificados',
+          'Identificamos que você possui vínculo como Colaborador e como Profissional Inscrito. Selecione como deseja acessar.'
+        );
+        return;
+      }
+
       if (result.user) {
         toastService.success(
           `Bem-vindo(a), ${result.user.nome}!`,
@@ -165,6 +189,20 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, councilCon
         onLoginSuccess(result.user);
       }
     }, 350);
+  };
+
+  const handleSelectMultiProfile = (tipo: 'FUNCIONARIO' | 'PROFISSIONAL') => {
+    const res = storageService.login(multiProfileDocumento, multiProfileSenha, salvarDoc, tipo);
+    if (res.success && res.user) {
+      setShowMultiProfileModal(false);
+      toastService.success(
+        `Bem-vindo(a), ${res.user.nome}!`,
+        tipo === 'PROFISSIONAL'
+          ? 'Entrando no Portal do Profissional Inscrito.'
+          : `Entrando como ${res.user.cargoOuTitulo || 'Colaborador do Conselho'}.`
+      );
+      onLoginSuccess(res.user);
+    }
   };
 
   const handleSolicitarPrimeiroAcesso = (e: React.FormEvent) => {
@@ -632,6 +670,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, councilCon
                     </div>
                     <div className="font-bold text-slate-900">{primeiroAcessoData?.targetNome}</div>
                     <div className="text-[11px] text-slate-600">
+                      {primeiroAcessoData?.targetTipo === 'DUPLO_VINCULO' && (
+                        <span className="text-blue-700 font-bold">Vínculo Duplo: Colaborador do Conselho + Profissional Inscrito (PF)</span>
+                      )}
                       {primeiroAcessoData?.targetTipo === 'FUNCIONARIO' && 'Colaborador / Fiscal do Conselho'}
                       {primeiroAcessoData?.targetTipo === 'PROFISSIONAL' && 'Profissional Inscrito (Pessoa Física)'}
                       {primeiroAcessoData?.targetTipo === 'EMPRESA' && 'Empresa / Estabelecimento (Pessoa Jurídica)'}
@@ -722,7 +763,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, councilCon
                     </div>
                     <div className="text-[11px] leading-relaxed text-slate-700 bg-white/80 p-2.5 rounded-lg border border-emerald-100">
                       <div><strong>Titular:</strong> {primeiroAcessoData?.targetNome}</div>
-                      <div><strong>Categoria:</strong> <span className="font-mono text-emerald-800 font-bold">{primeiroAcessoData?.targetTipo}</span></div>
+                      <div><strong>Categoria:</strong> <span className="font-mono text-emerald-800 font-bold">{primeiroAcessoData?.targetTipo === 'DUPLO_VINCULO' ? 'VÍNCULO DUPLO (COLABORADOR + PROFISSIONAL)' : primeiroAcessoData?.targetTipo}</span></div>
                       <div><strong>Documento:</strong> <span className="font-mono font-bold">{primeiroAcessoData?.targetDoc}</span></div>
                       <div><strong>E-mail:</strong> <span className="font-mono">{primeiroAcessoData?.email}</span></div>
                     </div>
@@ -899,6 +940,149 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, councilCon
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: SELEÇÃO DE PERFIL DE ACESSO (USUÁRIOS COM VÍNCULO DUPLO) */}
+      {showMultiProfileModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-xl w-full border border-slate-200 overflow-hidden">
+            {/* Modal Header */}
+            <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-slate-900 p-6 text-white flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center text-white shadow-inner">
+                  <ArrowRightLeft className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold uppercase tracking-wider">
+                    Selecione o Perfil de Acesso
+                  </h3>
+                  <p className="text-xs text-blue-100 font-medium">
+                    Duplo Vínculo Identificado para este CPF
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowMultiProfileModal(false)}
+                className="text-white/80 hover:text-white p-1.5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5">
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-700 leading-relaxed space-y-1">
+                <div className="font-bold text-slate-900 text-xs flex items-center space-x-1.5">
+                  <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                  <span>Você possui atuação como Colaborador e como Profissional Inscrito</span>
+                </div>
+                <p>
+                  Com qual perfil você deseja operar o sistema neste momento? Você poderá alternar entre eles a qualquer instante pela barra superior sem precisar deslogar.
+                </p>
+              </div>
+
+              {/* Grid de Perfis Disponíveis */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                {/* Perfil 1: Colaborador do Conselho */}
+                {availableProfiles.filter(p => p.tipo === 'FUNCIONARIO' || p.tipo === 'ADMIN').map((prof) => (
+                  <div
+                    key={prof.id}
+                    onClick={() => handleSelectMultiProfile('FUNCIONARIO')}
+                    className="p-5 rounded-2xl border-2 border-blue-200 hover:border-blue-600 bg-linear-to-b from-blue-50/50 to-white hover:shadow-lg hover:shadow-blue-500/10 transition-all cursor-pointer flex flex-col justify-between group text-left relative overflow-hidden"
+                  >
+                    <div className="absolute top-2.5 right-2.5">
+                      <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-blue-100 text-blue-800 border border-blue-200">
+                        {prof.badge || 'CONSELHO'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+                        <Building2 className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-blue-900 uppercase tracking-wide">
+                          Acesso Institucional
+                        </div>
+                        <h4 className="text-sm font-extrabold text-slate-900 mt-0.5 group-hover:text-blue-700">
+                          {prof.titulo}
+                        </h4>
+                        <p className="text-xs text-slate-600 mt-1 font-medium">
+                          {prof.subtitulo}
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-200/60 text-[11px] font-mono text-slate-500">
+                        {prof.identificacao}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="mt-4 w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase shadow-sm transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
+                    >
+                      <span>Entrar como Colaborador</span>
+                      <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                    </button>
+                  </div>
+                ))}
+
+                {/* Perfil 2: Profissional Inscrito (Pessoa Física) */}
+                {availableProfiles.filter(p => p.tipo === 'PROFISSIONAL').map((prof) => (
+                  <div
+                    key={prof.id}
+                    onClick={() => handleSelectMultiProfile('PROFISSIONAL')}
+                    className="p-5 rounded-2xl border-2 border-emerald-200 hover:border-emerald-600 bg-linear-to-b from-emerald-50/50 to-white hover:shadow-lg hover:shadow-emerald-500/10 transition-all cursor-pointer flex flex-col justify-between group text-left relative overflow-hidden"
+                  >
+                    <div className="absolute top-2.5 right-2.5">
+                      <span className="px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        {prof.badge || 'INSCRITO'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform">
+                        <User className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-emerald-900 uppercase tracking-wide">
+                          Portal do Inscrito
+                        </div>
+                        <h4 className="text-sm font-extrabold text-slate-900 mt-0.5 group-hover:text-emerald-700">
+                          {prof.titulo}
+                        </h4>
+                        <p className="text-xs text-slate-600 mt-1 font-medium">
+                          {prof.subtitulo}
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-200/60 text-[11px] font-mono text-slate-500">
+                        {prof.identificacao}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="mt-4 w-full py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs uppercase shadow-sm transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
+                    >
+                      <span>Acessar Portal do Inscrito</span>
+                      <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* Informação sobre comodidade de troca */}
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-[11px] flex items-center space-x-2">
+                <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>
+                  <strong>Comodidade e Segurança:</strong> Sua senha é unificada para ambos os perfis e você pode alternar entre eles a qualquer momento pelo menu superior.
+                </span>
+              </div>
             </div>
           </div>
         </div>

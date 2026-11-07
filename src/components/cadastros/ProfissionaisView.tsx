@@ -47,7 +47,8 @@ import {
   ShieldAlert,
   Key,
   RotateCcw,
-  Lock
+  Lock,
+  Eraser
 } from 'lucide-react';
 import { Profissional, SituacaoProfissional, TipoAssociado, Empresa, ProtocoloProcesso } from '../../types';
 import { storageService } from '../../services/storageService';
@@ -591,10 +592,219 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
       dataBloqueio: '',
       dataDesbloqueioPrevista: '',
       usuarioBloqueio: '',
-      observacoesBloqueio: ''
+      observacoesBloqueio: '',
+      eColaboradorCRF: false,
+      matriculaColaborador: ''
     });
     setModalTab('dados_pessoais');
     setIsModalOpen(true);
+  };
+
+  const handleClearForm = () => {
+    const generatedInscricao = editingProfissional?.id ? editingProfissional.inscricao : storageService.peekNextInscricaoProfissional();
+    setEditingProfissional({
+      id: editingProfissional?.id || '',
+      inscricao: generatedInscricao,
+      nome: '',
+      cpf: '',
+      rg: '',
+      orgaoExpeditor: 'SSP/AM',
+      dataNascimento: '',
+      sexo: 'F',
+      nacionalidade: 'BRASILEIRA',
+      naturalidade: '',
+      nomeMae: '',
+      nomePai: '',
+      situacao: (cadastrosSituacoes[0]?.nome as any) || 'Definitivo',
+      motivoSituacao: '',
+      dtInicioInscProvisoria: '',
+      dtVencInscProvisoria: '',
+      dataSolicitacaoBaixa: '',
+      dataReabilitacao: '',
+      transferidoOutroRegional: false,
+      nrInscricaoRegionalOrigem: '',
+      anuidRefAnoInscricaoEmDia: false,
+      ufRegionalOrigem: councilConfig.uf || 'AM',
+      anuidadeReduzida: false,
+      isentoAnuidade: false,
+      eVotante: true,
+      eMilitar: false,
+      dtVenctoMilitar: '',
+      recadastrado: false,
+      dataRecadastramento: '',
+      estadoCivil: '',
+      dataMandatoSeguranca: '',
+      orgaoMandatoSeguranca: '',
+      observacaoMandato: '',
+      formaEnvioBoletoParcelamento: '',
+      grupoSanguineo: '',
+      fatorRH: '',
+      doadorOrgaosTecidos: false,
+      participouCursoQualifarma: '',
+      rgDataExpedicao: '',
+      rgDataVencimento: '',
+      tituloEleitoral: '',
+      tituloZona: '',
+      tituloSecao: '',
+      tituloUfExp: councilConfig.uf || 'AM',
+      reservista: '',
+      cartTrabalho: '',
+      cartTrabalhoSerie: '',
+      cartTrabalhoUfExp: councilConfig.uf || 'AM',
+      cartTrabalhoDataExp: '',
+      nomeSocial: '',
+      tipoAssociado: (cadastrosTipos[0]?.nome as any) || 'Farmacêutico',
+      dataInscricao: new Date().toLocaleDateString('pt-BR'),
+      dataColacaoGrau: '',
+      dataExpDiploma: '',
+      faculdade: '',
+      emailPessoal: '',
+      emailComercial: '',
+      telefone: '',
+      celular: '',
+      uf: councilConfig.uf || 'AM',
+      cidade: councilConfig.cidadeSede || 'MANAUS',
+      cep: '',
+      endereco: '',
+      bairro: '',
+      statusFinanceiro: 'Adimplente',
+      carteiraProfissional: '',
+      habilitacoes: [],
+      fotoUrl: '',
+      bloqueado: false,
+      motivoBloqueio: '',
+      dataBloqueio: '',
+      dataDesbloqueioPrevista: '',
+      usuarioBloqueio: '',
+      observacoesBloqueio: '',
+      eColaboradorCRF: false,
+      matriculaColaborador: ''
+    });
+    toastService.info('Formulário Limpo', 'Todos os campos foram resetados.');
+  };
+
+  const handleCpfChange = (rawVal: string) => {
+    const masked = maskCPF(rawVal);
+    const cleanDigits = rawVal.replace(/\D/g, '');
+
+    if (cleanDigits.length === 11) {
+      // 1. Verificar duplicidade em profissionais cadastrados
+      const dupProf = storageService.getProfissionais().find(p => p.id !== editingProfissional?.id && (p.cpf || '').replace(/\D/g, '') === cleanDigits);
+      if (dupProf) {
+        toastService.warning(
+          'CPF Já Cadastrado em Profissionais!',
+          `Já existe um profissional cadastrado com este CPF (${maskCPF(cleanDigits)}): ${dupProf.nome} (Inscrição: ${dupProf.inscricao}).`
+        );
+        setEditingProfissional(prev => (prev ? { ...prev, cpf: masked } : null));
+        return;
+      }
+
+      // 2. Verificar se é colaborador do conselho para carregar dados
+      const { funcionario, profissional } = storageService.findCadastroByCpf(cleanDigits);
+      if (funcionario) {
+        setEditingProfissional(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            cpf: masked,
+            nome: funcionario.nome,
+            rg: funcionario.rg || '',
+            telefone: funcionario.telefone || '',
+            celular: funcionario.celular || '',
+            emailPessoal: funcionario.email || '',
+            fotoUrl: funcionario.fotoUrl || prev.fotoUrl,
+            eColaboradorCRF: true,
+            matriculaColaborador: funcionario.matricula
+          };
+        });
+        toastService.info(
+          'Colaborador do CRF Identificado!',
+          `Dados de ${funcionario.nome} (Matrícula: ${funcionario.matricula}) vinculados automaticamente pelo CPF.`
+        );
+        return;
+      } else if (profissional && profissional.id !== editingProfissional?.id) {
+        setEditingProfissional(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            cpf: masked,
+            nome: profissional.nome,
+            rg: profissional.rg || '',
+            dataNascimento: profissional.dataNascimento || '',
+            sexo: profissional.sexo || 'F',
+            nomeMae: profissional.nomeMae || '',
+            endereco: profissional.endereco || '',
+            bairro: profissional.bairro || '',
+            cidade: profissional.cidade || '',
+            uf: profissional.uf || 'AM',
+            cep: profissional.cep || '',
+            telefone: profissional.telefone || '',
+            celular: profissional.celular || '',
+            emailPessoal: profissional.emailPessoal || '',
+            fotoUrl: profissional.fotoUrl || prev.fotoUrl,
+            eColaboradorCRF: false,
+            matriculaColaborador: ''
+          };
+        });
+        toastService.info(
+          'Cadastro Localizado',
+          `Dados pré-existentes carregados para o CPF ${masked}.`
+        );
+        return;
+      } else {
+        // Se não encontrou vínculo com funcionário para este CPF, desmarca o flag
+        setEditingProfissional(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            cpf: masked,
+            eColaboradorCRF: false,
+            matriculaColaborador: ''
+          };
+        });
+        return;
+      }
+    }
+
+    setEditingProfissional(prev => (prev ? { ...prev, cpf: masked } : null));
+  };
+
+  const handleEmailBlur = (_emailVal: string) => {
+    // E-mail compartilhado permitido
+  };
+
+  const handlePuxarDadosFuncionario = (matricula: string) => {
+    if (!matricula || !matricula.trim()) {
+      toastService.warning('Informe a Matrícula', 'Digite a matrícula funcional do colaborador no CRF.');
+      return;
+    }
+    const func = storageService.findFuncionarioByMatricula(matricula);
+    if (func) {
+      setEditingProfissional(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          nome: prev.nome || func.nome,
+          cpf: prev.cpf || func.cpf,
+          rg: prev.rg || func.rg || '',
+          telefone: prev.telefone || func.telefone || '',
+          celular: prev.celular || func.celular || '',
+          emailPessoal: prev.emailPessoal || func.email || '',
+          fotoUrl: prev.fotoUrl || func.fotoUrl || '',
+          eColaboradorCRF: true,
+          matriculaColaborador: func.matricula
+        };
+      });
+      toastService.success(
+        'Dados do Colaborador Carregados!',
+        `Colaborador ${func.nome} vinculado com sucesso a partir da matrícula ${func.matricula}.`
+      );
+    } else {
+      toastService.warning(
+        'Matrícula Não Localizada',
+        `Nenhum colaborador com a matrícula "${matricula}" foi encontrado no cadastro de funcionários.`
+      );
+    }
   };
 
   const handleOpenEditModal = (prof: Profissional) => {
@@ -676,10 +886,12 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
     if (duplicateProf) {
       toastService.warning(
         'CPF Já Cadastrado',
-        `Já existe um profissional cadastrado com este CPF (${maskCPF(cleanCpfDigits)}): ${duplicateProf.nome} (Inscrição: ${duplicateProf.inscricao}).`
+        `Não é possível salvar: já existe um profissional cadastrado com este CPF (${maskCPF(cleanCpfDigits)}): ${duplicateProf.nome} (Inscrição: ${duplicateProf.inscricao}).`
       );
       return;
     }
+
+
 
     if (!editingProfissional.fotoUrl?.trim()) {
       toastService.warning('Foto Obrigatória', 'Por favor faça o upload da foto do profissional para prosseguir.');
@@ -769,7 +981,9 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
       dataBloqueio: editingProfissional.dataBloqueio || '',
       dataDesbloqueioPrevista: editingProfissional.dataDesbloqueioPrevista || '',
       usuarioBloqueio: editingProfissional.usuarioBloqueio || '',
-      observacoesBloqueio: editingProfissional.observacoesBloqueio || ''
+      observacoesBloqueio: editingProfissional.observacoesBloqueio || '',
+      eColaboradorCRF: Boolean(editingProfissional.eColaboradorCRF),
+      matriculaColaborador: editingProfissional.matriculaColaborador || ''
     };
 
     const finalProf = sanitizeToUpper(rawProfissional, ['id', 'fotoUrl', 'emailPessoal', 'emailComercial']);
@@ -2699,15 +2913,26 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setEditingProfissional(null);
-                }}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={handleClearForm}
+                  className="px-2.5 py-1 text-[11px] font-bold text-slate-600 hover:text-purple-700 bg-slate-100 hover:bg-purple-50 rounded-lg border border-slate-200 transition-colors flex items-center space-x-1 cursor-pointer"
+                  title="Limpar todos os campos do formulário"
+                >
+                  <RotateCcw className="w-3 h-3 text-purple-600" />
+                  <span>Limpar Formulário</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setEditingProfissional(null);
+                  }}
+                  className="p-1 rounded-lg text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Inscription Cronológica Box with Definitiva / Provisória Toggle */}
@@ -3248,6 +3473,68 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                     </div>
                   </div>
 
+                  {/* Vínculo de Colaborador do CRF */}
+                  <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-2xl space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <span className="text-xs font-bold text-blue-950 flex items-center gap-1.5">
+                          <Building2 className="w-4 h-4 text-blue-600" />
+                          Colaborador do CRF?
+                        </span>
+                        <p className="text-[11px] text-blue-700/80">
+                          Informe se este profissional também faz parte do quadro funcional ou é colaborador do Conselho.
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-4 bg-white px-3 py-1.5 rounded-xl border border-blue-200 shadow-2xs shrink-0">
+                        <label className="flex items-center space-x-2 text-xs font-bold text-slate-700 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="eColaboradorCRF"
+                            checked={editingProfissional.eColaboradorCRF === true}
+                            onChange={() => setEditingProfissional(prev => prev ? ({ ...prev, eColaboradorCRF: true }) : prev)}
+                            className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          />
+                          <span>SIM</span>
+                        </label>
+                        <label className="flex items-center space-x-2 text-xs font-bold text-slate-700 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="eColaboradorCRF"
+                            checked={!editingProfissional.eColaboradorCRF}
+                            onChange={() => setEditingProfissional(prev => prev ? ({ ...prev, eColaboradorCRF: false, matriculaColaborador: '' }) : prev)}
+                            className="w-4 h-4 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                          />
+                          <span>NÃO</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {editingProfissional.eColaboradorCRF && (
+                      <div className="pt-2 border-t border-blue-200/70 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <div className="flex-1">
+                          <label className="block text-blue-900 font-bold uppercase text-[10px] mb-1">
+                            Matrícula do Funcionário no CRF *
+                          </label>
+                          <input
+                            type="text"
+                            value={editingProfissional.matriculaColaborador || ''}
+                            onChange={(e) => setEditingProfissional(prev => prev ? ({ ...prev, matriculaColaborador: e.target.value.toUpperCase() }) : prev)}
+                            placeholder="EX: SIS-001, MAT-120, DEV-001"
+                            className="w-full px-3 py-2 bg-white border border-blue-300 rounded-xl font-mono font-bold text-blue-950 uppercase text-xs focus:ring-2 focus:ring-blue-500/20"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handlePuxarDadosFuncionario(editingProfissional.matriculaColaborador || '')}
+                          className="sm:mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Puxar Dados do Funcionário</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   <div>
                     <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">
                       Nome Completo do Profissional *
@@ -3272,7 +3559,7 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
                         required
                         maxLength={14}
                         value={editingProfissional.cpf || ''}
-                        onChange={(e) => setEditingProfissional(prev => ({ ...prev, cpf: maskCPF(e.target.value) }))}
+                        onChange={(e) => handleCpfChange(e.target.value)}
                         placeholder="000.000.000-00"
                         className={`w-full px-3 py-2 bg-slate-50 border rounded-xl text-slate-900 font-mono font-bold ${
                           councilConfig.validarCPF && editingProfissional.cpf && !isCpfValid ? 'border-rose-400 bg-rose-50/50' : 'border-slate-300'
@@ -3880,16 +4167,27 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
 
               {/* Botões do Rodapé */}
               <div className="flex justify-between items-center pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsModalOpen(false);
-                    setEditingProfissional(null);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold uppercase cursor-pointer"
-                >
-                  CANCELAR
-                </button>
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsModalOpen(false);
+                      setEditingProfissional(null);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold uppercase cursor-pointer"
+                  >
+                    CANCELAR
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearForm}
+                    className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 font-bold uppercase transition-colors cursor-pointer"
+                    title="Limpar todos os campos digitados"
+                  >
+                    <Eraser className="w-3.5 h-3.5" />
+                    <span>LIMPAR FORMULÁRIO</span>
+                  </button>
+                </div>
                 <button
                   type="submit"
                   className="flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-md shadow-purple-500/20 uppercase cursor-pointer"

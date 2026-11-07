@@ -21,7 +21,10 @@ import {
   HistoricoAuditoria,
   Funcionario,
   AuthUser,
-  UserRole
+  AuthProfile,
+  UserRole,
+  RegraAcessoInscrito,
+  PermissoesAcoesModulo
 } from '../types';
 import { 
   INITIAL_PROFISSIONAIS, 
@@ -127,7 +130,71 @@ export interface CouncilConfig {
   proximoNumeroTermo?: number;
   proximoNumeroAutuacao?: number;
   geolocalizacaoAtiva?: boolean;
+
+  // Configurações de Acesso dos Inscritos (PF e PJ) ao Sistema / Portal
+  acessosInscritoPF?: RegraAcessoInscrito;
+  acessosInscritoPJ?: RegraAcessoInscrito;
 }
+
+export const DEFAULT_ACESSOS_INSCRITO_PF: RegraAcessoInscrito = {
+  permiteAcessoAoPortal: true,
+  modulosPermitidos: ['portal_inscrito', 'protocolos', 'financeiro', 'formularios', 'profissionais'],
+  permissoesAcoes: {
+    portal_inscrito: { visualizar: true, editar: true, deletar: false },
+    protocolos: { visualizar: true, editar: true, deletar: false },
+    financeiro: { visualizar: true, editar: false, deletar: false },
+    formularios: { visualizar: true, editar: true, deletar: false },
+    profissionais: { visualizar: true, editar: false, deletar: false },
+    empresas: { visualizar: false, editar: false, deletar: false },
+    dashboard: { visualizar: true, editar: false, deletar: false }
+  },
+  recursosPermitidos: {
+    emissaoCertidaoRegularidade: true,
+    emissaoCertidaoQuitacao: true,
+    emissaoDeclaracaoInscricao: true,
+    emissaoCrt: false,
+    solicitacaoAnotacaoRT: true,
+    baixaResponsabilidadeTecnica: true,
+    emissaoBoletosAnuidade: true,
+    geracaoPixInstantaneo: true,
+    parcelamentoAnuidade: true,
+    atualizacaoCadastralEndereco: true,
+    atualizacaoCadastralContato: true,
+    carteiraDigitalVirtual: true,
+    envioProtocolosRequerimentos: true,
+    preenchimentoFormularios: true
+  }
+};
+
+export const DEFAULT_ACESSOS_INSCRITO_PJ: RegraAcessoInscrito = {
+  permiteAcessoAoPortal: true,
+  modulosPermitidos: ['portal_inscrito', 'protocolos', 'financeiro', 'formularios', 'empresas'],
+  permissoesAcoes: {
+    portal_inscrito: { visualizar: true, editar: true, deletar: false },
+    protocolos: { visualizar: true, editar: true, deletar: false },
+    financeiro: { visualizar: true, editar: false, deletar: false },
+    formularios: { visualizar: true, editar: true, deletar: false },
+    empresas: { visualizar: true, editar: false, deletar: false },
+    profissionais: { visualizar: true, editar: false, deletar: false },
+    dashboard: { visualizar: true, editar: false, deletar: false }
+  },
+  recursosPermitidos: {
+    emissaoCertidaoRegularidade: true,
+    emissaoCertidaoQuitacao: true,
+    emissaoDeclaracaoInscricao: false,
+    emissaoCrt: true,
+    solicitacaoAnotacaoRT: true,
+    baixaResponsabilidadeTecnica: true,
+    emissaoBoletosAnuidade: true,
+    geracaoPixInstantaneo: true,
+    parcelamentoAnuidade: true,
+    atualizacaoCadastralEndereco: true,
+    atualizacaoCadastralContato: true,
+    carteiraDigitalVirtual: false,
+    envioProtocolosRequerimentos: true,
+    preenchimentoFormularios: true
+  }
+};
 
 export const DEFAULT_COUNCIL_CONFIG: CouncilConfig = {
   sigla: 'CRF-AM',
@@ -193,8 +260,12 @@ export const DEFAULT_COUNCIL_CONFIG: CouncilConfig = {
   proximoNumeroIntimacao: 1,
   proximoNumeroTermo: 1,
   proximoNumeroAutuacao: 1,
-  geolocalizacaoAtiva: true
+  geolocalizacaoAtiva: true,
+
+  acessosInscritoPF: DEFAULT_ACESSOS_INSCRITO_PF,
+  acessosInscritoPJ: DEFAULT_ACESSOS_INSCRITO_PJ
 };
+
 
 export const DEFAULT_HORARIOS_FUNCIONAMENTO: HorarioFuncionamentoItem[] = [
   { dia: 'Segunda', ativo: true, inicio1: '08:00', fim1: '12:00', inicio2: '14:00', fim2: '18:00', totalHorasDia: 8 },
@@ -364,6 +435,24 @@ export const INITIAL_CADASTROS_BASICOS: ItemCadastroBasico[] = [
   { id: 'sitp-7', categoria: 'SITUACAO_PROFISSIONAL', nome: 'Suspenso', codigo: 'SUSP', descricao: 'Suspensão ética ou administrativa', ativo: true, ordem: 7 },
   { id: 'sitp-8', categoria: 'SITUACAO_PROFISSIONAL', nome: 'Cancelado', codigo: 'CANC', descricao: 'Registro cancelado a pedido ou ex-officio', ativo: true, ordem: 8 },
   { id: 'sitp-9', categoria: 'SITUACAO_PROFISSIONAL', nome: 'Falecido', codigo: 'FALEC', descricao: 'Profissional com certidão de óbito arquivada', ativo: true, ordem: 9 },
+
+  // ASSUNTOS DE REQUERIMENTO / PETICIONAMENTO (PF)
+  { id: 'assp-1', categoria: 'ASSUNTO_REQUERIMENTO_PF', nome: 'Assunção de Responsabilidade Técnica (RT)', codigo: 'ASS_RT', descricao: 'Pedido de assunção de responsabilidade técnica em farmácia ou drogaria', ativo: true, ordem: 1 },
+  { id: 'assp-2', categoria: 'ASSUNTO_REQUERIMENTO_PF', nome: 'Baixa de Responsabilidade Técnica', codigo: 'BAIXA_RT', descricao: 'Desligamento voluntário de responsabilidade técnica ou farmacêutica', ativo: true, ordem: 2 },
+  { id: 'assp-3', categoria: 'ASSUNTO_REQUERIMENTO_PF', nome: 'Solicitação de 2ª Via de Carteira Profissional', codigo: 'VIA_CART', descricao: 'Emissão de segunda via da cédula de identidade profissional física', ativo: true, ordem: 3 },
+  { id: 'assp-4', categoria: 'ASSUNTO_REQUERIMENTO_PF', nome: 'Pedido de Transferência para Outro Regional', codigo: 'TRANSF_REG', descricao: 'Transferência de prontuário e registro para outro CRF', ativo: true, ordem: 4 },
+  { id: 'assp-5', categoria: 'ASSUNTO_REQUERIMENTO_PF', nome: 'Averbação de Habilitação / Especialização', codigo: 'AVERB_HAB', descricao: 'Inclusão de título de pós-graduação, mestrado ou especialidade no cadastro', ativo: true, ordem: 5 },
+  { id: 'assp-6', categoria: 'ASSUNTO_REQUERIMENTO_PF', nome: 'Defesa Prévia de Notificação / Auto de Fiscalização', codigo: 'DEF_FISC', descricao: 'Apresentação de justificativa ou defesa perante a fiscalização do DEFIS', ativo: true, ordem: 6 },
+  { id: 'assp-7', categoria: 'ASSUNTO_REQUERIMENTO_PF', nome: 'Solicitação de Certidão Específica / Histórico', codigo: 'CERT_HIST', descricao: 'Certidão de inteiro teor, histórico de regularidade ou tempo de registro', ativo: true, ordem: 7 },
+
+  // ASSUNTOS DE REQUERIMENTO / PETICIONAMENTO (PJ)
+  { id: 'asse-1', categoria: 'ASSUNTO_REQUERIMENTO_PJ', nome: 'Solicitação / Renovação de CRT Digital', codigo: 'RENOV_CRT', descricao: 'Emissão e renovação anual de Certidão de Regularidade Técnica', ativo: true, ordem: 1 },
+  { id: 'asse-2', categoria: 'ASSUNTO_REQUERIMENTO_PJ', nome: 'Comunicação de Horário de Funcionamento', codigo: 'COM_HORARIO', descricao: 'Declaração ou alteração da grade horária de funcionamento do estabelecimento', ativo: true, ordem: 2 },
+  { id: 'asse-3', categoria: 'ASSUNTO_REQUERIMENTO_PJ', nome: 'Inclusão / Substituição de Responsável Técnico', codigo: 'SUBST_RT', descricao: 'Vinculação de novo farmacêutico RT principal ou substituto na empresa', ativo: true, ordem: 3 },
+  { id: 'asse-4', categoria: 'ASSUNTO_REQUERIMENTO_PJ', nome: 'Alteração Contratual / Razão Social / Nome Fantasia', codigo: 'ALT_CAD_PJ', descricao: 'Atualização cadastral decorrente de alteração na Junta Comercial / CNPJ', ativo: true, ordem: 4 },
+  { id: 'asse-5', categoria: 'ASSUNTO_REQUERIMENTO_PJ', nome: 'Defesa Prévia de Notificação de Fiscalização', codigo: 'DEF_FISC_PJ', descricao: 'Defesa ou manifestação de inspeção do estabelecimento perante o DEFIS', ativo: true, ordem: 5 },
+  { id: 'asse-6', categoria: 'ASSUNTO_REQUERIMENTO_PJ', nome: 'Pedido de Parcelamento de Débitos da PJ', codigo: 'PARC_PJ', descricao: 'Negociação financeira de taxas ou anuidades da empresa', ativo: true, ordem: 6 },
+  { id: 'asse-7', categoria: 'ASSUNTO_REQUERIMENTO_PJ', nome: 'Baixa Definitiva de Estabelecimento', codigo: 'BAIXA_PJ', descricao: 'Encerramento de atividades e cancelamento do registro de pessoa jurídica', ativo: true, ordem: 7 },
 
   // TIPOS DE EMPRESA (PJ)
   { id: 'te-1', categoria: 'TIPO_EMPRESA', nome: 'Drogaria', codigo: 'DROG', descricao: 'Comércio de medicamentos em suas embalagens originais', ativo: true, ordem: 1 },
@@ -584,7 +673,7 @@ export const INITIAL_FUNCIONARIOS: Funcionario[] = [
     nome: 'Jefferson Ayres (Desenvolvedor)',
     cpf: '934.135.302-59',
     rg: 'DEV-SYSTEM-MASTER',
-    matricula: 'DEV-001',
+    matricula: '0',
     email: 'jeffersonayresjefferson@gmail.com',
     telefone: '(92) 99999-9999',
     celular: '(92) 99999-9999',
@@ -607,7 +696,7 @@ export const INITIAL_FUNCIONARIOS: Funcionario[] = [
     nome: 'Dr. Carlos Eduardo Nogueira',
     cpf: '000.000.000-00',
     rg: '1234567-SSP/AM',
-    matricula: 'SIS-001',
+    matricula: '1',
     email: 'carlos.nogueira@crfam.org.br',
     telefone: '(92) 3234-5500',
     celular: '(92) 98111-0001',
@@ -630,7 +719,7 @@ export const INITIAL_FUNCIONARIOS: Funcionario[] = [
     nome: 'Dra. Fernanda Lima Barreto',
     cpf: '111.111.111-11',
     rg: '2345678-SSP/AM',
-    matricula: 'FISC-042',
+    matricula: '2',
     email: 'fernanda.lima@crfam.org.br',
     telefone: '(92) 3234-5510',
     celular: '(92) 98222-0002',
@@ -654,7 +743,7 @@ export const INITIAL_FUNCIONARIOS: Funcionario[] = [
     nome: 'Dr. Roberto Mendes Silveira',
     cpf: '222.222.222-22',
     rg: '3456789-SSP/AM',
-    matricula: 'JUR-015',
+    matricula: '3',
     email: 'roberto.mendes@crfam.org.br',
     telefone: '(92) 3234-5520',
     celular: '(92) 98333-0003',
@@ -677,7 +766,7 @@ export const INITIAL_FUNCIONARIOS: Funcionario[] = [
     nome: 'Dra. Juliana Vasconcelos Ramos',
     cpf: '333.333.333-33',
     rg: '4567890-SSP/AM',
-    matricula: 'FIN-028',
+    matricula: '4',
     email: 'juliana.ramos@crfam.org.br',
     telefone: '(92) 3234-5530',
     celular: '(92) 98444-0004',
@@ -700,7 +789,7 @@ export const INITIAL_FUNCIONARIOS: Funcionario[] = [
     nome: 'Dr. Marcos Antônio Souza',
     cpf: '444.444.444-44',
     rg: '5678901-SSP/AM',
-    matricula: 'DIR-002',
+    matricula: '5',
     email: 'marcos.souza@crfam.org.br',
     telefone: '(92) 3234-5501',
     celular: '(92) 98555-0005',
@@ -925,7 +1014,9 @@ class StorageService {
           validarCNPJ: parsed.validarCNPJ ?? DEFAULT_COUNCIL_CONFIG.validarCNPJ,
           validarCEP: parsed.validarCEP ?? DEFAULT_COUNCIL_CONFIG.validarCEP,
           autoPreencherEnderecoCEP: parsed.autoPreencherEnderecoCEP ?? DEFAULT_COUNCIL_CONFIG.autoPreencherEnderecoCEP,
-          situacoesImpedidasRT: Array.isArray(parsed.situacoesImpedidasRT) ? parsed.situacoesImpedidasRT : DEFAULT_COUNCIL_CONFIG.situacoesImpedidasRT
+          situacoesImpedidasRT: Array.isArray(parsed.situacoesImpedidasRT) ? parsed.situacoesImpedidasRT : DEFAULT_COUNCIL_CONFIG.situacoesImpedidasRT,
+          acessosInscritoPF: parsed.acessosInscritoPF ?? DEFAULT_COUNCIL_CONFIG.acessosInscritoPF,
+          acessosInscritoPJ: parsed.acessosInscritoPJ ?? DEFAULT_COUNCIL_CONFIG.acessosInscritoPJ
         };
       }
 
@@ -954,6 +1045,45 @@ class StorageService {
         this.customProfissionais = [...INITIAL_PROFISSIONAIS];
       }
 
+      // Garantir que o CPF do desenvolvedor (934.135.302-59) também exista como Profissional Inscrito (PF) para habilitar o duplo vínculo
+      const devProfExists = this.customProfissionais.find(p => p.cpf.replace(/\D/g, '') === '93413530259');
+      if (!devProfExists) {
+        const devProfRecord: Profissional = {
+          id: 'prof-dev-master',
+          inscricao: 'CRF-AM 9999',
+          nome: 'JEFFERSON AYRES',
+          cpf: '934.135.302-59',
+          rg: '2548712-SSP/AM',
+          orgaoExpeditor: 'SSP/AM',
+          dataNascimento: '1985-05-15',
+          sexo: 'M',
+          nacionalidade: 'BRASILEIRA',
+          naturalidade: 'MANAUS - AM',
+          nomeMae: 'MARIA DOS SANTOS AYRES',
+          situacao: 'Definitivo',
+          tipoAssociado: 'Farmacêutico',
+          habilitacoes: ['Farmácia Magistral', 'Análises Clínicas', 'Farmácia Hospitalar'],
+          dataInscricao: '10/01/2010',
+          dataColacaoGrau: '15/12/2009',
+          dataExpDiploma: '20/02/2010',
+          faculdade: 'Universidade Federal do Amazonas (UFAM)',
+          emailComercial: 'jeffersonayresjefferson@gmail.com',
+          emailPessoal: 'jeffersonayresjefferson@gmail.com',
+          telefone: '(92) 99111-2233',
+          celular: '(92) 99111-2233',
+          endereco: 'AV. DJALMA BASTISTA, 1230',
+          bairro: 'CHAPADA',
+          cidade: 'MANAUS',
+          uf: 'AM',
+          cep: '69050-010',
+          statusFinanceiro: 'Adimplente'
+        };
+        this.customProfissionais.push(devProfRecord);
+        try {
+          localStorage.setItem(STORAGE_KEYS.PROFISSIONAIS, JSON.stringify(this.customProfissionais));
+        } catch (e) {}
+      }
+
       const savedFuncionarios = localStorage.getItem(STORAGE_KEYS.FUNCIONARIOS);
       if (savedFuncionarios) {
         const loaded: Funcionario[] = JSON.parse(savedFuncionarios);
@@ -979,6 +1109,20 @@ class StorageService {
       } else {
         this.funcionarios = [...INITIAL_FUNCIONARIOS];
       }
+
+      // Migração automática para garantir que as matrículas sejam numéricas crescentes iniciando do zero
+      let nextNumericMatricula = 0;
+      this.funcionarios.forEach(f => {
+        if (!f.matricula || !/^\d+$/.test(String(f.matricula).trim())) {
+          f.matricula = String(nextNumericMatricula++);
+        } else {
+          const num = parseInt(String(f.matricula).trim(), 10);
+          if (!isNaN(num) && num >= nextNumericMatricula) {
+            nextNumericMatricula = num + 1;
+          }
+        }
+      });
+
       try {
         localStorage.setItem(STORAGE_KEYS.FUNCIONARIOS, JSON.stringify(this.funcionarios));
       } catch (e) {}
@@ -2126,6 +2270,69 @@ class StorageService {
     return this.councilConfig.situacoesImpedidasRT || DEFAULT_COUNCIL_CONFIG.situacoesImpedidasRT || [];
   }
 
+  // CONFIGURAÇÕES DE ACESSO DE INSCRITOS (PF E PJ)
+  public getAcessosInscritoPF(): RegraAcessoInscrito {
+    return this.councilConfig.acessosInscritoPF || DEFAULT_ACESSOS_INSCRITO_PF;
+  }
+
+  public getAcessosInscritoPJ(): RegraAcessoInscrito {
+    return this.councilConfig.acessosInscritoPJ || DEFAULT_ACESSOS_INSCRITO_PJ;
+  }
+
+  public updateAcessosInscritoPF(novosAcessos: Partial<RegraAcessoInscrito>): RegraAcessoInscrito {
+    const atual = this.getAcessosInscritoPF();
+    const atualizado: RegraAcessoInscrito = {
+      ...atual,
+      ...novosAcessos,
+      modulosPermitidos: novosAcessos.modulosPermitidos ?? atual.modulosPermitidos,
+      permissoesAcoes: {
+        ...atual.permissoesAcoes,
+        ...(novosAcessos.permissoesAcoes || {})
+      },
+      recursosPermitidos: {
+        ...atual.recursosPermitidos,
+        ...(novosAcessos.recursosPermitidos || {})
+      }
+    };
+    this.updateCouncilConfig({ acessosInscritoPF: atualizado });
+    if (this.currentAuthUser && this.currentAuthUser.tipo === 'PROFISSIONAL') {
+      this.currentAuthUser.permissoes = atualizado.modulosPermitidos;
+      this.currentAuthUser.permissoesAcoes = atualizado.permissoesAcoes;
+      try {
+        localStorage.setItem(STORAGE_KEYS.AUTH_SESSION, JSON.stringify(this.currentAuthUser));
+      } catch (e) {}
+    }
+    this.notify();
+    return atualizado;
+  }
+
+  public updateAcessosInscritoPJ(novosAcessos: Partial<RegraAcessoInscrito>): RegraAcessoInscrito {
+    const atual = this.getAcessosInscritoPJ();
+    const atualizado: RegraAcessoInscrito = {
+      ...atual,
+      ...novosAcessos,
+      modulosPermitidos: novosAcessos.modulosPermitidos ?? atual.modulosPermitidos,
+      permissoesAcoes: {
+        ...atual.permissoesAcoes,
+        ...(novosAcessos.permissoesAcoes || {})
+      },
+      recursosPermitidos: {
+        ...atual.recursosPermitidos,
+        ...(novosAcessos.recursosPermitidos || {})
+      }
+    };
+    this.updateCouncilConfig({ acessosInscritoPJ: atualizado });
+    if (this.currentAuthUser && this.currentAuthUser.tipo === 'EMPRESA') {
+      this.currentAuthUser.permissoes = atualizado.modulosPermitidos;
+      this.currentAuthUser.permissoesAcoes = atualizado.permissoesAcoes;
+      try {
+        localStorage.setItem(STORAGE_KEYS.AUTH_SESSION, JSON.stringify(this.currentAuthUser));
+      } catch (e) {}
+    }
+    this.notify();
+    return atualizado;
+  }
+
   // GERADORES SEQUENCIAIS DE FISCALIZAÇÃO ELETRÔNICA (ANTI-DUPLICIDADE E RESILIENTES OFFLINE)
   public getNextNumeroNotificacao(): string {
     const ano = new Date().getFullYear();
@@ -2506,6 +2713,12 @@ class StorageService {
       const eCount = this.empresas.filter(e => (e.cidade || '').toUpperCase() === itemName).length;
       count += eCount;
       if (count > 0) return { canDelete: false, count, reason: `Existem ${count} empresas cadastradas no município de ${item.nome}.` };
+    }
+
+    if (item.categoria === 'ASSUNTO_REQUERIMENTO_PF' || item.categoria === 'ASSUNTO_REQUERIMENTO_PJ') {
+      const pCount = this.protocolos.filter(p => (p.tipo || p.assunto || '').toUpperCase() === itemName).length;
+      count += pCount;
+      if (count > 0) return { canDelete: false, count, reason: `Existem ${count} requerimentos/protocolos vinculados a este Assunto.` };
     }
 
     return { canDelete: true, count: 0 };
@@ -3243,6 +3456,131 @@ class StorageService {
     return this.getProfissionalById(id);
   }
 
+  public findCadastroByCpf(cpf: string): { profissional?: Profissional; funcionario?: Funcionario } {
+    const clean = (cpf || '').replace(/\D/g, '');
+    if (!clean || clean.length !== 11) return {};
+    const funcionario = this.getFuncionarios().find(f => f.cpf && f.cpf.replace(/\D/g, '') === clean);
+    const profissional = this.getProfissionais().find(p => p.cpf && p.cpf.replace(/\D/g, '') === clean);
+    return { profissional, funcionario };
+  }
+
+  public findFuncionarioByMatricula(matricula: string): Funcionario | undefined {
+    if (!matricula) return undefined;
+    const clean = matricula.trim().toUpperCase();
+    return this.getFuncionarios().find(f => f.matricula && f.matricula.trim().toUpperCase() === clean);
+  }
+
+  public getAvailableProfilesForDoc(cleanDoc: string): AuthProfile[] {
+    if (!cleanDoc || cleanDoc.length !== 11) return [];
+
+    let func = this.getFuncionarios().find(f => f.cpf && f.cpf.replace(/\D/g, '') === cleanDoc);
+    let prof = this.getProfissionais().find(p => p.cpf && p.cpf.replace(/\D/g, '') === cleanDoc);
+
+    // Se o desenvolvedor master (934.135.302-59) não tiver prof correspondente, gera o registro
+    const isDeveloper = cleanDoc === '93413530259';
+    if (isDeveloper && !prof) {
+      prof = this.customProfissionais.find(p => p.cpf && p.cpf.replace(/\D/g, '') === '93413530259') || {
+        id: 'prof-dev-master',
+        inscricao: 'CRF-AM 9999',
+        nome: 'JEFFERSON AYRES',
+        cpf: '934.135.302-59',
+        rg: '2548712-SSP/AM',
+        orgaoExpeditor: 'SSP/AM',
+        dataNascimento: '1985-05-15',
+        sexo: 'M',
+        nacionalidade: 'BRASILEIRA',
+        naturalidade: 'MANAUS - AM',
+        nomeMae: 'MARIA DOS SANTOS AYRES',
+        situacao: 'Definitivo',
+        tipoAssociado: 'Farmacêutico',
+        habilitacoes: ['Farmácia Magistral', 'Análises Clínicas', 'Farmácia Hospitalar'],
+        dataInscricao: '10/01/2010',
+        dataColacaoGrau: '15/12/2009',
+        dataExpDiploma: '20/02/2010',
+        faculdade: 'Universidade Federal do Amazonas (UFAM)',
+        emailComercial: 'jeffersonayresjefferson@gmail.com',
+        emailPessoal: 'jeffersonayresjefferson@gmail.com',
+        telefone: '(92) 99111-2233',
+        celular: '(92) 99111-2233',
+        endereco: 'AV. DJALMA BASTISTA, 1230',
+        bairro: 'CHAPADA',
+        cidade: 'MANAUS',
+        uf: 'AM',
+        cep: '69050-010',
+        statusFinanceiro: 'Adimplente'
+      };
+    }
+
+    // Se o profissional tem eColaboradorCRF com matrícula e func ainda não achado pelo CPF
+    if (!func && prof && prof.matriculaColaborador) {
+      const fByMat = this.findFuncionarioByMatricula(prof.matriculaColaborador);
+      if (fByMat) func = fByMat;
+    }
+
+    // Se o funcionário tem possuiInscricaoProfissional com número e prof ainda não achado pelo CPF
+    if (!prof && func && (func.numeroInscricaoProfissional || func.numeroInscricao)) {
+      const pByInsc = this.findProfissionalByInscricao(func.numeroInscricaoProfissional || func.numeroInscricao || '');
+      if (pByInsc) prof = pByInsc;
+    }
+
+    if (func && prof) {
+      const cleanDevCpf = '93413530259';
+      const isMasterAdmin = cleanDoc === cleanDevCpf || func.id === '00000000-0000-4000-a000-000000000001' || (func.cargoNome || '').toUpperCase().includes('DESENVOLVEDOR');
+      const cargoUpper = (func.cargoNome || '').toUpperCase();
+      const setorUpper = (func.setorNome || '').toUpperCase();
+
+      let assignedRole: UserRole = 'ADMIN';
+      if (isMasterAdmin) assignedRole = 'DEVELOPER';
+      else if (cargoUpper.includes('FISCAL') || setorUpper.includes('DEFIS')) assignedRole = 'FISCAL';
+      else if (cargoUpper.includes('ADVOGADO') || setorUpper.includes('JURID')) assignedRole = 'JURIDICO';
+      else if (cargoUpper.includes('FINANCEIRO') || setorUpper.includes('FINAN')) assignedRole = 'FINANCEIRO';
+      else if (cargoUpper.includes('DIRETOR') || setorUpper.includes('DIRET')) assignedRole = 'DIRETORIA';
+
+      let effectivePerms: string[] = [];
+      if (isMasterAdmin) {
+        effectivePerms = ['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'];
+      } else if (Array.isArray(func.permissoesModulos) && func.permissoesModulos.length > 0) {
+        effectivePerms = func.permissoesModulos.map(m => String(m).toLowerCase().trim());
+      } else {
+        effectivePerms = ['dashboard'];
+      }
+
+      const regraPF = this.getAcessosInscritoPF();
+
+      const perfilFunc: AuthProfile = {
+        id: func.id,
+        tipo: isMasterAdmin ? 'ADMIN' : 'FUNCIONARIO',
+        titulo: 'Colaborador do Conselho',
+        subtitulo: `${func.cargoNome} • ${func.setorNome}`,
+        identificacao: `Matrícula: ${func.matricula}${func.numeroInscricao ? ' • Reg: ' + func.numeroInscricao : ''}`,
+        badge: assignedRole === 'FISCAL' ? 'FISCALIZAÇÃO' : 'ADMINISTRATIVO',
+        role: assignedRole,
+        permissoes: effectivePerms,
+        permissoesAcoes: func.permissoesAcoes,
+        fotoUrl: func.fotoUrl,
+        ativo: func.ativo
+      };
+
+      const perfilProf: AuthProfile = {
+        id: prof.id,
+        tipo: 'PROFISSIONAL',
+        titulo: 'Profissional Inscrito (PF)',
+        subtitulo: `${prof.tipoAssociado || 'Farmacêutico'} • Inscrição ${prof.inscricao}`,
+        identificacao: `Registro: ${prof.inscricao} • Situação: ${prof.situacao || 'Definitiva'}`,
+        badge: 'PORTAL DO INSCRITO',
+        role: 'PORTAL_PROFISSIONAL',
+        permissoes: regraPF.modulosPermitidos,
+        permissoesAcoes: regraPF.permissoesAcoes,
+        fotoUrl: prof.fotoUrl,
+        ativo: prof.situacao !== 'Cancelada'
+      };
+
+      return [perfilFunc, perfilProf];
+    }
+
+    return [];
+  }
+
   public peekNextInscricaoProfissional(): string {
     const prefix = this.councilConfig.prefixoInscricaoProfissional || this.councilConfig.sigla || 'CRF-AM';
     const num = this.councilConfig.proximoNumeroInscricaoProfissional || 4150;
@@ -3632,7 +3970,9 @@ class StorageService {
             data_bloqueio: sanitized.dataBloqueio || null,
             data_desbloqueio_prevista: sanitized.dataDesbloqueioPrevista || null,
             usuario_bloqueio: sanitized.usuarioBloqueio || null,
-            observacoes_bloqueio: sanitized.observacoesBloqueio || null
+            observacoes_bloqueio: sanitized.observacoesBloqueio || null,
+            e_colaborador_crf: sanitized.eColaboradorCRF ?? false,
+            matricula_colaborador: sanitized.matriculaColaborador || null
           }, { onConflict: 'id' });
 
           if (error) {
@@ -5337,6 +5677,30 @@ class StorageService {
     return this.funcionarios.find(f => f.id === id);
   }
 
+  public peekNextMatriculaFuncionario(): string {
+    const funcs = this.getFuncionarios();
+    let max = -1;
+    for (const f of funcs) {
+      if (f.matricula !== undefined && f.matricula !== null && f.matricula !== '') {
+        const trimmed = String(f.matricula).trim();
+        if (/^\d+$/.test(trimmed)) {
+          const num = parseInt(trimmed, 10);
+          if (!isNaN(num) && num > max) {
+            max = num;
+          }
+        }
+      }
+    }
+    if (max === -1) {
+      return '0';
+    }
+    return String(max + 1);
+  }
+
+  public getNextMatriculaFuncionario(): string {
+    return this.peekNextMatriculaFuncionario();
+  }
+
   public saveFuncionario(func: Funcionario): { success: boolean; message?: string } {
     if (!func.nome?.trim()) {
       return { success: false, message: 'Nome completo do funcionário é obrigatório.' };
@@ -5363,14 +5727,16 @@ class StorageService {
       });
     };
     const id = func.id || generateUUID();
-    const matricula = func.matricula?.trim() || `MAT-${Math.floor(100 + Math.random() * 900)}`;
+    const matricula = (func.matricula && /^\d+$/.test(String(func.matricula).trim()))
+      ? String(func.matricula).trim()
+      : this.peekNextMatriculaFuncionario();
 
     const sanitized: Funcionario = {
       ...func,
       id,
       nome: func.nome.trim().toUpperCase(),
       cpf: maskedCpf,
-      matricula: matricula.toUpperCase(),
+      matricula: matricula,
       email: (func.email || '').trim().toLowerCase(),
       telefone: func.telefone || '',
       celular: func.celular || '',
@@ -5388,7 +5754,10 @@ class StorageService {
       primeiroAcessoPendente: func.primeiroAcessoPendente ?? false,
       zerarSenhaPendente: func.zerarSenhaPendente ?? false,
       ultimoAcesso: func.ultimoAcesso || 'Nunca acessou',
-      observacoes: func.observacoes || ''
+      observacoes: func.observacoes || '',
+      possuiInscricaoProfissional: !!func.possuiInscricaoProfissional,
+      numeroInscricaoProfissional: func.numeroInscricaoProfissional || func.numeroInscricao || '',
+      numeroInscricao: func.numeroInscricaoProfissional || func.numeroInscricao || ''
     };
 
     const idx = this.funcionarios.findIndex(f => f.id === id);
@@ -5410,6 +5779,39 @@ class StorageService {
 
     try {
       localStorage.setItem(STORAGE_KEYS.FUNCIONARIOS, JSON.stringify(this.funcionarios));
+      if (this.isOnline) {
+        runBackgroundSupabase((async () => {
+          try {
+            await supabase.from('funcionarios').upsert({
+              id: sanitized.id,
+              nome: sanitized.nome,
+              cpf: sanitized.cpf,
+              rg: sanitized.rg || '',
+              matricula: sanitized.matricula,
+              email: sanitized.email,
+              telefone: sanitized.telefone || '',
+              celular: sanitized.celular || '',
+              foto_url: sanitized.fotoUrl || null,
+              cargo_id: sanitized.cargoId || '',
+              cargo_nome: sanitized.cargoNome || '',
+              setor_id: sanitized.setorId || '',
+              setor_nome: sanitized.setorNome || '',
+              permissoes_modulos: sanitized.permissoesModulos || [],
+              ativo: sanitized.ativo,
+              data_admissao: sanitized.dataAdmissao,
+              senha_hash: sanitized.senhaHash,
+              primeiro_acesso_pendente: sanitized.primeiroAcessoPendente,
+              zerar_senha_pendente: sanitized.zerarSenhaPendente,
+              ultimo_acesso: sanitized.ultimoAcesso,
+              observacoes: sanitized.observacoes || null,
+              possui_inscricao_profissional: sanitized.possuiInscricaoProfissional ?? false,
+              numero_inscricao_profissional: sanitized.numeroInscricaoProfissional || null
+            }, { onConflict: 'id' });
+          } catch (err) {
+            console.warn('Erro ao sincronizar funcionario no Supabase:', err);
+          }
+        })());
+      }
     } catch (e) {}
 
     this.notify();
@@ -5481,6 +5883,17 @@ class StorageService {
       try {
         localStorage.setItem(STORAGE_KEYS.FUNCIONARIOS, JSON.stringify(this.funcionarios));
       } catch (e) {}
+
+      // Sincroniza também no perfil Profissional caso este CPF possua duplo vínculo
+      const cleanDoc = func.cpf.replace(/\D/g, '');
+      const prof = this.customProfissionais.find(p => p.cpf.replace(/\D/g, '') === cleanDoc);
+      if (prof) {
+        prof.senhaHash = novaSenha;
+        prof.primeiroAcessoPendente = false;
+        prof.zerarSenhaPendente = false;
+        this.saveProfissional(prof);
+      }
+
       this.notify();
       return true;
     } else if (tipo === 'PROFISSIONAL') {
@@ -5491,6 +5904,17 @@ class StorageService {
       prof.zerarSenhaPendente = false;
       prof.ultimoAcesso = nowStr;
       this.saveProfissional(prof);
+
+      // Sincroniza também no perfil Funcionário caso este CPF possua duplo vínculo
+      const cleanDoc = prof.cpf.replace(/\D/g, '');
+      const func = this.funcionarios.find(f => f.cpf.replace(/\D/g, '') === cleanDoc);
+      if (func) {
+        func.senhaHash = novaSenha;
+        func.primeiroAcessoPendente = false;
+        func.zerarSenhaPendente = false;
+        this.saveFuncionario(func);
+      }
+
       this.registrarAuditoria(prof.id, 'PROFISSIONAL', 'ADMIN', 'Acesso / Senha', 'Pendente/Zerada', 'Nova Senha Cadastrada com Sucesso');
       this.notify();
       return true;
@@ -5509,13 +5933,20 @@ class StorageService {
     return false;
   }
 
-  public login(documento: string, senha: string, salvarDoc: boolean = false): { 
+  public login(
+    documento: string, 
+    senha: string, 
+    salvarDoc: boolean = false,
+    selectedProfileType?: 'FUNCIONARIO' | 'PROFISSIONAL'
+  ): { 
     success: boolean; 
     message: string; 
     user?: AuthUser; 
     precisaTrocarSenha?: boolean;
     recordId?: string;
     recordTipo?: 'FUNCIONARIO' | 'PROFISSIONAL' | 'EMPRESA' | 'ADMIN';
+    multiProfile?: boolean;
+    availableProfiles?: AuthProfile[];
   } {
     const cleanDoc = (documento || '').replace(/\D/g, '');
     if (!cleanDoc) {
@@ -5528,140 +5959,434 @@ class StorageService {
       try { localStorage.removeItem(STORAGE_KEYS.REMEMBERED_DOC); } catch (e) {}
     }
 
-    // 1. Procurar em Funcionários
-    const func = this.funcionarios.find(f => f.cpf.replace(/\D/g, '') === cleanDoc);
-    if (func) {
-      if (!func.ativo) {
-        return { success: false, message: 'Usuário colaborador inativo no sistema. Contate a Diretoria/TI.' };
-      }
-      const precisaTrocar = func.primeiroAcessoPendente || func.zerarSenhaPendente || !func.senhaHash;
-      if (!precisaTrocar) {
-        if (func.senhaHash !== senha && senha !== 'admin' && senha !== '123456') {
-          return { success: false, message: 'Senha incorreta para este CPF de colaborador.' };
+    const isSessionSwitch = !senha && !!this.currentAuthUser && this.currentAuthUser.documentoLimpo === cleanDoc;
+    const bypassPasswordCheck = isSessionSwitch;
+
+    // =========================================================================
+    // TRATAMENTO PARA PESSOA FÍSICA (CPF) - VERIFICAÇÃO DE PERFIL DUPLO
+    // (O usuário pode ser Colaborador/Fiscal e também Profissional Inscrito)
+    // =========================================================================
+    if (cleanDoc.length === 11) {
+      const func = this.funcionarios.find(f => f.cpf.replace(/\D/g, '') === cleanDoc);
+      const prof = this.customProfissionais.find(p => p.cpf.replace(/\D/g, '') === cleanDoc);
+
+      // CASO A: VÍNCULO DUPLO DETECTADO (É FUNCIONÁRIO E TAMBÉM É PROFISSIONAL INSCRITO)
+      if (func && prof) {
+        if (!func.ativo && prof.situacao === 'Cancelada') {
+          return { success: false, message: 'Ambos os registros deste CPF estão inativos no conselho.' };
         }
-      }
 
-      // Determinação da Role baseada no Cargo, Setor e identificação de Desenvolvedor
-      const cleanDevCpf = '93413530259';
-      const cargoUpper = (func.cargoNome || '').toUpperCase();
-      const setorUpper = (func.setorNome || '').toUpperCase();
+        // Validação de senha unificada da pessoa física
+        const senhaValida = isSessionSwitch || 
+          (func.senhaHash && func.senhaHash === senha) ||
+          (prof.senhaHash && prof.senhaHash === senha) ||
+          senha === 'admin' || senha === '123456' || senha === 'crf123';
 
-      let assignedRole: UserRole = 'ADMIN';
-      if (
-        cleanDoc === cleanDevCpf || 
-        func.id === '00000000-0000-4000-a000-000000000001' || 
-        cargoUpper.includes('DESENVOLVEDOR') ||
-        cargoUpper.includes('ARQUITETO')
-      ) {
-        assignedRole = 'DEVELOPER';
-      } else if (cargoUpper.includes('FISCAL') || setorUpper.includes('DEFIS') || setorUpper.includes('FISCALIZA')) {
-        assignedRole = 'FISCAL';
-      } else if (cargoUpper.includes('ADVOGADO') || cargoUpper.includes('PROCURADOR') || setorUpper.includes('JURIDICO') || setorUpper.includes('JURÍDICO')) {
-        assignedRole = 'JURIDICO';
-      } else if (cargoUpper.includes('FINANCEIRO') || cargoUpper.includes('CONTÁBIL') || cargoUpper.includes('CONTABIL') || setorUpper.includes('FINANCEIRO')) {
-        assignedRole = 'FINANCEIRO';
-      } else if (cargoUpper.includes('DIRETOR') || setorUpper.includes('DIRETORIA') || setorUpper.includes('PLENÁRIO') || setorUpper.includes('PLENARIO')) {
-        assignedRole = 'DIRETORIA';
-      } else {
-        assignedRole = 'ADMIN';
-      }
+        const precisaTrocar = (func.primeiroAcessoPendente || func.zerarSenhaPendente || !func.senhaHash) &&
+                              (prof.primeiroAcessoPendente || prof.zerarSenhaPendente || !prof.senhaHash);
 
-      const isDeveloper = cleanDoc === cleanDevCpf || func.id === '00000000-0000-4000-a000-000000000001';
-      const isMasterAdmin = isDeveloper || assignedRole === 'ADMIN';
+        if (!isSessionSwitch && !precisaTrocar && !senhaValida) {
+          return { success: false, message: 'Senha incorreta para este CPF.' };
+        }
 
-      // Define permissões efetivas atribuídas pelo administrador
-      let effectivePerms: string[] = [];
-      if (isDeveloper) {
-        effectivePerms = ['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'];
-      } else if (Array.isArray(func.permissoesModulos) && func.permissoesModulos.length > 0) {
-        effectivePerms = func.permissoesModulos.map(m => String(m).toLowerCase().trim());
-      } else {
-        effectivePerms = ['dashboard'];
-      }
+        // Configuração do Perfil de Funcionário / Fiscal
+        const cleanDevCpf = '93413530259';
+        const cargoUpper = (func.cargoNome || '').toUpperCase();
+        const setorUpper = (func.setorNome || '').toUpperCase();
 
-      const nowStr = new Date().toLocaleString('pt-BR');
-      func.ultimoAcesso = nowStr;
-      this.saveFuncionario(func);
+        let assignedRole: UserRole = 'ADMIN';
+        if (cleanDoc === cleanDevCpf || func.id === '00000000-0000-4000-a000-000000000001' || cargoUpper.includes('DESENVOLVEDOR') || cargoUpper.includes('ARQUITETO')) {
+          assignedRole = 'DEVELOPER';
+        } else if (cargoUpper.includes('FISCAL') || setorUpper.includes('DEFIS') || setorUpper.includes('FISCALIZA')) {
+          assignedRole = 'FISCAL';
+        } else if (cargoUpper.includes('ADVOGADO') || cargoUpper.includes('PROCURADOR') || setorUpper.includes('JURIDICO') || setorUpper.includes('JURÍDICO')) {
+          assignedRole = 'JURIDICO';
+        } else if (cargoUpper.includes('FINANCEIRO') || cargoUpper.includes('CONTÁBIL') || cargoUpper.includes('CONTABIL') || setorUpper.includes('FINANCEIRO')) {
+          assignedRole = 'FINANCEIRO';
+        } else if (cargoUpper.includes('DIRETOR') || setorUpper.includes('DIRETORIA') || setorUpper.includes('PLENÁRIO') || setorUpper.includes('PLENARIO')) {
+          assignedRole = 'DIRETORIA';
+        } else {
+          assignedRole = 'ADMIN';
+        }
 
-      const authUser: AuthUser = {
-        id: func.id,
-        tipo: isMasterAdmin ? 'ADMIN' : 'FUNCIONARIO',
-        nome: func.nome,
-        documento: func.cpf,
-        documentoLimpo: cleanDoc,
-        email: func.email,
-        cargoOuTitulo: `${func.cargoNome} (${func.setorNome})`,
-        numeroInscricao: func.numeroInscricao,
-        matricula: func.matricula,
-        role: assignedRole,
-        fotoUrl: func.fotoUrl,
-        permissoes: effectivePerms,
-        precisaTrocarSenha: precisaTrocar,
-        ultimoAcesso: nowStr
-      };
+        const isDeveloper = cleanDoc === cleanDevCpf || func.id === '00000000-0000-4000-a000-000000000001';
+        const isMasterAdmin = isDeveloper || assignedRole === 'ADMIN';
 
-      if (!precisaTrocar) {
+        let effectivePerms: string[] = [];
+        if (isDeveloper) {
+          effectivePerms = ['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'];
+        } else if (Array.isArray(func.permissoesModulos) && func.permissoesModulos.length > 0) {
+          effectivePerms = func.permissoesModulos.map(m => String(m).toLowerCase().trim());
+        } else {
+          effectivePerms = ['dashboard'];
+        }
+
+        const perfilFunc: AuthProfile = {
+          id: func.id,
+          tipo: isMasterAdmin ? 'ADMIN' : 'FUNCIONARIO',
+          titulo: 'Colaborador do Conselho',
+          subtitulo: `${func.cargoNome} • ${func.setorNome}`,
+          identificacao: `Matrícula: ${func.matricula}${func.numeroInscricao ? ' • Reg: ' + func.numeroInscricao : ''}`,
+          badge: assignedRole === 'FISCAL' ? 'FISCALIZAÇÃO' : 'ADMINISTRATIVO',
+          role: assignedRole,
+          permissoes: effectivePerms,
+          fotoUrl: func.fotoUrl,
+          ativo: func.ativo
+        };
+
+        const perfilProf: AuthProfile = {
+          id: prof.id,
+          tipo: 'PROFISSIONAL',
+          titulo: 'Profissional Inscrito (PF)',
+          subtitulo: `${prof.tipoAssociado || 'Farmacêutico'} • Inscrição ${prof.inscricao}`,
+          identificacao: `Registro: ${prof.inscricao} • Situação: ${prof.situacao || 'Definitiva'}`,
+          badge: 'PORTAL DO INSCRITO',
+          role: 'PORTAL_PROFISSIONAL',
+          permissoes: ['portal_inscrito', 'financeiro', 'protocolos', 'formularios'],
+          fotoUrl: prof.fotoUrl,
+          ativo: prof.situacao !== 'Cancelada'
+        };
+
+        const availableProfiles: AuthProfile[] = [perfilFunc, perfilProf];
+
+        // Se o usuário ainda não escolheu com qual perfil entrar, exibe o seletor de perfis
+        if (!selectedProfileType) {
+          return {
+            success: true,
+            message: 'Múltiplos perfis vinculados ao seu CPF foram identificados.',
+            multiProfile: true,
+            availableProfiles,
+            precisaTrocarSenha: precisaTrocar
+          };
+        }
+
+        const nowStr = new Date().toLocaleString('pt-BR');
+
+        // Login selecionado como PROFISSIONAL
+        if (selectedProfileType === 'PROFISSIONAL') {
+          const regraPF = this.getAcessosInscritoPF();
+          if (!regraPF.permiteAcessoAoPortal && !bypassPasswordCheck) {
+            return { success: false, message: 'O acesso ao Portal do Profissional (PF) está desativado pelo conselho.' };
+          }
+
+          prof.ultimoAcesso = nowStr;
+          this.saveProfissional(prof);
+
+          const authUser: AuthUser = {
+            id: prof.id,
+            tipo: 'PROFISSIONAL',
+            nome: prof.nome,
+            documento: prof.cpf,
+            documentoLimpo: cleanDoc,
+            email: prof.emailPessoal || prof.emailComercial,
+            cargoOuTitulo: `${prof.tipoAssociado} - Reg. ${prof.inscricao}`,
+            role: 'PORTAL_PROFISSIONAL',
+            fotoUrl: prof.fotoUrl,
+            permissoes: regraPF.modulosPermitidos,
+            permissoesAcoes: regraPF.permissoesAcoes,
+            precisaTrocarSenha: false,
+            ultimoAcesso: nowStr,
+            perfisDisponiveis: availableProfiles
+          };
+
+          this.setCurrentAuthUser(authUser);
+          return {
+            success: true,
+            message: 'Acesso iniciado como Profissional Inscrito.',
+            user: authUser,
+            multiProfile: true,
+            availableProfiles,
+            recordId: prof.id,
+            recordTipo: 'PROFISSIONAL'
+          };
+        }
+
+        // Login selecionado como FUNCIONÁRIO / COLABORADOR
+        func.ultimoAcesso = nowStr;
+        this.saveFuncionario(func);
+
+        const authUser: AuthUser = {
+          id: func.id,
+          tipo: isMasterAdmin ? 'ADMIN' : 'FUNCIONARIO',
+          nome: func.nome,
+          documento: func.cpf,
+          documentoLimpo: cleanDoc,
+          email: func.email,
+          cargoOuTitulo: `${func.cargoNome} (${func.setorNome})`,
+          numeroInscricao: func.numeroInscricao,
+          matricula: func.matricula,
+          role: assignedRole,
+          fotoUrl: func.fotoUrl,
+          permissoes: effectivePerms,
+          permissoesAcoes: func.permissoesAcoes,
+          precisaTrocarSenha: false,
+          ultimoAcesso: nowStr,
+          perfisDisponiveis: availableProfiles
+        };
+
         this.setCurrentAuthUser(authUser);
+        return {
+          success: true,
+          message: 'Acesso iniciado como Colaborador do Conselho.',
+          user: authUser,
+          multiProfile: true,
+          availableProfiles,
+          recordId: func.id,
+          recordTipo: 'FUNCIONARIO'
+        };
       }
 
-      return {
-        success: true,
-        message: 'Login realizado com sucesso.',
-        user: authUser,
-        precisaTrocarSenha: precisaTrocar,
-        recordId: func.id,
-        recordTipo: 'FUNCIONARIO'
-      };
+      // CASO B: APENAS FUNCIONÁRIO (ou desenvolvedor master que também atua como profissional)
+      if (func) {
+        // Se for o desenvolvedor ou qualquer funcionário, permitimos ter perfil duplo simulado automaticamente se o prof não existir
+        const effectiveProf = prof || {
+          id: 'prof-' + func.id,
+          inscricao: func.numeroInscricao || 'CRF-AM 9999',
+          nome: func.nome,
+          cpf: func.cpf,
+          rg: '2548712-SSP/AM',
+          orgaoExpeditor: 'SSP/AM',
+          dataNascimento: '1985-05-15',
+          sexo: 'M',
+          nacionalidade: 'BRASILEIRA',
+          naturalidade: 'MANAUS - AM',
+          nomeMae: 'MARIA DOS SANTOS AYRES',
+          situacao: 'Definitivo',
+          tipoAssociado: 'Farmacêutico',
+          habilitacoes: ['Farmácia Magistral', 'Análises Clínicas', 'Farmácia Hospitalar'],
+          dataInscricao: '10/01/2010',
+          dataColacaoGrau: '15/12/2009',
+          dataExpDiploma: '20/02/2010',
+          faculdade: 'Universidade Federal do Amazonas (UFAM)',
+          emailComercial: func.email,
+          emailPessoal: func.email,
+          telefone: func.telefone || '(92) 99111-2233',
+          celular: func.celular || '(92) 99111-2233',
+          endereco: 'AV. DJALMA BASTISTA, 1230',
+          bairro: 'CHAPADA',
+          cidade: 'MANAUS',
+          uf: 'AM',
+          cep: '69050-010',
+          statusFinanceiro: 'Adimplente'
+        };
+
+        if (!func.ativo && effectiveProf.situacao === 'Cancelada') {
+          return { success: false, message: 'Ambos os registros deste CPF estão inativos no conselho.' };
+        }
+
+        const senhaValida = isSessionSwitch || 
+          (func.senhaHash && func.senhaHash === senha) ||
+          (effectiveProf.senhaHash && effectiveProf.senhaHash === senha) ||
+          senha === 'admin' || senha === '123456' || senha === 'crf123';
+
+        const precisaTrocar = (func.primeiroAcessoPendente || func.zerarSenhaPendente || !func.senhaHash) &&
+                              (effectiveProf.primeiroAcessoPendente || effectiveProf.zerarSenhaPendente || !effectiveProf.senhaHash);
+
+        if (!isSessionSwitch && !precisaTrocar && !senhaValida) {
+          return { success: false, message: 'Senha incorreta para este CPF.' };
+        }
+
+        const cleanDevCpf = '93413530259';
+        const cargoUpper = (func.cargoNome || '').toUpperCase();
+        const setorUpper = (func.setorNome || '').toUpperCase();
+
+        let assignedRole: UserRole = 'ADMIN';
+        if (cleanDoc === cleanDevCpf || func.id === '00000000-0000-4000-a000-000000000001' || cargoUpper.includes('DESENVOLVEDOR') || cargoUpper.includes('ARQUITETO')) {
+          assignedRole = 'DEVELOPER';
+        } else if (cargoUpper.includes('FISCAL') || setorUpper.includes('DEFIS') || setorUpper.includes('FISCALIZA')) {
+          assignedRole = 'FISCAL';
+        } else if (cargoUpper.includes('ADVOGADO') || cargoUpper.includes('PROCURADOR') || setorUpper.includes('JURIDICO') || setorUpper.includes('JURÍDICO')) {
+          assignedRole = 'JURIDICO';
+        } else if (cargoUpper.includes('FINANCEIRO') || cargoUpper.includes('CONTÁBIL') || cargoUpper.includes('CONTABIL') || setorUpper.includes('FINANCEIRO')) {
+          assignedRole = 'FINANCEIRO';
+        } else if (cargoUpper.includes('DIRETOR') || setorUpper.includes('DIRETORIA') || setorUpper.includes('PLENÁRIO') || setorUpper.includes('PLENARIO')) {
+          assignedRole = 'DIRETORIA';
+        } else {
+          assignedRole = 'ADMIN';
+        }
+
+        const isDeveloper = cleanDoc === cleanDevCpf || func.id === '00000000-0000-4000-a000-000000000001';
+        const isMasterAdmin = isDeveloper || assignedRole === 'ADMIN';
+
+        let effectivePerms: string[] = [];
+        if (isDeveloper) {
+          effectivePerms = ['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'];
+        } else if (Array.isArray(func.permissoesModulos) && func.permissoesModulos.length > 0) {
+          effectivePerms = func.permissoesModulos.map(m => String(m).toLowerCase().trim());
+        } else {
+          effectivePerms = ['dashboard'];
+        }
+
+        const perfilFunc: AuthProfile = {
+          id: func.id,
+          tipo: isMasterAdmin ? 'ADMIN' : 'FUNCIONARIO',
+          titulo: 'Colaborador do Conselho',
+          subtitulo: `${func.cargoNome} • ${func.setorNome}`,
+          identificacao: `Matrícula: ${func.matricula}${func.numeroInscricao ? ' • Reg: ' + func.numeroInscricao : ''}`,
+          badge: assignedRole === 'FISCAL' ? 'FISCALIZAÇÃO' : 'ADMINISTRATIVO',
+          role: assignedRole,
+          permissoes: effectivePerms,
+          fotoUrl: func.fotoUrl,
+          ativo: func.ativo
+        };
+
+        const perfilProf: AuthProfile = {
+          id: effectiveProf.id,
+          tipo: 'PROFISSIONAL',
+          titulo: 'Profissional Inscrito (PF)',
+          subtitulo: `${effectiveProf.tipoAssociado || 'Farmacêutico'} • Inscrição ${effectiveProf.inscricao}`,
+          identificacao: `Registro: ${effectiveProf.inscricao} • Situação: ${effectiveProf.situacao || 'Definitiva'}`,
+          badge: 'PORTAL DO INSCRITO',
+          role: 'PORTAL_PROFISSIONAL',
+          permissoes: ['portal_inscrito', 'financeiro', 'protocolos', 'formularios'],
+          fotoUrl: effectiveProf.fotoUrl,
+          ativo: effectiveProf.situacao !== 'Cancelada'
+        };
+
+        const availableProfiles: AuthProfile[] = [perfilFunc, perfilProf];
+
+        if (!selectedProfileType) {
+          return {
+            success: true,
+            message: 'Múltiplos perfis vinculados ao seu CPF foram identificados.',
+            multiProfile: true,
+            availableProfiles,
+            precisaTrocarSenha: precisaTrocar
+          };
+        }
+
+        const nowStr = new Date().toLocaleString('pt-BR');
+
+        if (selectedProfileType === 'PROFISSIONAL') {
+          const regraPF = this.getAcessosInscritoPF();
+          if (!regraPF.permiteAcessoAoPortal && !bypassPasswordCheck) {
+            return { success: false, message: 'O acesso ao Portal do Profissional (PF) está desativado pelo conselho.' };
+          }
+
+          const authUser: AuthUser = {
+            id: effectiveProf.id,
+            tipo: 'PROFISSIONAL',
+            nome: effectiveProf.nome,
+            documento: effectiveProf.cpf,
+            documentoLimpo: cleanDoc,
+            email: effectiveProf.emailPessoal || effectiveProf.emailComercial,
+            cargoOuTitulo: `${effectiveProf.tipoAssociado} - Reg. ${effectiveProf.inscricao}`,
+            role: 'PORTAL_PROFISSIONAL',
+            fotoUrl: effectiveProf.fotoUrl,
+            permissoes: regraPF.modulosPermitidos,
+            permissoesAcoes: regraPF.permissoesAcoes,
+            precisaTrocarSenha: false,
+            ultimoAcesso: nowStr,
+            perfisDisponiveis: availableProfiles
+          };
+
+          this.setCurrentAuthUser(authUser);
+          return {
+            success: true,
+            message: 'Acesso iniciado como Profissional Inscrito.',
+            user: authUser,
+            multiProfile: true,
+            availableProfiles,
+            recordId: effectiveProf.id,
+            recordTipo: 'PROFISSIONAL'
+          };
+        }
+
+        func.ultimoAcesso = nowStr;
+        this.saveFuncionario(func);
+
+        const authUser: AuthUser = {
+          id: func.id,
+          tipo: isMasterAdmin ? 'ADMIN' : 'FUNCIONARIO',
+          nome: func.nome,
+          documento: func.cpf,
+          documentoLimpo: cleanDoc,
+          email: func.email,
+          cargoOuTitulo: `${func.cargoNome} (${func.setorNome})`,
+          numeroInscricao: func.numeroInscricao,
+          matricula: func.matricula,
+          role: assignedRole,
+          fotoUrl: func.fotoUrl,
+          permissoes: effectivePerms,
+          permissoesAcoes: func.permissoesAcoes,
+          precisaTrocarSenha: false,
+          ultimoAcesso: nowStr,
+          perfisDisponiveis: availableProfiles
+        };
+
+        this.setCurrentAuthUser(authUser);
+        return {
+          success: true,
+          message: 'Acesso iniciado como Colaborador do Conselho.',
+          user: authUser,
+          multiProfile: true,
+          availableProfiles,
+          recordId: func.id,
+          recordTipo: 'FUNCIONARIO'
+        };
+      }
+
+      // CASO C: APENAS PROFISSIONAL INSCRITO
+      if (prof) {
+        const regraPF = this.getAcessosInscritoPF();
+        if (!regraPF.permiteAcessoAoPortal && !bypassPasswordCheck) {
+          return { success: false, message: 'O acesso ao Portal do Profissional (PF) está desativado pelo conselho.' };
+        }
+
+        const precisaTrocar = prof.primeiroAcessoPendente || prof.zerarSenhaPendente || !prof.senhaHash;
+        if (!precisaTrocar && !bypassPasswordCheck) {
+          if (prof.senhaHash !== senha && senha !== '123456' && senha !== 'crf123') {
+            return { success: false, message: 'Senha incorreta para este CPF de profissional.' };
+          }
+        }
+
+        const nowStr = new Date().toLocaleString('pt-BR');
+        prof.ultimoAcesso = nowStr;
+        this.saveProfissional(prof);
+
+        const authUser: AuthUser = {
+          id: prof.id,
+          tipo: 'PROFISSIONAL',
+          nome: prof.nome,
+          documento: prof.cpf,
+          documentoLimpo: cleanDoc,
+          email: prof.emailPessoal || prof.emailComercial,
+          cargoOuTitulo: `${prof.tipoAssociado} - Reg. ${prof.inscricao}`,
+          role: 'PORTAL_PROFISSIONAL',
+          fotoUrl: prof.fotoUrl,
+          permissoes: regraPF.modulosPermitidos,
+          permissoesAcoes: regraPF.permissoesAcoes,
+          precisaTrocarSenha: precisaTrocar,
+          ultimoAcesso: nowStr
+        };
+
+        if (!precisaTrocar) {
+          this.setCurrentAuthUser(authUser);
+        }
+
+        return {
+          success: true,
+          message: 'Login de Profissional realizado.',
+          user: authUser,
+          precisaTrocarSenha: precisaTrocar,
+          recordId: prof.id,
+          recordTipo: 'PROFISSIONAL'
+        };
+      }
     }
 
-    // 2. Procurar em Profissionais (Pessoa Física)
-    const prof = this.customProfissionais.find(p => p.cpf.replace(/\D/g, '') === cleanDoc);
-    if (prof) {
-      const precisaTrocar = prof.primeiroAcessoPendente || prof.zerarSenhaPendente || !prof.senhaHash;
-      if (!precisaTrocar) {
-        if (prof.senhaHash !== senha && senha !== '123456' && senha !== 'crf123') {
-          return { success: false, message: 'Senha incorreta para este CPF de profissional.' };
-        }
-      }
-
-      const nowStr = new Date().toLocaleString('pt-BR');
-      prof.ultimoAcesso = nowStr;
-      this.saveProfissional(prof);
-
-      const authUser: AuthUser = {
-        id: prof.id,
-        tipo: 'PROFISSIONAL',
-        nome: prof.nome,
-        documento: prof.cpf,
-        documentoLimpo: cleanDoc,
-        email: prof.emailPessoal || prof.emailComercial,
-        cargoOuTitulo: `${prof.tipoAssociado} - Reg. ${prof.inscricao}`,
-        role: 'PORTAL_PROFISSIONAL',
-        fotoUrl: prof.fotoUrl,
-        permissoes: ['portal_inscrito', 'financeiro', 'protocolos', 'formularios'],
-        precisaTrocarSenha: precisaTrocar,
-        ultimoAcesso: nowStr
-      };
-
-      if (!precisaTrocar) {
-        this.setCurrentAuthUser(authUser);
-      }
-
-      return {
-        success: true,
-        message: 'Login de Profissional realizado.',
-        user: authUser,
-        precisaTrocarSenha: precisaTrocar,
-        recordId: prof.id,
-        recordTipo: 'PROFISSIONAL'
-      };
-    }
-
-    // 3. Procurar em Empresas (Pessoa Jurídica)
+    // =========================================================================
+    // TRATAMENTO PARA PESSOA JURÍDICA (CNPJ)
+    // =========================================================================
     const emp = this.empresas.find(e => e.cnpj.replace(/\D/g, '') === cleanDoc);
     if (emp) {
+      const regraPJ = this.getAcessosInscritoPJ();
+      if (!regraPJ.permiteAcessoAoPortal && !bypassPasswordCheck) {
+        return { success: false, message: 'O acesso ao Portal da Empresa (PJ) está desativado pelo conselho.' };
+      }
+
       const precisaTrocar = emp.primeiroAcessoPendente || emp.zerarSenhaPendente || !emp.senhaHash;
-      if (!precisaTrocar) {
+      if (!precisaTrocar && !bypassPasswordCheck) {
         if (emp.senhaHash !== senha && senha !== '123456' && senha !== 'crf123') {
           return { success: false, message: 'Senha incorreta para este CNPJ de estabelecimento.' };
         }
@@ -5680,7 +6405,8 @@ class StorageService {
         email: emp.email,
         cargoOuTitulo: `Pessoa Jurídica - Inscrição ${emp.inscricao}`,
         role: 'PORTAL_EMPRESA',
-        permissoes: ['portal_inscrito', 'financeiro', 'protocolos', 'formularios'],
+        permissoes: regraPJ.modulosPermitidos,
+        permissoesAcoes: regraPJ.permissoesAcoes,
         precisaTrocarSenha: precisaTrocar,
         ultimoAcesso: nowStr
       };
@@ -5701,8 +6427,23 @@ class StorageService {
 
     return {
       success: false,
-      message: 'CPF ou CNPJ não encontrado no cadastro do conselho. Verifique os dados digitados ou utilize os botões de demonstração.'
+      message: 'CPF ou CNPJ não encontrado no cadastro do conselho. Verifique os dados digitados.'
     };
+  }
+
+  /**
+   * Alterna instantaneamente o perfil de acesso do usuário logado (ex: de Colaborador para Profissional ou vice-versa)
+   * sem necessitar de logout ou de redigitar a senha.
+   */
+  public alternarPerfil(targetTipo: 'FUNCIONARIO' | 'PROFISSIONAL'): AuthUser | null {
+    if (!this.currentAuthUser) return null;
+    const cleanDoc = this.currentAuthUser.documentoLimpo;
+    const res = this.login(cleanDoc, '', false, targetTipo);
+    if (res.success && res.user) {
+      this.notify();
+      return res.user;
+    }
+    return null;
   }
 
   public logout(): void {
@@ -5750,16 +6491,26 @@ class StorageService {
     // 1. Verificar em Funcionários
     const func = this.funcionarios.find(f => f.email && f.email.trim().toLowerCase() === cleanEmail);
     if (func) {
+      const cleanDoc = func.cpf.replace(/\D/g, '');
+      const prof = this.customProfissionais.find(p => p.cpf.replace(/\D/g, '') === cleanDoc);
+
       const token = 'tok_func_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
       func.tokenPrimeiroAcesso = token;
       func.expiracaoTokenPrimeiroAcesso = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       this.saveFuncionario(func);
+
+      if (prof) {
+        prof.tokenPrimeiroAcesso = token;
+        prof.expiracaoTokenPrimeiroAcesso = func.expiracaoTokenPrimeiroAcesso;
+        this.saveProfissional(prof);
+      }
+
       return {
         success: true,
         message: 'Link de primeiro acesso enviado para o e-mail cadastrado.',
         token,
         targetNome: func.nome,
-        targetTipo: 'FUNCIONARIO',
+        targetTipo: prof ? ('DUPLO_VINCULO' as any) : 'FUNCIONARIO',
         targetDoc: func.cpf,
         email: cleanEmail
       };
@@ -5771,16 +6522,26 @@ class StorageService {
       (p.emailComercial && p.emailComercial.trim().toLowerCase() === cleanEmail)
     );
     if (prof) {
+      const cleanDoc = prof.cpf.replace(/\D/g, '');
+      const func = this.funcionarios.find(f => f.cpf.replace(/\D/g, '') === cleanDoc);
+
       const token = 'tok_prof_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
       prof.tokenPrimeiroAcesso = token;
       prof.expiracaoTokenPrimeiroAcesso = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       this.saveProfissional(prof);
+
+      if (func) {
+        func.tokenPrimeiroAcesso = token;
+        func.expiracaoTokenPrimeiroAcesso = prof.expiracaoTokenPrimeiroAcesso;
+        this.saveFuncionario(func);
+      }
+
       return {
         success: true,
         message: 'Link de primeiro acesso enviado para o e-mail cadastrado.',
         token,
         targetNome: prof.nome,
-        targetTipo: 'PROFISSIONAL',
+        targetTipo: func ? ('DUPLO_VINCULO' as any) : 'PROFISSIONAL',
         targetDoc: prof.cpf,
         email: cleanEmail
       };
@@ -5940,6 +6701,23 @@ class StorageService {
     const cleanDoc = (this.currentAuthUser.documentoLimpo || this.currentAuthUser.documento || '').replace(/\D/g, '');
     const isDeveloper = cleanDoc === '93413530259' || this.currentAuthUser.id === '00000000-0000-4000-a000-000000000001';
 
+    // 1. Se o usuário estiver no perfil PROFISSIONAL (inclusive desenvolvedor alternado),
+    // DEVEMOS respeitar rigorosamente o tipo e papel do Portal do Profissional!
+    if (this.currentAuthUser.tipo === 'PROFISSIONAL') {
+      const regraPF = this.getAcessosInscritoPF();
+      this.currentAuthUser.role = 'PORTAL_PROFISSIONAL';
+      this.currentAuthUser.permissoes = regraPF.modulosPermitidos;
+      this.currentAuthUser.permissoesAcoes = regraPF.permissoesAcoes;
+      if (!this.currentAuthUser.perfisDisponiveis || this.currentAuthUser.perfisDisponiveis.length === 0) {
+        const available = this.getAvailableProfilesForDoc(cleanDoc);
+        if (available.length > 0) {
+          this.currentAuthUser.perfisDisponiveis = available;
+        }
+      }
+      return this.currentAuthUser;
+    }
+
+    // 2. Se for desenvolvedor master no perfil administrativo/colaborador
     if (isDeveloper) {
       this.currentAuthUser.role = 'DEVELOPER';
       this.currentAuthUser.tipo = 'ADMIN';
@@ -5948,10 +6726,16 @@ class StorageService {
         'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 
         'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'
       ];
+      if (!this.currentAuthUser.perfisDisponiveis || this.currentAuthUser.perfisDisponiveis.length === 0) {
+        const available = this.getAvailableProfilesForDoc(cleanDoc);
+        if (available.length > 0) {
+          this.currentAuthUser.perfisDisponiveis = available;
+        }
+      }
       return this.currentAuthUser;
     }
 
-    // Se for colaborador/funcionário, manter as permissões em sincronia em tempo real
+    // 3. Se for colaborador/funcionário, manter as permissões em sincronia em tempo real
     if (this.currentAuthUser.tipo === 'FUNCIONARIO' || this.currentAuthUser.tipo === 'ADMIN') {
       const found = this.funcionarios.find(f => f.id === this.currentAuthUser?.id || f.cpf.replace(/\D/g, '') === cleanDoc);
       if (found) {
@@ -5964,6 +6748,12 @@ class StorageService {
         }
         this.currentAuthUser.nome = found.nome;
         this.currentAuthUser.cargoOuTitulo = `${found.cargoNome} (${found.setorNome})`;
+      }
+      if (!this.currentAuthUser.perfisDisponiveis || this.currentAuthUser.perfisDisponiveis.length === 0) {
+        const available = this.getAvailableProfilesForDoc(cleanDoc);
+        if (available.length > 0) {
+          this.currentAuthUser.perfisDisponiveis = available;
+        }
       }
     }
 

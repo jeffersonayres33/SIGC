@@ -27,9 +27,11 @@ import {
   ExternalLink,
   Lock,
   UserX,
-  ArrowRight
+  ArrowRight,
+  Eye,
+  Download
 } from 'lucide-react';
-import { Funcionario, UserRole } from '../../types';
+import { Funcionario, UserRole, PermissoesAcoesModulo } from '../../types';
 import { storageService } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
 import { maskCPF, maskPhone, sanitizeToUpper } from '../../utils/documentUtils';
@@ -199,7 +201,7 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
       nome: '',
       cpf: '',
       rg: '',
-      matricula: `MAT-${Math.floor(100 + Math.random() * 900)}`,
+      matricula: storageService.peekNextMatriculaFuncionario(),
       email: '',
       telefone: '',
       celular: '',
@@ -216,16 +218,157 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
       senhaHash: '123456',
       primeiroAcessoPendente: true,
       zerarSenhaPendente: false,
-      ultimoAcesso: 'Nunca acessou'
+      ultimoAcesso: 'Nunca acessou',
+      possuiInscricaoProfissional: false,
+      numeroInscricaoProfissional: ''
     });
     setTempPassword('');
     setModalTab('dados_gerais');
     setIsModalOpen(true);
   };
 
+  const handleClearForm = () => {
+    const defaultCargo = cargosCadastrados[0];
+    const defaultSetor = setoresCadastrados[0];
+    const initialRule = defaultCargo && defaultSetor 
+      ? findMatchingRegraAcesso(defaultCargo.id, defaultSetor.id, defaultCargo.nome, defaultSetor.nome) 
+      : null;
+
+    setEditingFunc({
+      id: editingFunc?.id || '',
+      nome: '',
+      cpf: '',
+      rg: '',
+      matricula: editingFunc?.id ? (editingFunc.matricula || storageService.peekNextMatriculaFuncionario()) : storageService.peekNextMatriculaFuncionario(),
+      email: '',
+      telefone: '',
+      celular: '',
+      fotoUrl: '',
+      cargoId: defaultCargo ? defaultCargo.id : '',
+      cargoNome: defaultCargo ? defaultCargo.nome : 'Assistente Administrativo',
+      setorId: defaultSetor ? defaultSetor.id : '',
+      setorNome: defaultSetor ? defaultSetor.nome : 'Secretaria Geral',
+      permissoesModulos: initialRule?.modulosPermitidos 
+        ? initialRule.modulosPermitidos.map(m => String(m).toLowerCase().trim()) 
+        : ['dashboard'],
+      ativo: true,
+      dataAdmissao: new Date().toISOString().split('T')[0],
+      senhaHash: '123456',
+      primeiroAcessoPendente: true,
+      zerarSenhaPendente: false,
+      ultimoAcesso: 'Nunca acessou',
+      possuiInscricaoProfissional: false,
+      numeroInscricaoProfissional: '',
+      numeroInscricao: '',
+      observacoes: ''
+    });
+    setTempPassword('');
+    toastService.info('Formulário Limpo', 'Todos os campos foram resetados.');
+  };
+
+  const handleCpfChange = (rawVal: string) => {
+    const masked = maskCPF(rawVal);
+    const cleanDigits = rawVal.replace(/\D/g, '');
+
+    if (cleanDigits.length === 11) {
+      // 1. Verificar duplicidade em funcionários cadastrados
+      const dupFunc = funcionarios.find(f => f.id !== editingFunc?.id && f.cpf.replace(/\D/g, '') === cleanDigits);
+      if (dupFunc) {
+        toastService.warning(
+          'CPF Já Cadastrado em Funcionários!',
+          `Já existe um colaborador cadastrado com este CPF (${maskCPF(cleanDigits)}): ${dupFunc.nome} (Matrícula: ${dupFunc.matricula}).`
+        );
+        setEditingFunc(prev => (prev ? { ...prev, cpf: masked } : null));
+        return;
+      }
+
+      // 2. Verificar se existe cadastro de profissional para carregar dados
+      const { profissional } = storageService.findCadastroByCpf(cleanDigits);
+      if (profissional) {
+        setEditingFunc(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            cpf: masked,
+            nome: profissional.nome,
+            rg: profissional.rg || '',
+            telefone: profissional.telefone || '',
+            celular: profissional.celular || '',
+            email: profissional.emailPessoal || profissional.emailComercial || '',
+            fotoUrl: profissional.fotoUrl || prev.fotoUrl,
+            possuiInscricaoProfissional: true,
+            numeroInscricaoProfissional: profissional.inscricao,
+            numeroInscricao: profissional.inscricao
+          };
+        });
+        toastService.info(
+          'Profissional Inscrito Identificado!',
+          `Dados de ${profissional.nome} (Inscrição: ${profissional.inscricao}) carregados automaticamente para o colaborador.`
+        );
+        return;
+      } else {
+        // Se o CPF digitado não pertence a um profissional, desvincula inscrição profissional
+        setEditingFunc(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            cpf: masked,
+            possuiInscricaoProfissional: false,
+            numeroInscricaoProfissional: '',
+            numeroInscricao: ''
+          };
+        });
+        return;
+      }
+    }
+
+    setEditingFunc(prev => (prev ? { ...prev, cpf: masked } : null));
+  };
+
+  const handleEmailBlur = (_emailVal: string) => {
+    // E-mail compartilhado permitido
+  };
+
+  const handlePuxarDadosProfissional = (inscricao: string) => {
+    if (!inscricao || !inscricao.trim()) {
+      toastService.warning('Informe a Inscrição', 'Digite o número de inscrição do profissional no CRF.');
+      return;
+    }
+    const prof = storageService.findProfissionalByInscricao(inscricao);
+    if (prof) {
+      setEditingFunc(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          nome: prev.nome || prof.nome,
+          cpf: prev.cpf || prof.cpf,
+          rg: prev.rg || prof.rg || '',
+          telefone: prev.telefone || prof.telefone || '',
+          celular: prev.celular || prof.celular || '',
+          email: prev.email || prof.emailPessoal || prof.emailComercial || '',
+          fotoUrl: prev.fotoUrl || prof.fotoUrl || '',
+          possuiInscricaoProfissional: true,
+          numeroInscricaoProfissional: prof.inscricao,
+          numeroInscricao: prof.inscricao
+        };
+      });
+      toastService.success(
+        'Dados do Profissional Carregados!',
+        `Profissional ${prof.nome} (${prof.inscricao}) vinculado com sucesso ao cadastro do funcionário.`
+      );
+    } else {
+      toastService.warning(
+        'Inscrição Não Localizada',
+        `Nenhum profissional com a inscrição "${inscricao}" foi encontrado no cadastro do conselho.`
+      );
+    }
+  };
+
   const handleOpenEdit = (func: Funcionario) => {
     setEditingFunc({ 
       ...func,
+      possuiInscricaoProfissional: func.possuiInscricaoProfissional ?? Boolean(func.numeroInscricaoProfissional || func.numeroInscricao),
+      numeroInscricaoProfissional: func.numeroInscricaoProfissional || func.numeroInscricao || '',
       permissoesModulos: (func.permissoesModulos || []).map(m => String(m).toLowerCase().trim())
     });
     setTempPassword('');
@@ -255,17 +398,116 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
     const current = (editingFunc.permissoesModulos || []).map(m => String(m).toLowerCase().trim());
     const exists = current.includes(modNorm);
     const updated = exists ? current.filter(m => m !== modNorm) : [...current, modNorm];
-    setEditingFunc({ ...editingFunc, permissoesModulos: updated });
+    
+    const currentAcoes = { ...(editingFunc.permissoesAcoes || {}) };
+    if (exists) {
+      currentAcoes[modNorm] = { visualizar: false, editar: false, deletar: false };
+    } else {
+      currentAcoes[modNorm] = currentAcoes[modNorm] || { visualizar: true, editar: true, deletar: false };
+      if (!currentAcoes[modNorm].visualizar) {
+        currentAcoes[modNorm].visualizar = true;
+      }
+    }
+
+    setEditingFunc({ 
+      ...editingFunc, 
+      permissoesModulos: updated,
+      permissoesAcoes: currentAcoes
+    });
+  };
+
+  const handleToggleAcaoModulo = (
+    moduloId: string, 
+    acao: 'visualizar' | 'editar' | 'deletar', 
+    e?: React.MouseEvent
+  ) => {
+    if (e) e.stopPropagation();
+    if (!editingFunc) return;
+    const modNorm = moduloId.toLowerCase().trim();
+    const currentAcoes = { ...(editingFunc.permissoesAcoes || {}) };
+    const modAcoes: PermissoesAcoesModulo = currentAcoes[modNorm] || {
+      visualizar: (editingFunc.permissoesModulos || []).map(m => m.toLowerCase().trim()).includes(modNorm),
+      editar: (editingFunc.permissoesModulos || []).map(m => m.toLowerCase().trim()).includes(modNorm),
+      deletar: false
+    };
+
+    const nextVal = !modAcoes[acao];
+    const updatedModAcoes: PermissoesAcoesModulo = {
+      ...modAcoes,
+      [acao]: nextVal
+    };
+
+    if ((acao === 'editar' || acao === 'deletar') && nextVal) {
+      updatedModAcoes.visualizar = true;
+    }
+    if (acao === 'visualizar' && !nextVal) {
+      updatedModAcoes.editar = false;
+      updatedModAcoes.deletar = false;
+    }
+
+    const hasAny = updatedModAcoes.visualizar || updatedModAcoes.editar || updatedModAcoes.deletar;
+    let nextModulos = [...(editingFunc.permissoesModulos || [])].map(m => m.toLowerCase().trim());
+    if (hasAny && !nextModulos.includes(modNorm)) {
+      nextModulos.push(modNorm);
+    } else if (!hasAny && nextModulos.includes(modNorm)) {
+      nextModulos = nextModulos.filter(m => m !== modNorm);
+    }
+
+    setEditingFunc({
+      ...editingFunc,
+      permissoesModulos: nextModulos,
+      permissoesAcoes: {
+        ...currentAcoes,
+        [modNorm]: updatedModAcoes
+      }
+    });
+  };
+
+  const handlePresetAcoesColaborador = (preset: 'apenas_visualizar' | 'visualizar_editar' | 'acesso_total') => {
+    if (!editingFunc) return;
+    const currentModulos = (editingFunc.permissoesModulos && editingFunc.permissoesModulos.length > 0)
+      ? editingFunc.permissoesModulos.map(m => m.toLowerCase().trim())
+      : MODULOS_DISPONIVEIS.map(m => m.id.toLowerCase().trim());
+
+    const newAcoes: Record<string, PermissoesAcoesModulo> = {};
+    currentModulos.forEach(mId => {
+      if (preset === 'apenas_visualizar') {
+        newAcoes[mId] = { visualizar: true, editar: false, deletar: false };
+      } else if (preset === 'visualizar_editar') {
+        newAcoes[mId] = { visualizar: true, editar: true, deletar: false };
+      } else {
+        newAcoes[mId] = { visualizar: true, editar: true, deletar: true };
+      }
+    });
+
+    setEditingFunc({
+      ...editingFunc,
+      permissoesModulos: currentModulos,
+      permissoesAcoes: newAcoes
+    });
   };
 
   const handleSelectAllModulos = () => {
     if (!editingFunc) return;
-    setEditingFunc({ ...editingFunc, permissoesModulos: MODULOS_DISPONIVEIS.map(m => m.id.toLowerCase()) });
+    const all = MODULOS_DISPONIVEIS.map(m => m.id.toLowerCase());
+    const newAcoes: Record<string, PermissoesAcoesModulo> = {};
+    all.forEach(mId => {
+      newAcoes[mId] = { visualizar: true, editar: true, deletar: false };
+    });
+    setEditingFunc({ 
+      ...editingFunc, 
+      permissoesModulos: all,
+      permissoesAcoes: newAcoes
+    });
   };
 
   const handleClearAllModulos = () => {
     if (!editingFunc) return;
-    setEditingFunc({ ...editingFunc, permissoesModulos: ['dashboard'] });
+    setEditingFunc({ 
+      ...editingFunc, 
+      permissoesModulos: ['dashboard'],
+      permissoesAcoes: { dashboard: { visualizar: true, editar: false, deletar: false } }
+    });
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -280,12 +522,26 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
       return;
     }
 
+    // 1. Validação de duplicidade de CPF em funcionários
+    const dupCpf = funcionarios.find(f => f.id !== editingFunc.id && f.cpf.replace(/\D/g, '') === cleanCpf);
+    if (dupCpf) {
+      toastService.warning(
+        'CPF Já Cadastrado',
+        `Não é possível salvar: já existe um colaborador cadastrado com este CPF (${maskCPF(cleanCpf)}): ${dupCpf.nome} (Matrícula: ${dupCpf.matricula}).`
+      );
+      return;
+    }
+
+    const matriculaFinal = (editingFunc.matricula && /^\d+$/.test(String(editingFunc.matricula).trim()))
+      ? String(editingFunc.matricula).trim()
+      : storageService.peekNextMatriculaFuncionario();
+
     const payload: Funcionario = {
       id: editingFunc.id || `func_${Date.now()}`,
       nome: editingFunc.nome.trim(),
       cpf: maskCPF(cleanCpf),
       rg: editingFunc.rg || '',
-      matricula: editingFunc.matricula || `MAT-${Math.floor(100 + Math.random() * 900)}`,
+      matricula: matriculaFinal,
       email: editingFunc.email || '',
       telefone: editingFunc.telefone || '',
       celular: editingFunc.celular || '',
@@ -298,13 +554,16 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
       permissoesModulos: editingFunc.permissoesModulos && editingFunc.permissoesModulos.length > 0 
         ? editingFunc.permissoesModulos 
         : ['dashboard'],
+      permissoesAcoes: editingFunc.permissoesAcoes,
       ativo: editingFunc.ativo ?? true,
       dataAdmissao: editingFunc.dataAdmissao || new Date().toISOString().split('T')[0],
       senhaHash: tempPassword.trim() || editingFunc.senhaHash || '123456',
       primeiroAcessoPendente: editingFunc.primeiroAcessoPendente ?? false,
       zerarSenhaPendente: editingFunc.zerarSenhaPendente ?? false,
       ultimoAcesso: editingFunc.ultimoAcesso || 'Nunca acessou',
-      observacoes: editingFunc.observacoes || ''
+      observacoes: editingFunc.observacoes || '',
+      possuiInscricaoProfissional: Boolean(editingFunc.possuiInscricaoProfissional),
+      numeroInscricaoProfissional: editingFunc.numeroInscricaoProfissional || editingFunc.numeroInscricao || ''
     };
 
     const res = storageService.saveFuncionario(payload);
@@ -667,15 +926,26 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
                 </div>
               </div>
 
-              <button
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setEditingFunc(null);
-                }}
-                className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={handleClearForm}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-amber-300 hover:text-white hover:bg-slate-800 border border-slate-700 hover:border-amber-400/50 transition-all flex items-center space-x-1.5 cursor-pointer"
+                  title="Limpar todos os campos deste formulário"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Limpar Formulário</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setEditingFunc(null);
+                  }}
+                  className="p-1.5 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Modal Navigation Tabs */}
@@ -774,6 +1044,71 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
                     </div>
                   </div>
 
+                  {/* Vínculo: Profissional com inscrição neste regional */}
+                  <div className="p-3.5 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <span className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                          <UserCheck className="w-4 h-4 text-emerald-600" />
+                          Profissional com inscrição neste regional?
+                        </span>
+                        <p className="text-[11px] text-emerald-700/80">
+                          Informe se este colaborador também é um profissional registrado neste Conselho Regional de Farmácia.
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-4 bg-white px-3 py-1.5 rounded-xl border border-emerald-200 shadow-2xs shrink-0">
+                        <label className="flex items-center space-x-2 text-xs font-bold text-slate-700 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="possuiInscricaoProfissional"
+                            checked={editingFunc.possuiInscricaoProfissional === true}
+                            onChange={() => setEditingFunc(prev => prev ? ({ ...prev, possuiInscricaoProfissional: true }) : prev)}
+                            className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          />
+                          <span>SIM</span>
+                        </label>
+                        <label className="flex items-center space-x-2 text-xs font-bold text-slate-700 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="possuiInscricaoProfissional"
+                            checked={!editingFunc.possuiInscricaoProfissional}
+                            onChange={() => setEditingFunc(prev => prev ? ({ ...prev, possuiInscricaoProfissional: false, numeroInscricaoProfissional: '' }) : prev)}
+                            className="w-4 h-4 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          />
+                          <span>NÃO</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {editingFunc.possuiInscricaoProfissional && (
+                      <div className="pt-2 border-t border-emerald-200/70 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <div className="flex-1">
+                          <label className="block text-emerald-950 font-bold uppercase text-[10px] mb-1">
+                            Número de Inscrição Profissional (CRF) *
+                          </label>
+                          <input
+                            type="text"
+                            value={editingFunc.numeroInscricaoProfissional || editingFunc.numeroInscricao || ''}
+                            onChange={(e) => {
+                              const val = e.target.value.toUpperCase();
+                              setEditingFunc(prev => prev ? ({ ...prev, numeroInscricaoProfissional: val, numeroInscricao: val }) : prev);
+                            }}
+                            placeholder="EX: CRF-AM 4150, CRF-AM 9999"
+                            className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-xl font-mono font-bold text-emerald-950 uppercase text-xs focus:ring-2 focus:ring-emerald-500/20"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handlePuxarDadosProfissional(editingFunc.numeroInscricaoProfissional || editingFunc.numeroInscricao || '')}
+                          className="sm:mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Puxar Dados do Profissional</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Nome Completo e CPF */}
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="sm:col-span-2">
@@ -799,7 +1134,7 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
                         required
                         placeholder="000.000.000-00"
                         value={editingFunc.cpf || ''}
-                        onChange={(e) => setEditingFunc({ ...editingFunc, cpf: maskCPF(e.target.value) })}
+                        onChange={(e) => handleCpfChange(e.target.value)}
                         className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono font-bold focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
                       />
                     </div>
@@ -809,14 +1144,15 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       <label className="block text-slate-700 font-bold mb-1 uppercase">
-                        Matrícula Funcional
+                        Matrícula Funcional (Numérica)
                       </label>
                       <input
                         type="text"
-                        placeholder="EX: SIS-001"
-                        value={editingFunc.matricula || ''}
-                        onChange={(e) => setEditingFunc({ ...editingFunc, matricula: e.target.value.toUpperCase() })}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono font-bold uppercase focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                        inputMode="numeric"
+                        placeholder="EX: 0"
+                        value={editingFunc.matricula ?? ''}
+                        onChange={(e) => setEditingFunc({ ...editingFunc, matricula: e.target.value.replace(/\D/g, '') })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-mono font-bold focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
                       />
                     </div>
 
@@ -857,6 +1193,7 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
                         placeholder="colaborador@crfam.org.br"
                         value={editingFunc.email || ''}
                         onChange={(e) => setEditingFunc({ ...editingFunc, email: e.target.value.toLowerCase() })}
+                        onBlur={(e) => handleEmailBlur(e.target.value)}
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl font-semibold focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
                       />
                     </div>
@@ -969,8 +1306,8 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
                       </div>
                     </div>
 
-                    {/* Campo Exclusivo: Número de Inscrição / CRF do Fiscal */}
-                    {((editingFunc.cargoNome || '').toLowerCase().includes('fiscal') || (editingFunc.setorNome || '').toLowerCase().includes('fiscal')) && (
+                    {/* Campo Exclusivo: Número de Inscrição / CRF do Fiscal - EXCLUSIVO PARA O CARGO DE FISCAL */}
+                    {(editingFunc.cargoNome || '').toLowerCase().includes('fiscal') && (
                       <div className="p-3.5 bg-emerald-50 border border-emerald-300 rounded-xl space-y-1.5 animate-in fade-in duration-200">
                         <div className="flex items-center justify-between">
                           <label className="block text-emerald-950 font-bold uppercase text-[11px] flex items-center space-x-1.5">
@@ -978,7 +1315,7 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
                             <span>Número de Inscrição / CRF do Fiscal *</span>
                           </label>
                           <span className="text-[10px] font-bold text-emerald-800 bg-white px-2 py-0.5 rounded border border-emerald-200">
-                            Exibido na Assinatura dos Termos
+                            Exclusivo Cargo Fiscal
                           </span>
                         </div>
                         <input
@@ -1178,72 +1515,145 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
                           ({editingFunc.permissoesModulos?.length || 0} de {MODULOS_DISPONIVEIS.length})
                         </span>
                       </label>
-                      <div className="flex items-center space-x-2 text-[11px]">
+                      <div className="flex items-center space-x-1.5 text-[11px] flex-wrap gap-1">
                         <button
                           type="button"
-                          onClick={() => {
-                            const updated = applyMatchingAcesso(
-                              editingFunc.cargoId || '',
-                              editingFunc.cargoNome || '',
-                              editingFunc.setorId || '',
-                              editingFunc.setorNome || '',
-                              editingFunc,
-                              false
-                            );
-                            setEditingFunc(updated);
-                            toastService.info('Módulos Restaurados', 'Módulos redefinidos para o padrão do Cargo e Setor.');
-                          }}
-                          className="font-bold text-purple-700 hover:underline cursor-pointer"
+                          onClick={() => handlePresetAcoesColaborador('apenas_visualizar')}
+                          className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 font-bold text-[10px] cursor-pointer"
+                          title="Definir apenas visualização para os módulos liberados"
                         >
-                          Padrão do Cargo/Setor
+                          👁️ Apenas Visualizar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handlePresetAcoesColaborador('visualizar_editar')}
+                          className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 font-bold text-[10px] cursor-pointer"
+                          title="Definir visualização e edição para os módulos liberados"
+                        >
+                          ✏️ Visualizar & Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handlePresetAcoesColaborador('acesso_total')}
+                          className="px-2 py-0.5 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 font-bold text-[10px] cursor-pointer"
+                          title="Definir acesso total (visualizar, editar, deletar) para os módulos"
+                        >
+                          ⚡ Acesso Total
                         </button>
                         <span className="text-slate-300">|</span>
                         <button
                           type="button"
                           onClick={handleSelectAllModulos}
-                          className="font-bold text-blue-600 hover:underline cursor-pointer"
+                          className="font-bold text-blue-600 hover:underline cursor-pointer text-[10px]"
                         >
-                          Marcar Todos
+                          Todos Módulos
                         </button>
                         <span className="text-slate-300">|</span>
                         <button
                           type="button"
                           onClick={handleClearAllModulos}
-                          className="font-bold text-slate-500 hover:underline cursor-pointer"
+                          className="font-bold text-slate-500 hover:underline cursor-pointer text-[10px]"
                         >
-                          Apenas Iniciais
+                          Mínimo
                         </button>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {MODULOS_DISPONIVEIS.map((mod) => {
                         const isChecked = (editingFunc.permissoesModulos || [])
                           .map(m => String(m).toLowerCase().trim())
                           .includes(mod.id.toLowerCase().trim());
+
+                        const modNorm = mod.id.toLowerCase().trim();
+                        const acoes = (editingFunc.permissoesAcoes && editingFunc.permissoesAcoes[modNorm]) || {
+                          visualizar: isChecked,
+                          editar: isChecked,
+                          deletar: false
+                        };
+
                         return (
                           <div
                             key={mod.id}
-                            onClick={() => handleToggleModulo(mod.id)}
-                            className={`p-3 rounded-xl border flex items-start space-x-3 cursor-pointer transition-all ${
+                            className={`p-3 rounded-xl border flex flex-col justify-between transition-all ${
                               isChecked
                                 ? 'bg-blue-50/70 border-blue-300 shadow-2xs'
                                 : 'bg-white border-slate-200 hover:bg-slate-50'
                             }`}
                           >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {}} // handled by parent div
-                              className="mt-0.5 w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 pointer-events-none"
-                            />
-                            <div className="flex-1">
-                              <div className={`font-bold text-xs ${isChecked ? 'text-blue-900' : 'text-slate-700'}`}>
-                                {mod.nome}
+                            <div 
+                              onClick={() => handleToggleModulo(mod.id)}
+                              className="flex items-start space-x-2.5 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {}} // handled by parent div
+                                className="mt-0.5 w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 pointer-events-none"
+                              />
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between">
+                                  <div className={`font-bold text-xs ${isChecked ? 'text-blue-900' : 'text-slate-700'}`}>
+                                    {mod.nome}
+                                  </div>
+                                  {isChecked && (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 uppercase">
+                                      Ativo
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[10px] text-slate-500 leading-tight mt-0.5">
+                                  {mod.descricao}
+                                </p>
                               </div>
-                              <p className="text-[10px] text-slate-500 leading-tight mt-0.5">
-                                {mod.descricao}
-                              </p>
+                            </div>
+
+                            {/* Ações Granulares: Visualizar, Editar, Deletar */}
+                            <div className="mt-2.5 pt-2 border-t border-slate-200/80 flex items-center justify-end space-x-1.5">
+                              {/* Visualizar */}
+                              <button
+                                type="button"
+                                onClick={(e) => handleToggleAcaoModulo(mod.id, 'visualizar', e)}
+                                className={`flex items-center space-x-1 px-2 py-1 rounded-md text-[10px] font-bold border transition-colors cursor-pointer ${
+                                  acoes.visualizar
+                                    ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                                    : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-100'
+                                }`}
+                                title="Permissão para consultar/visualizar este módulo"
+                              >
+                                <Eye className="w-3 h-3" />
+                                <span>Visualizar</span>
+                              </button>
+
+                              {/* Editar */}
+                              <button
+                                type="button"
+                                onClick={(e) => handleToggleAcaoModulo(mod.id, 'editar', e)}
+                                className={`flex items-center space-x-1 px-2 py-1 rounded-md text-[10px] font-bold border transition-colors cursor-pointer ${
+                                  acoes.editar
+                                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                                    : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-100'
+                                }`}
+                                title="Permissão para criar e editar registros neste módulo"
+                              >
+                                <Edit3 className="w-3 h-3" />
+                                <span>Editar</span>
+                              </button>
+
+                              {/* Deletar */}
+                              <button
+                                type="button"
+                                onClick={(e) => handleToggleAcaoModulo(mod.id, 'deletar', e)}
+                                className={`flex items-center space-x-1 px-2 py-1 rounded-md text-[10px] font-bold border transition-colors cursor-pointer ${
+                                  acoes.deletar
+                                    ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
+                                    : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-100'
+                                }`}
+                                title="Permissão para excluir registros neste módulo"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Deletar</span>
+                              </button>
                             </div>
                           </div>
                         );
@@ -1254,24 +1664,36 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
               )}
 
               {/* Modal Actions */}
-              <div className="flex items-center justify-end space-x-2.5 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100 flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsModalOpen(false);
-                    setEditingFunc(null);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-colors uppercase cursor-pointer"
+                  onClick={handleClearForm}
+                  className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold transition-colors uppercase text-xs cursor-pointer shadow-2xs"
+                  title="Limpar todos os campos deste formulário"
                 >
-                  CANCELAR
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Limpar Formulário</span>
                 </button>
-                <button
-                  type="submit"
-                  className="flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-500/20 transition-all uppercase cursor-pointer"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>SALVAR FUNCIONÁRIO</span>
-                </button>
+
+                <div className="flex items-center space-x-2.5 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsModalOpen(false);
+                      setEditingFunc(null);
+                    }}
+                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold transition-colors uppercase cursor-pointer"
+                  >
+                    CANCELAR
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex items-center space-x-1.5 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md shadow-blue-500/20 transition-all uppercase cursor-pointer"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>SALVAR FUNCIONÁRIO</span>
+                  </button>
+                </div>
               </div>
             </form>
           </div>

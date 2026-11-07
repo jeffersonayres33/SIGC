@@ -15,7 +15,9 @@ import {
   SlidersHorizontal,
   ChevronDown,
   Menu,
-  LogOut
+  LogOut,
+  ArrowRightLeft,
+  Briefcase
 } from 'lucide-react';
 import { UserRole, AuthUser } from '../types';
 import { CouncilConfig, storageService } from '../services/storageService';
@@ -35,6 +37,7 @@ interface NavbarProps {
   onOpenSupabaseModal?: () => void;
   authUser?: AuthUser | null;
   onLogout?: () => void;
+  onSwitchProfile?: (targetTipo: 'FUNCIONARIO' | 'PROFISSIONAL') => void;
 }
 
 const ROLES_LIST: { role: UserRole; label: string; icon: any; color: string; badgeColor: string }[] = [
@@ -57,7 +60,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   councilConfig,
   onToggleSidebar,
   authUser,
-  onLogout
+  onLogout,
+  onSwitchProfile
 }) => {
   const [showRoleMenu, setShowRoleMenu] = useState(false);
 
@@ -144,118 +148,84 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
 
       {/* Main Bar with Hamburger Menu Button, Logo, Clean Brand and Role Switcher */}
-      <div className="px-4 py-2.5 flex items-center justify-between gap-3">
+      <div className="px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between gap-2 sm:gap-3">
         {/* Left: Hamburger menu toggle + System Title */}
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
           <button
             onClick={onToggleSidebar}
-            className="flex items-center justify-center w-9 h-9 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-700 border border-slate-200 transition-colors shadow-xs cursor-pointer"
+            className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-700 border border-slate-200 transition-colors shadow-xs cursor-pointer shrink-0"
             title="Abrir Menu do Sistema"
             aria-label="Abrir Menu"
           >
-            <Menu className="w-5 h-5" />
+            <Menu className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2 sm:space-x-3 min-w-0">
             <img 
               src={SIGCON_LOGO} 
               alt="SIGCON Icon" 
-              className="h-9 w-9 object-contain rounded-xl border border-slate-200 shadow-2xs p-0.5 bg-white transition-transform hover:scale-105"
+              className="h-8 w-8 sm:h-9 sm:w-9 object-contain rounded-xl border border-slate-200 shadow-2xs p-0.5 bg-white transition-transform hover:scale-105 shrink-0"
             />
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center space-x-2">
-                <h1 className="font-extrabold text-base tracking-tight text-slate-900 flex items-center">
+                <h1 className="font-extrabold text-sm sm:text-base tracking-tight text-slate-900 flex items-center">
                   SIGCON <span className="text-slate-500 font-normal text-xs ml-1.5 hidden md:inline">| Sistema Integrado de Gestão de Conselho</span>
                 </h1>
               </div>
-              <p className="text-[11px] text-slate-500 font-medium hidden sm:block">
+              <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium hidden sm:block truncate">
                 {councilConfig.sigla} — {councilConfig.nomeCompleto}
               </p>
-              <div className="text-[11px] text-blue-700 font-bold mt-0.5 flex flex-wrap items-center gap-1.5">
-                <span>
-                  Olá, <strong className="text-blue-900 underline decoration-blue-300">{authUser?.nome || 'Usuário'}</strong>! Seja bem-vindo(a) ao SIGCON.
+              <div className="text-[10px] sm:text-[11px] text-blue-700 font-bold mt-0.5 hidden sm:flex items-center gap-1.5 truncate">
+                <span className="truncate">
+                  Olá, <strong className="text-blue-900 underline decoration-blue-300">{authUser?.nome || 'Usuário'}</strong>!
                 </span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Right: Role Switcher & Sair */}
-        <div className="flex items-center space-x-2.5">
+        {/* Right: Profile Switcher, Role & Sair */}
+        <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
 
-          {/* User Role Badge / Developer Switcher */}
-          {isMasterDeveloper(authUser) ? (
-            <div className="relative">
-              <button
-                onClick={() => setShowRoleMenu(!showRoleMenu)}
-                className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-all ${activeRoleConfig.color} hover:shadow-sm cursor-pointer`}
-                title="Modo Desenvolvedor: Alternar simulação de perfil"
-              >
-                <Icon className="w-4 h-4" />
-                <div className="text-left hidden sm:block">
-                  <div className="text-[10px] text-slate-500 font-normal leading-none flex items-center space-x-1">
-                    <span>Simular Perfil</span>
-                    <span className="text-[9px] bg-purple-100 text-purple-700 px-1 rounded font-bold">DEV</span>
-                  </div>
-                  <div className="font-bold leading-tight mt-0.5">{activeRoleConfig.label}</div>
-                </div>
-                <ChevronDown className="w-3.5 h-3.5 ml-1 opacity-60" />
-              </button>
-
-              {showRoleMenu && (
-                <div className="absolute right-0 mt-2 w-72 bg-white border border-slate-200 rounded-2xl shadow-2xl py-2 z-50 text-xs">
-                  <div className="px-3.5 py-2 text-[11px] font-bold text-slate-500 border-b border-slate-100 uppercase tracking-wider flex items-center justify-between">
-                    <span>Simular Perfil de Acesso</span>
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
-                  </div>
-                  <div className="p-1.5 space-y-1">
-                    {ROLES_LIST.map((item) => {
-                      const ItemIcon = item.icon;
-                      const isSelected = item.role === currentRole;
-                      return (
-                        <button
-                          key={item.role}
-                          onClick={() => {
-                            onRoleChange(item.role);
-                            setShowRoleMenu(false);
-                            toastService.info(
-                              'Perfil Simulado',
-                              `Ambiente alterado para o perfil: ${item.label}.`
-                            );
-                          }}
-                          className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-left transition-colors cursor-pointer ${
-                            isSelected 
-                              ? 'bg-blue-50 text-blue-900 border border-blue-200 font-bold' 
-                              : 'text-slate-700 hover:bg-slate-50'
-                          }`}
-                        >
-                          <ItemIcon className="w-4 h-4 text-slate-500 shrink-0" />
-                          <div className="flex-1">
-                            <div className="font-semibold text-slate-800">{item.label}</div>
-                          </div>
-                          {isSelected && <UserCheck className="w-4 h-4 text-blue-600" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl border text-xs font-semibold ${activeRoleConfig.color}`}>
-              <Icon className="w-4 h-4" />
-              <div className="text-left hidden sm:block">
-                <div className="text-[10px] text-slate-500 font-normal leading-none">Perfil de Acesso</div>
-                <div className="font-bold leading-tight mt-0.5">{activeRoleConfig.label}</div>
-              </div>
-            </div>
+          {/* Botão de Alternância Imediata Sem Deslogar */}
+          {authUser && authUser.perfisDisponiveis && authUser.perfisDisponiveis.length > 1 && onSwitchProfile && (
+            <button
+              type="button"
+              onClick={() => onSwitchProfile(authUser.tipo === 'PROFISSIONAL' ? 'FUNCIONARIO' : 'PROFISSIONAL')}
+              className={`flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-white text-xs font-bold shadow-xs transition-all cursor-pointer group shrink-0 active:scale-95 ${
+                authUser.tipo === 'PROFISSIONAL'
+                  ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
+                  : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
+              }`}
+              title={
+                authUser.tipo === 'PROFISSIONAL'
+                  ? 'Clique para alternar imediatamente para sua atuação como Colaborador do Conselho'
+                  : 'Clique para alternar imediatamente para sua atuação como Profissional Inscrito (PF)'
+              }
+            >
+              <ArrowRightLeft className="w-3.5 h-3.5 group-hover:rotate-180 transition-transform duration-300" />
+              <span className="hidden sm:inline">
+                {authUser.tipo === 'PROFISSIONAL' ? 'Alternar para Colaborador' : 'Alternar para Profissional'}
+              </span>
+              <span className="inline sm:hidden text-[11px]">
+                {authUser.tipo === 'PROFISSIONAL' ? 'Colaborador' : 'Profissional'}
+              </span>
+            </button>
           )}
+
+          {/* Perfil de Acesso Ativo (Informativo - Simulação no Menu Lateral) */}
+          <div className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold ${activeRoleConfig.color}`}>
+            <Icon className="w-3.5 h-3.5 shrink-0" />
+            <div className="text-left hidden md:block">
+              <div className="font-bold leading-tight text-[11px] truncate max-w-[130px]">{activeRoleConfig.label}</div>
+            </div>
+          </div>
 
           {/* Botão Sair / Logout */}
           {onLogout && (
             <button
               onClick={onLogout}
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 hover:border-rose-300 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+              className="flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 hover:border-rose-300 text-xs font-bold transition-all cursor-pointer shadow-2xs"
               title="Desconectar do sistema"
             >
               <LogOut className="w-3.5 h-3.5 text-rose-600" />

@@ -197,6 +197,8 @@ ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS dt_inicio_insc VARCHAR
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS categoria VARCHAR(100) DEFAULT 'Farmacêutico';
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS especialidade VARCHAR(100);
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS email VARCHAR(150);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS e_colaborador_crf BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS matricula_colaborador VARCHAR(50);
 
 -- Garantir restrições UNIQUE para CPF e Inscrição
 DO $$
@@ -649,4 +651,69 @@ ON CONFLICT (cpf) DO UPDATE SET
     cargo_nome = EXCLUDED.cargo_nome,
     permissoes_modulos = EXCLUDED.permissoes_modulos,
     ativo = TRUE;
+
+-- ------------------------------------------------------------------------------
+-- 15. ATUALIZAÇÕES PARA CONTROLE DE PERFIL DUPLO E VÍNCULO CRUZADO
+-- ------------------------------------------------------------------------------
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS possui_inscricao_profissional BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS numero_inscricao_profissional VARCHAR(50);
+
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS e_colaborador_crf BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS matricula_colaborador VARCHAR(50);
+
+-- ------------------------------------------------------------------------------
+-- 16. TABELA DE PERMISSÕES E PERFIS DE USUÁRIOS
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.perfis_permissoes_usuario (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    usuario_id VARCHAR(100),
+    documento VARCHAR(20),
+    tipo_perfil VARCHAR(50),
+    nome VARCHAR(255),
+    cargo_ou_titulo VARCHAR(150),
+    matricula VARCHAR(50),
+    numero_inscricao VARCHAR(50),
+    modulos_permitidos TEXT[] DEFAULT '{}',
+    permissoes_acoes JSONB DEFAULT '{}'::jsonb,
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Garantir todas as colunas caso a tabela já tenha sido criada anteriormente sem alguma delas:
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS usuario_id VARCHAR(100);
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS documento VARCHAR(20);
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS tipo_perfil VARCHAR(50);
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS nome VARCHAR(255);
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS cargo_ou_titulo VARCHAR(150);
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS matricula VARCHAR(50);
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS numero_inscricao VARCHAR(50);
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS modulos_permitidos TEXT[] DEFAULT '{}';
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS permissoes_acoes JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
+
+-- Migrar valores legados de 'cpf' para 'documento' se a coluna 'cpf' existir
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+          AND table_name = 'perfis_permissoes_usuario' 
+          AND column_name = 'cpf'
+    ) THEN
+        UPDATE public.perfis_permissoes_usuario 
+        SET documento = COALESCE(documento, cpf) 
+        WHERE documento IS NULL;
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_perfis_permissoes_doc ON public.perfis_permissoes_usuario(documento);
+CREATE INDEX IF NOT EXISTS idx_perfis_permissoes_tipo ON public.perfis_permissoes_usuario(tipo_perfil);
+
+ALTER TABLE public.perfis_permissoes_usuario ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Public access perfis_permissoes_usuario" ON public.perfis_permissoes_usuario;
+CREATE POLICY "Public access perfis_permissoes_usuario" ON public.perfis_permissoes_usuario FOR ALL USING (true) WITH CHECK (true);
+
 

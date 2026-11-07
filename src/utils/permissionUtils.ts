@@ -1,6 +1,7 @@
 import { AuthUser } from '../types';
 import { MainSection } from '../components/Sidebar';
 import { UserRole } from '../types';
+import { storageService } from '../services/storageService';
 
 export interface ModuloInfo {
   id: string;
@@ -92,8 +93,17 @@ export function hasModulePermission(
     if (activeRole === 'DIRETORIA') {
       return ['dashboard', 'relatorios', 'protocolos', 'profissionais', 'empresas', 'financeiro', 'fiscalizacao', 'cobranca_juridico'].includes(targetModule);
     }
-    if (activeRole === 'PORTAL_PROFISSIONAL' || activeRole === 'PORTAL_EMPRESA') {
-      return targetModule === 'portal_inscrito';
+    if (activeRole === 'PORTAL_PROFISSIONAL') {
+      const config = storageService.getCouncilConfig();
+      const regraPF = config.acessosInscritoPF || storageService.getAcessosInscritoPF();
+      if (!regraPF.permiteAcessoAoPortal) return false;
+      return (regraPF.modulosPermitidos || []).map(m => m.toLowerCase().trim()).includes(targetModule);
+    }
+    if (activeRole === 'PORTAL_EMPRESA') {
+      const config = storageService.getCouncilConfig();
+      const regraPJ = config.acessosInscritoPJ || storageService.getAcessosInscritoPJ();
+      if (!regraPJ.permiteAcessoAoPortal) return false;
+      return (regraPJ.modulosPermitidos || []).map(m => m.toLowerCase().trim()).includes(targetModule);
     }
     // Caso contrário, acesso total irrestrito para Desenvolvedor Master
     return true;
@@ -113,9 +123,26 @@ export function hasModulePermission(
     return ['dashboard', 'relatorios', 'protocolos', 'profissionais', 'empresas', 'financeiro', 'fiscalizacao', 'cobranca_juridico'].includes(targetModule);
   }
 
-  // Usuários externos do Portal
-  if (isPortalUser(user) || activeRole === 'PORTAL_PROFISSIONAL' || activeRole === 'PORTAL_EMPRESA') {
-    return targetModule === 'portal_inscrito';
+  // Usuários do Portal do Inscrito (Pessoa Física - PF)
+  if (user.tipo === 'PROFISSIONAL' || activeRole === 'PORTAL_PROFISSIONAL') {
+    const config = storageService.getCouncilConfig();
+    const regraPF = config.acessosInscritoPF || storageService.getAcessosInscritoPF();
+    if (!regraPF.permiteAcessoAoPortal) {
+      return false;
+    }
+    const allowed = (regraPF.modulosPermitidos || []).map(m => m.toLowerCase().trim());
+    return allowed.includes(targetModule);
+  }
+
+  // Usuários do Portal do Inscrito (Pessoa Jurídica - PJ)
+  if (user.tipo === 'EMPRESA' || activeRole === 'PORTAL_EMPRESA') {
+    const config = storageService.getCouncilConfig();
+    const regraPJ = config.acessosInscritoPJ || storageService.getAcessosInscritoPJ();
+    if (!regraPJ.permiteAcessoAoPortal) {
+      return false;
+    }
+    const allowed = (regraPJ.modulosPermitidos || []).map(m => m.toLowerCase().trim());
+    return allowed.includes(targetModule);
   }
 
   // Lista de permissões concedidas pelo Administrador
@@ -191,4 +218,69 @@ export function getModuleName(sectionOrModule: string): string {
     case 'admin': return 'Parâmetros Administrativos';
     default: return sectionOrModule.replace(/_/g, ' ').toUpperCase();
   }
+}
+
+/**
+ * Verifica se o usuário autenticado possui permissão para uma ação específica
+ * ('visualizar' | 'editar' | 'deletar') dentro de um módulo determinado.
+ */
+export function hasActionPermission(
+  user: AuthUser | null | undefined,
+  module: string,
+  action: 'visualizar' | 'editar' | 'deletar'
+): boolean {
+  if (!user) return false;
+
+  // Master Developer tem permissão irrestrita total
+  if (isMasterDeveloper(user)) return true;
+
+  // Primeiro checa se tem acesso ao módulo
+  if (!hasModulePermission(user, module)) return false;
+
+  const normMod = normalizeSectionToModule(module);
+
+  // Se o usuário for Inscrito PF, consulta as permissões salvas do conselho
+  if (user.tipo === 'PROFISSIONAL' || user.role === 'PORTAL_PROFISSIONAL') {
+    const config = storageService.getCouncilConfig();
+    const regraPF = config.acessosInscritoPF || storageService.getAcessosInscritoPF();
+    if (regraPF.permissoesAcoes && regraPF.permissoesAcoes[normMod]) {
+      const acao = regraPF.permissoesAcoes[normMod];
+      if (typeof acao[action] === 'boolean') {
+        return acao[action];
+      }
+    }
+  }
+
+  // Se o usuário for Inscrito PJ, consulta as permissões salvas do conselho
+  if (user.tipo === 'EMPRESA' || user.role === 'PORTAL_EMPRESA') {
+    const config = storageService.getCouncilConfig();
+    const regraPJ = config.acessosInscritoPJ || storageService.getAcessosInscritoPJ();
+    if (regraPJ.permissoesAcoes && regraPJ.permissoesAcoes[normMod]) {
+      const acao = regraPJ.permissoesAcoes[normMod];
+      if (typeof acao[action] === 'boolean') {
+        return acao[action];
+      }
+    }
+  }
+
+  // Se houver controle granular registrado para o usuário colaborador
+  if (user.permissoesAcoes && user.permissoesAcoes[normMod]) {
+    const acao = user.permissoesAcoes[normMod];
+    if (typeof acao[action] === 'boolean') {
+      return acao[action];
+    }
+  }
+
+  // Regra padrão de retrocompatibilidade:
+  // Se o usuário tem permissão no módulo:
+  // - visualizar: true
+  // - editar: true
+  // - deletar: apenas ADMIN ou DEVELOPER
+  if (action === 'visualizar') return true;
+  if (action === 'editar') return true;
+  if (action === 'deletar') {
+    return user.role === 'ADMIN' || user.role === 'DEVELOPER';
+  }
+
+  return false;
 }

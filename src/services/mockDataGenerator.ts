@@ -168,8 +168,41 @@ export const PROF_ANA_KERCIA: Profissional = {
   fotoUrl: 'https://images.unsplash.com/photo-1594824813511-209706786a32?w=150&auto=format&fit=crop&q=80'
 };
 
+export const PROF_FERNANDA_LIMA: Profissional = {
+  id: 'prof-fernanda-lima-fisc',
+  inscricao: '4150',
+  nome: 'DRA. FERNANDA LIMA BARRETO',
+  cpf: '111.111.111-11',
+  rg: '2345678-SSP/AM',
+  orgaoExpeditor: 'SSP/AM',
+  dataNascimento: '18/09/1985',
+  sexo: 'Feminino',
+  nacionalidade: 'Brasileira',
+  naturalidade: 'Manaus - AM',
+  nomeMae: 'Tereza Cristina Barreto',
+  situacao: 'Definitiva',
+  tipoAssociado: 'Farmacêutico',
+  dataInscricao: '10/02/2011',
+  dataColacaoGrau: '15/12/2010',
+  dataExpDiploma: '20/01/2011',
+  faculdade: 'Universidade Federal do Amazonas (UFAM)',
+  emailComercial: 'fernanda.lima@crfam.org.br',
+  emailPessoal: 'fernanda.lima@crfam.org.br',
+  telefone: '(92) 3234-5510',
+  celular: '(92) 98222-0002',
+  endereco: 'AV. DJALMA BATISTA, Nº 1420',
+  bairro: 'ADRIANÓPOLIS',
+  cidade: 'MANAUS',
+  uf: 'AM',
+  cep: '69050-010',
+  statusFinanceiro: 'Adimplente',
+  carteiraProfissional: 'CRF-AM 4150',
+  fotoUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80'
+};
+
 // Memory pool of initial detailed professionals for fast rich UI
 export const INITIAL_PROFISSIONAIS: Profissional[] = [
+  PROF_FERNANDA_LIMA,
   PROF_ANA_KERCIA,
   ...Array.from({ length: 120 }, (_, i) => generateSingleProfissional(i))
 ];

@@ -24,10 +24,13 @@ import {
   ShieldAlert,
   Briefcase,
   Tablet,
-  Sliders
+  Sliders,
+  SlidersHorizontal,
+  ArrowRightLeft
 } from 'lucide-react';
 import { UserRole, AuthUser } from '../types';
 import { CouncilConfig, storageService } from '../services/storageService';
+import { toastService } from '../services/toastService';
 import { hasModulePermission, isMasterDeveloper } from '../utils/permissionUtils';
 import { SIGCON_LOGO } from '../constants/assets';
 
@@ -43,6 +46,8 @@ export type MainSection =
   | 'relatorios'
   | 'formularios'
   | 'portal_inscrito'
+  | 'portal_inscrito_pf'
+  | 'portal_inscrito_pj'
   | 'configuracoes'
   | 'painel_admin'
   | 'backup_restore'
@@ -50,11 +55,24 @@ export type MainSection =
   | 'admin'
   | 'microsservicos';
 
+const SIDEBAR_ROLES: { role: UserRole; label: string; icon: any; color: string }[] = [
+  { role: 'DEVELOPER', label: '👑 Desenvolvedor Master', icon: ShieldCheck, color: 'text-purple-700 bg-purple-50 border-purple-200' },
+  { role: 'ADMIN', label: '🛡️ Administrador Geral', icon: ShieldAlert, color: 'text-red-700 bg-red-50 border-red-200' },
+  { role: 'FISCAL', label: '🧭 Fiscal de Campo (GPS)', icon: Compass, color: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
+  { role: 'FINANCEIRO', label: '🪙 Setor Financeiro', icon: Coins, color: 'text-amber-700 bg-amber-50 border-amber-200' },
+  { role: 'JURIDICO', label: '⚖️ Jurídico & Dívida Ativa', icon: Scale, color: 'text-purple-700 bg-purple-50 border-purple-200' },
+  { role: 'DIRETORIA', label: '📊 Diretoria / Relatórios BI', icon: BarChart3, color: 'text-blue-700 bg-blue-50 border-blue-200' },
+  { role: 'PORTAL_PROFISSIONAL', label: '👤 Portal do Profissional (PF)', icon: User, color: 'text-cyan-700 bg-cyan-50 border-cyan-200' },
+  { role: 'PORTAL_EMPRESA', label: '🏢 Portal da Empresa (PJ)', icon: Building2, color: 'text-teal-700 bg-teal-50 border-teal-200' },
+];
+
 interface SidebarProps {
   activeSection: MainSection;
   activeSubTab?: string;
   onSelectSection: (section: MainSection, subTab?: string) => void;
   currentRole: UserRole;
+  onRoleChange?: (role: UserRole) => void;
+  onSwitchProfile?: (targetTipo: 'FUNCIONARIO' | 'PROFISSIONAL') => void;
   isOpen: boolean;
   onClose: () => void;
   councilConfig: CouncilConfig;
@@ -67,6 +85,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   activeSubTab,
   onSelectSection,
   currentRole,
+  onRoleChange,
+  onSwitchProfile,
   isOpen,
   onClose,
   councilConfig,
@@ -80,7 +100,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     juridico: true,
     relatorios: true,
     configuracoes: true,
-    configuracaoMenu: true
+    configuracaoMenu: true,
+    inscritoMenu: true
   });
 
   const checkPerm = (sec: string) => hasModulePermission(authUser, sec, currentRole);
@@ -141,6 +162,62 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Simulador de Perfil no Menu Lateral (Mobile & Desktop) */}
+        <div className="p-3 border-b border-slate-100 bg-linear-to-b from-purple-50/70 to-slate-50/50 space-y-2">
+          {/* Alternar Perfil sem deslogar */}
+          {authUser && authUser.perfisDisponiveis && authUser.perfisDisponiveis.length > 1 && onSwitchProfile && (
+            <button
+              type="button"
+              onClick={() => {
+                onSwitchProfile(authUser.tipo === 'PROFISSIONAL' ? 'FUNCIONARIO' : 'PROFISSIONAL');
+                onClose();
+              }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-white text-xs font-bold shadow-xs transition-all cursor-pointer active:scale-95 ${
+                authUser.tipo === 'PROFISSIONAL'
+                  ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
+                  : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
+              }`}
+            >
+              <div className="flex items-center space-x-2">
+                <ArrowRightLeft className="w-3.5 h-3.5" />
+                <span>{authUser.tipo === 'PROFISSIONAL' ? 'Mudar p/ Colaborador' : 'Mudar p/ Profissional PF'}</span>
+              </div>
+              <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-sm uppercase font-mono">Alternar</span>
+            </button>
+          )}
+
+          {/* Seletor do Simulador de Perfis */}
+          {onRoleChange && (
+            <div className="bg-white border border-purple-200/90 rounded-xl p-2.5 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-900 flex items-center space-x-1.5">
+                  <SlidersHorizontal className="w-3 h-3 text-purple-600" />
+                  <span>Simulador de Perfil</span>
+                </span>
+                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-800 font-bold">
+                  8 Perfis
+                </span>
+              </div>
+              <select
+                value={currentRole}
+                onChange={(e) => {
+                  const newRole = e.target.value as UserRole;
+                  onRoleChange(newRole);
+                  const found = SIDEBAR_ROLES.find(r => r.role === newRole);
+                  toastService.info('Perfil Simulado', `Ambiente alterado para: ${found?.label || newRole}.`);
+                }}
+                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-purple-500/20 cursor-pointer"
+              >
+                {SIDEBAR_ROLES.map(r => (
+                  <option key={r.role} value={r.role}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Executive Dashboard Shortcut */}
@@ -423,18 +500,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           )}
 
-          {/* 10. Portal de Autoatendimento do Inscrito */}
-          {checkPerm( 'portal_inscrito') && (
+          {/* 10. Portal do Profissional (PF) */}
+          {checkPerm('portal_inscrito') && (
             <button
-              onClick={() => handleSelect('portal_inscrito')}
+              onClick={() => handleSelect('portal_inscrito_pf')}
               className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
-                activeSection === 'portal_inscrito'
+                activeSection === 'portal_inscrito_pf' || activeSection === 'portal_inscrito'
+                  ? 'bg-cyan-50 text-cyan-800 font-bold border-l-2 border-cyan-500'
+                  : 'text-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              <User className="w-4 h-4 text-cyan-600" />
+              <span>10. Portal do Profissional (PF)</span>
+            </button>
+          )}
+
+          {/* 11. Portal da Empresa (PJ) */}
+          {checkPerm('portal_inscrito') && (
+            <button
+              onClick={() => handleSelect('portal_inscrito_pj')}
+              className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+                activeSection === 'portal_inscrito_pj'
                   ? 'bg-teal-50 text-teal-800 font-bold border-l-2 border-teal-500'
                   : 'text-slate-700 hover:bg-slate-100'
               }`}
             >
-              <User className="w-4 h-4 text-teal-600" />
-              <span>10. Portal do Inscrito (PF/PJ)</span>
+              <Building2 className="w-4 h-4 text-teal-600" />
+              <span>11. Portal da Empresa (PJ)</span>
             </button>
           )}
 
@@ -519,6 +611,58 @@ export const Sidebar: React.FC<SidebarProps> = ({
                               <Tablet className="w-3 h-3 text-amber-500" />
                               <span>Fiscalização Eletrônica</span>
                             </button>
+
+                            {/* Submenu 3: Inscrito (com subdivisões Pessoa Física e Pessoa Jurídica) */}
+                            <div className="space-y-0.5 pt-0.5">
+                              <button
+                                type="button"
+                                onClick={() => toggleGroup('inscritoMenu')}
+                                className={`w-full flex items-center justify-between px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                                  activeSection === 'configuracoes' && (activeSubTab === 'inscrito' || activeSubTab === 'inscrito_pf' || activeSubTab === 'inscrito_pj')
+                                    ? 'bg-indigo-50 text-indigo-900 font-bold'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                                }`}
+                              >
+                                <div className="flex items-center space-x-2">
+                                  <ShieldCheck className="w-3 h-3 text-indigo-600" />
+                                  <span>Inscrito</span>
+                                </div>
+                                {openGroups.inscritoMenu ? (
+                                  <ChevronDown className="w-2.5 h-2.5 text-slate-400" />
+                                ) : (
+                                  <ChevronRight className="w-2.5 h-2.5 text-slate-400" />
+                                )}
+                              </button>
+
+                              {openGroups.inscritoMenu && (
+                                <div className="ml-2.5 pl-2 border-l border-indigo-200/80 space-y-0.5 my-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelect('configuracoes', 'inscrito_pf')}
+                                    className={`w-full flex items-center space-x-1.5 px-2 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                                      activeSection === 'configuracoes' && (activeSubTab === 'inscrito_pf' || activeSubTab === 'inscrito')
+                                        ? 'bg-emerald-600 text-white font-bold shadow-2xs'
+                                        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                                    }`}
+                                  >
+                                    <User className="w-2.5 h-2.5" />
+                                    <span>Pessoa Física</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelect('configuracoes', 'inscrito_pj')}
+                                    className={`w-full flex items-center space-x-1.5 px-2 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                                      activeSection === 'configuracoes' && activeSubTab === 'inscrito_pj'
+                                        ? 'bg-teal-600 text-white font-bold shadow-2xs'
+                                        : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                                    }`}
+                                  >
+                                    <Building2 className="w-2.5 h-2.5" />
+                                    <span>Pessoa Jurídica</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
