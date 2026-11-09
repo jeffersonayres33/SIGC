@@ -16,6 +16,7 @@ import { MicrosservicosView } from './components/arquitetura/MicrosservicosView'
 import { ConfiguracoesView, ConfigTab } from './components/configuracoes/ConfiguracoesView';
 import { BackupRestoreConfig } from './components/configuracoes/BackupRestoreConfig';
 import { FuncionariosView } from './components/cadastros/FuncionariosView';
+import { SitePublicoView } from './components/publico/SitePublicoView';
 import { LoginView } from './components/auth/LoginView';
 import { ToastContainer } from './components/common/ToastContainer';
 
@@ -294,21 +295,73 @@ export default function App() {
                   <FormulariosView />
                 )}
 
+                {activeSection === 'site_publico' && (
+                  <SitePublicoView />
+                )}
+
                 {activeSection === 'protocolos' && (
                   <ProtocolosView />
                 )}
 
-                {(activeSection === 'portal_inscrito' || activeSection === 'portal_inscrito_pf') && (
+                {(activeSection === 'portal_inscrito' || activeSection === 'portal_inscrito_pf' || activeSection === 'portal_profissional_perfil') && (
                   <PortalView
-                    defaultTab="PROFISSIONAL"
+                    viewMode="PROFISSIONAL"
                     onOpenBoletoPix={setBoletoLancamento}
                     onOpenCrtModal={setCrtEmpresa}
                   />
                 )}
 
-                {activeSection === 'portal_inscrito_pj' && (
+                {activeSection === 'portal_profissional_anuidade' && (
                   <PortalView
-                    defaultTab="EMPRESA"
+                    viewMode="ANUIDADE_PF"
+                    onOpenBoletoPix={setBoletoLancamento}
+                    onOpenCrtModal={setCrtEmpresa}
+                  />
+                )}
+
+                {activeSection === 'portal_profissional_protocolo' && (
+                  <PortalView
+                    viewMode="PROTOCOLO_PF"
+                    onOpenBoletoPix={setBoletoLancamento}
+                    onOpenCrtModal={setCrtEmpresa}
+                  />
+                )}
+
+                {activeSection === 'portal_profissional_requerimento' && (
+                  <PortalView
+                    viewMode="REQUERIMENTO_PF"
+                    onOpenBoletoPix={setBoletoLancamento}
+                    onOpenCrtModal={setCrtEmpresa}
+                  />
+                )}
+
+                {(activeSection === 'portal_inscrito_pj' || activeSection === 'portal_empresa_perfil') && (
+                  <PortalView
+                    viewMode="EMPRESA"
+                    onOpenBoletoPix={setBoletoLancamento}
+                    onOpenCrtModal={setCrtEmpresa}
+                  />
+                )}
+
+                {activeSection === 'portal_empresa_anuidade' && (
+                  <PortalView
+                    viewMode="ANUIDADE_PJ"
+                    onOpenBoletoPix={setBoletoLancamento}
+                    onOpenCrtModal={setCrtEmpresa}
+                  />
+                )}
+
+                {activeSection === 'portal_empresa_protocolo' && (
+                  <PortalView
+                    viewMode="PROTOCOLO_PJ"
+                    onOpenBoletoPix={setBoletoLancamento}
+                    onOpenCrtModal={setCrtEmpresa}
+                  />
+                )}
+
+                {activeSection === 'portal_empresa_requerimento' && (
+                  <PortalView
+                    viewMode="REQUERIMENTO_PJ"
                     onOpenBoletoPix={setBoletoLancamento}
                     onOpenCrtModal={setCrtEmpresa}
                   />

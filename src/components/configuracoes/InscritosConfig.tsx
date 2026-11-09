@@ -3,9 +3,6 @@ import {
   User, 
   Building2, 
   ShieldCheck, 
-  Eye, 
-  Edit3, 
-  Trash2, 
   Save, 
   RotateCcw, 
   Check, 
@@ -13,67 +10,27 @@ import {
   Unlock, 
   FileCheck2, 
   FileText, 
-  CreditCard, 
-  QrCode, 
+  Coins, 
   BadgeCheck, 
   IdCard, 
-  Layers, 
+  Building,
+  Edit3,
+  Eye,
+  QrCode,
+  Receipt,
   CheckCircle2, 
+  AlertCircle,
   HelpCircle,
-  AlertCircle
+  Send,
+  SlidersHorizontal
 } from 'lucide-react';
-import { storageService, CouncilConfig, DEFAULT_ACESSOS_INSCRITO_PF, DEFAULT_ACESSOS_INSCRITO_PJ } from '../../services/storageService';
-import { RegraAcessoInscrito, PermissoesAcoesModulo } from '../../types';
+import { storageService, DEFAULT_ACESSOS_INSCRITO_PF, DEFAULT_ACESSOS_INSCRITO_PJ } from '../../services/storageService';
+import { RegraAcessoInscrito, RecursoConfigPortal } from '../../types';
 import { toastService } from '../../services/toastService';
 
 interface InscritosConfigProps {
   initialSubTab?: 'PF' | 'PJ';
 }
-
-const MODULOS_INSCRITO = [
-  { 
-    id: 'portal_inscrito', 
-    nome: 'Portal do Inscrito (Autoatendimento)', 
-    descricao: 'Acesso principal ao painel de certidões, financeiro e dados cadastrais',
-    icon: IdCard
-  },
-  { 
-    id: 'profissionais', 
-    nome: 'Cadastro de Profissionais (PF)', 
-    descricao: 'Visualização da ficha cadastral, histórico e habilitações do inscrito',
-    icon: User
-  },
-  { 
-    id: 'empresas', 
-    nome: 'Cadastro de Empresas (PJ)', 
-    descricao: 'Visualização de estabelecimentos, filiais, sócios e vínculos de RT',
-    icon: Building2
-  },
-  { 
-    id: 'protocolos', 
-    nome: 'Protocolos & Requerimentos', 
-    descricao: 'Abertura, acompanhamento e envio de petições e documentos ao conselho',
-    icon: FileText
-  },
-  { 
-    id: 'financeiro', 
-    nome: 'Financeiro & Anuidades', 
-    descricao: 'Emissão de boletos, guias Pix, extrato e histórico financeiro',
-    icon: CreditCard
-  },
-  { 
-    id: 'formularios', 
-    nome: 'Formulários & Declarações Eletrônicas', 
-    descricao: 'Preenchimento e assinatura digital de formulários normativos',
-    icon: FileCheck2
-  },
-  { 
-    id: 'dashboard', 
-    nome: 'Painel Informativo Resumido', 
-    descricao: 'Métricas, notícias e comunicados da autarquia para o inscrito',
-    icon: Layers
-  }
-];
 
 export const InscritosConfig: React.FC<InscritosConfigProps> = ({ initialSubTab = 'PF' }) => {
   const [subTab, setSubTab] = useState<'PF' | 'PJ'>(initialSubTab);
@@ -105,128 +62,168 @@ export const InscritosConfig: React.FC<InscritosConfigProps> = ({ initialSubTab 
     setHasChanges(true);
   };
 
-  const handleToggleModulo = (moduloId: string) => {
-    setActiveRegra(prev => {
-      const exists = prev.modulosPermitidos.includes(moduloId);
-      let newModulos: string[];
-      let newAcoes = { ...prev.permissoesAcoes };
-
-      if (exists) {
-        newModulos = prev.modulosPermitidos.filter(m => m !== moduloId);
-        newAcoes[moduloId] = { visualizar: false, editar: false, deletar: false };
-      } else {
-        newModulos = [...prev.modulosPermitidos, moduloId];
-        newAcoes[moduloId] = newAcoes[moduloId] || { visualizar: true, editar: true, deletar: false };
-        if (!newAcoes[moduloId].visualizar) {
-          newAcoes[moduloId].visualizar = true;
-        }
-      }
-
-      return {
-        ...prev,
-        modulosPermitidos: newModulos,
-        permissoesAcoes: newAcoes
-      };
-    });
+  // Garante que o objeto recursosPortal exista e tenha defaults
+  const getRecursoState = (key: string): RecursoConfigPortal => {
+    const r = activeRegra.recursosPortal?.[key];
+    if (r !== undefined) return r;
+    return { liberado: true, permiteEditar: true, permiteEmitir: true };
   };
 
-  const handleToggleAcao = (moduloId: string, acao: 'visualizar' | 'editar' | 'deletar', e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
+  const setRecursoField = (key: string, field: 'liberado' | 'permiteEditar' | 'permiteEmitir', value: boolean) => {
     setActiveRegra(prev => {
-      const currentAcoes = prev.permissoesAcoes[moduloId] || { visualizar: false, editar: false, deletar: false };
-      const nextVal = !currentAcoes[acao];
-      const updatedAcao: PermissoesAcoesModulo = {
-        ...currentAcoes,
-        [acao]: nextVal
+      const current = prev.recursosPortal?.[key] || { liberado: true, permiteEditar: true, permiteEmitir: true };
+      const updatedRecurso: RecursoConfigPortal = {
+        ...current,
+        [field]: value
       };
 
-      // Se ativou editar ou deletar, obrigatoriamente ativa visualizar
-      if ((acao === 'editar' || acao === 'deletar') && nextVal) {
-        updatedAcao.visualizar = true;
+      // Se desativou liberado, desativa também os sub-privilégios
+      if (field === 'liberado' && !value) {
+        updatedRecurso.permiteEditar = false;
+        updatedRecurso.permiteEmitir = false;
       }
-      // Se desativou visualizar, desativa editar e deletar também
-      if (acao === 'visualizar' && !nextVal) {
-        updatedAcao.editar = false;
-        updatedAcao.deletar = false;
+      // Se ativou editar ou emitir, obrigatoriamente ativa liberado
+      if ((field === 'permiteEditar' || field === 'permiteEmitir') && value) {
+        updatedRecurso.liberado = true;
       }
 
-      // Se nenhuma ação ficou marcada, remove dos módulos permitidos
-      const hasAny = updatedAcao.visualizar || updatedAcao.editar || updatedAcao.deletar;
-      let nextModulos = [...prev.modulosPermitidos];
-      if (hasAny && !nextModulos.includes(moduloId)) {
-        nextModulos.push(moduloId);
-      } else if (!hasAny && nextModulos.includes(moduloId)) {
-        nextModulos = nextModulos.filter(m => m !== moduloId);
+      const nextRecursos = {
+        ...(prev.recursosPortal || {}),
+        [key]: updatedRecurso
+      };
+
+      // Sincroniza com modulosPermitidos e recursosPermitidos para retrocompatibilidade
+      const nextModulos = ['portal_inscrito'];
+      if (nextRecursos.dadosCadastrais?.liberado || nextRecursos.dadosEstabelecimento?.liberado) {
+        nextModulos.push('dados_cadastrais');
+      }
+      if (nextRecursos.anuidadeFinanceiro?.liberado) {
+        nextModulos.push('anuidade');
+      }
+      if (nextRecursos.protocolosProcessos?.liberado) {
+        nextModulos.push('protocolo');
+      }
+      if (nextRecursos.requerimentoEletronico?.liberado) {
+        nextModulos.push('requerimento');
       }
 
       return {
         ...prev,
+        recursosPortal: nextRecursos,
         modulosPermitidos: nextModulos,
         permissoesAcoes: {
           ...prev.permissoesAcoes,
-          [moduloId]: updatedAcao
+          dados_cadastrais: {
+            visualizar: Boolean(nextRecursos.dadosCadastrais?.liberado ?? nextRecursos.dadosEstabelecimento?.liberado),
+            editar: Boolean(nextRecursos.dadosCadastrais?.permiteEditar),
+            deletar: false
+          },
+          anuidade: {
+            visualizar: Boolean(nextRecursos.anuidadeFinanceiro?.liberado),
+            editar: Boolean(nextRecursos.anuidadeFinanceiro?.permiteEmitir),
+            deletar: false
+          },
+          protocolo: {
+            visualizar: Boolean(nextRecursos.protocolosProcessos?.liberado),
+            editar: true,
+            deletar: false
+          },
+          requerimento: {
+            visualizar: Boolean(nextRecursos.requerimentoEletronico?.liberado),
+            editar: Boolean(nextRecursos.requerimentoEletronico?.permiteEditar),
+            deletar: false
+          }
+        },
+        recursosPermitidos: {
+          ...prev.recursosPermitidos,
+          emissaoCertidaoQuitacao: Boolean(nextRecursos.certidaoQuitacao?.liberado),
+          emissaoCrt: Boolean(nextRecursos.certidaoCrtDigital?.liberado),
+          emissaoBoletosAnuidade: Boolean(nextRecursos.anuidadeFinanceiro?.permiteEmitir),
+          geracaoPixInstantaneo: Boolean(nextRecursos.anuidadeFinanceiro?.permiteEmitir),
+          atualizacaoCadastralEndereco: Boolean(nextRecursos.dadosCadastrais?.permiteEditar),
+          envioProtocolosRequerimentos: Boolean(nextRecursos.requerimentoEletronico?.liberado)
         }
       };
     });
   };
 
-  const handlePresetAcoes = (preset: 'somente_leitura' | 'leitura_edicao' | 'acesso_total' | 'limpar') => {
+  const handlePreset = (mode: 'todos_liberados' | 'apenas_consulta' | 'bloquear_todos') => {
     setActiveRegra(prev => {
-      const newAcoes: Record<string, PermissoesAcoesModulo> = {};
-      let newModulos: string[] = [];
+      const isPF = subTab === 'PF';
+      const newRecursos: Record<string, RecursoConfigPortal> = {};
 
-      MODULOS_INSCRITO.forEach(mod => {
-        if (preset === 'somente_leitura') {
-          newAcoes[mod.id] = { visualizar: true, editar: false, deletar: false };
-          newModulos.push(mod.id);
-        } else if (preset === 'leitura_edicao') {
-          newAcoes[mod.id] = { visualizar: true, editar: true, deletar: false };
-          newModulos.push(mod.id);
-        } else if (preset === 'acesso_total') {
-          newAcoes[mod.id] = { visualizar: true, editar: true, deletar: true };
-          newModulos.push(mod.id);
-        } else {
-          newAcoes[mod.id] = { visualizar: false, editar: false, deletar: false };
-        }
-      });
+      if (isPF) {
+        newRecursos.dadosCadastrais = {
+          liberado: mode !== 'bloquear_todos',
+          permiteEditar: mode === 'todos_liberados'
+        };
+        newRecursos.vinculosProfissionais = {
+          liberado: mode !== 'bloquear_todos'
+        };
+        newRecursos.certidaoQuitacao = {
+          liberado: mode !== 'bloquear_todos',
+          permiteEmitir: mode === 'todos_liberados'
+        };
+        newRecursos.anuidadeFinanceiro = {
+          liberado: mode !== 'bloquear_todos',
+          permiteEmitir: mode === 'todos_liberados'
+        };
+        newRecursos.protocolosProcessos = {
+          liberado: mode !== 'bloquear_todos'
+        };
+        newRecursos.requerimentoEletronico = {
+          liberado: mode !== 'bloquear_todos',
+          permiteEditar: mode === 'todos_liberados'
+        };
+      } else {
+        newRecursos.dadosEstabelecimento = {
+          liberado: mode !== 'bloquear_todos',
+          permiteEditar: false
+        };
+        newRecursos.certidaoCrtDigital = {
+          liberado: mode !== 'bloquear_todos',
+          permiteEmitir: mode === 'todos_liberados'
+        };
+        newRecursos.anuidadeFinanceiro = {
+          liberado: mode !== 'bloquear_todos',
+          permiteEmitir: mode === 'todos_liberados'
+        };
+        newRecursos.protocolosProcessos = {
+          liberado: mode !== 'bloquear_todos'
+        };
+        newRecursos.requerimentoEletronico = {
+          liberado: mode !== 'bloquear_todos',
+          permiteEditar: mode === 'todos_liberados'
+        };
+      }
 
       return {
         ...prev,
-        modulosPermitidos: newModulos,
-        permissoesAcoes: newAcoes
+        recursosPortal: newRecursos,
+        modulosPermitidos: mode === 'bloquear_todos' ? [] : ['portal_inscrito', 'dados_cadastrais', 'anuidade', 'protocolo', 'requerimento']
       };
     });
-  };
-
-  const handleToggleRecurso = (recursoKey: string) => {
-    setActiveRegra(prev => ({
-      ...prev,
-      recursosPermitidos: {
-        ...prev.recursosPermitidos,
-        [recursoKey]: !prev.recursosPermitidos[recursoKey]
-      }
-    }));
   };
 
   const handleSave = () => {
     if (subTab === 'PF') {
       storageService.updateAcessosInscritoPF(regraPF);
       toastService.success(
-        'Permissões PF Atualizadas',
-        'As regras de acesso para Inscritos Pessoa Física (PF) foram salvas e sincronizadas com sucesso.'
+        'Acessos PF Salvos com Sucesso',
+        'As permissões dos recursos do Portal do Profissional (PF) foram sincronizadas com o banco de dados.'
       );
     } else {
       storageService.updateAcessosInscritoPJ(regraPJ);
       toastService.success(
-        'Permissões PJ Atualizadas',
-        'As regras de acesso para Inscritos Pessoa Jurídica (PJ) foram salvas e sincronizadas com sucesso.'
+        'Acessos PJ Salvos com Sucesso',
+        'As permissões dos recursos do Portal da Empresa (PJ) foram sincronizadas com o banco de dados.'
       );
     }
     setHasChanges(false);
   };
 
   const handleResetToDefault = () => {
-    if (window.confirm(`Deseja restaurar as permissões padrão para ${subTab === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica'}?`)) {
+    if (window.confirm(`Deseja restaurar as permissões padrão para ${subTab === 'PF' ? 'Profissionais (Pessoa Física)' : 'Empresas (Pessoa Jurídica)'}?`)) {
       if (subTab === 'PF') {
         storageService.updateAcessosInscritoPF(DEFAULT_ACESSOS_INSCRITO_PF);
         setRegraPF(DEFAULT_ACESSOS_INSCRITO_PF);
@@ -235,7 +232,7 @@ export const InscritosConfig: React.FC<InscritosConfigProps> = ({ initialSubTab 
         setRegraPJ(DEFAULT_ACESSOS_INSCRITO_PJ);
       }
       setHasChanges(false);
-      toastService.info('Restaurado Padrão', 'As permissões retornaram aos padrões regulatórios do conselho.');
+      toastService.info('Padrão Restaurado', 'As regras retornaram à configuração regulatória padrão.');
     }
   };
 
@@ -259,6 +256,7 @@ export const InscritosConfig: React.FC<InscritosConfigProps> = ({ initialSubTab 
               {subTab === 'PF' ? 'Pessoa Física (PF)' : 'Pessoa Jurídica (PJ)'}
             </span>
           </div>
+
           <h2 className="text-xl font-black text-slate-900 mt-1.5 tracking-tight flex items-center gap-2">
             {subTab === 'PF' ? (
               <User className="w-6 h-6 text-emerald-600" />
@@ -266,13 +264,14 @@ export const InscritosConfig: React.FC<InscritosConfigProps> = ({ initialSubTab 
               <Building2 className="w-6 h-6 text-teal-600" />
             )}
             <span>
-              Configuração de Acessos & Permissões — Inscrito {subTab === 'PF' ? 'Pessoa Física (PF)' : 'Pessoa Jurídica (PJ)'}
+              Controle de Acessos — Portal do Inscrito ({subTab === 'PF' ? 'Profissional PF' : 'Empresa PJ'})
             </span>
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
             {subTab === 'PF'
-              ? 'Defina com precisão quais módulos e ações (Visualizar, Editar, Deletar) os Farmacêuticos e Técnicos poderão executar na plataforma.'
-              : 'Defina com precisão quais módulos e ações (Visualizar, Editar, Deletar) as Farmácias, Drogarias e Estabelecimentos poderão executar na plataforma.'}
+              ? 'Defina quais recursos e serviços do autoatendimento estarão liberados para os Farmacêuticos e Técnicos inscritos.'
+              : 'Defina quais recursos e serviços do autoatendimento estarão liberados para as Farmácias, Drogarias e Estabelecimentos.'}
+            {' '}<strong>Inscritos não acessam áreas internas administrativas do conselho.</strong>
           </p>
         </div>
 
@@ -317,7 +316,7 @@ export const InscritosConfig: React.FC<InscritosConfigProps> = ({ initialSubTab 
             </div>
             <div>
               <div className="font-extrabold text-sm text-slate-900 uppercase flex items-center gap-2">
-                <span>Acesso ao Sistema Liberado para {subTab === 'PF' ? 'Profissionais (Pessoa Física)' : 'Empresas (Pessoa Jurídica)'}</span>
+                <span>Acesso ao Portal Liberado para {subTab === 'PF' ? 'Profissionais (Pessoa Física)' : 'Empresas (Pessoa Jurídica)'}</span>
                 <span className={`text-[10px] px-2 py-0.5 rounded-md font-bold ${
                   activeRegra.permiteAcessoAoPortal ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                 }`}>
@@ -326,8 +325,8 @@ export const InscritosConfig: React.FC<InscritosConfigProps> = ({ initialSubTab 
               </div>
               <p className="text-xs text-slate-600 mt-0.5">
                 {activeRegra.permiteAcessoAoPortal
-                  ? `Inscritos ${subTab} podem realizar primeiro acesso, criar senha e acessar o autoatendimento.`
-                  : `O acesso via login para ${subTab} está temporariamente desativado por política da diretoria.`}
+                  ? `Inscritos ${subTab} podem realizar login, consultar seus cadastros e utilizar os serviços do portal.`
+                  : `O acesso via login para ${subTab} está temporariamente desativado por decisão administrativa.`}
               </p>
             </div>
           </div>
@@ -344,403 +343,587 @@ export const InscritosConfig: React.FC<InscritosConfigProps> = ({ initialSubTab 
         </div>
       </div>
 
-      {/* Seção 1: Módulos Permitidos na Plataforma com Granularidade (Visualizar, Editar, Deletar) */}
+      {/* Seção Única e Coesa: Recursos Existentes no Portal do Inscrito */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-slate-100 pb-3">
           <div>
             <div className="flex items-center space-x-2">
-              <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
               <h3 className="font-extrabold text-sm text-slate-900 uppercase tracking-wider">
-                Módulos Permitidos na Plataforma & Ações Detalhadas
+                Recursos & Serviços Disponíveis no Portal {subTab === 'PF' ? 'do Profissional' : 'da Empresa'}
               </h3>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Marque o módulo para liberar o acesso e selecione os níveis de privilégio: <strong>Visualizar (👁️)</strong>, <strong>Editar (✏️)</strong> ou <strong>Deletar (🗑️)</strong>.
+              Cada item abaixo corresponde diretamente a uma tela ou ferramenta presente no Portal do Inscrito.
             </p>
           </div>
 
-          {/* Atalhos Rápidos de Ações */}
+          {/* Atalhos Rápidos */}
           <div className="flex items-center flex-wrap gap-1.5 text-xs font-bold">
-            <span className="text-slate-400 text-[11px] uppercase mr-1">Atalhos:</span>
+            <span className="text-slate-400 text-[11px] uppercase mr-1">Ações Rápidas:</span>
             <button
               type="button"
-              onClick={() => handlePresetAcoes('somente_leitura')}
-              className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-[11px] cursor-pointer"
-              title="Apenas Visualizar em todos os módulos"
-            >
-              👁️ Apenas Visualizar
-            </button>
-            <button
-              type="button"
-              onClick={() => handlePresetAcoes('leitura_edicao')}
+              onClick={() => handlePreset('todos_liberados')}
               className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-[11px] cursor-pointer"
-              title="Visualizar e Editar em todos os módulos"
             >
-              ✏️ Leitura e Edição
+              ✅ Liberar Todos
             </button>
             <button
               type="button"
-              onClick={() => handlePresetAcoes('acesso_total')}
-              className="px-2.5 py-1 rounded-lg bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-[11px] cursor-pointer"
-              title="Acesso total (Visualizar, Editar, Deletar)"
+              onClick={() => handlePreset('apenas_consulta')}
+              className="px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-[11px] cursor-pointer"
             >
-              ⚡ Acesso Total
+              👁️ Apenas Consulta
             </button>
             <button
               type="button"
-              onClick={() => handlePresetAcoes('limpar')}
-              className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200 text-[11px] cursor-pointer"
-              title="Remover todos os módulos"
+              onClick={() => handlePreset('bloquear_todos')}
+              className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 text-[11px] cursor-pointer"
             >
-              🚫 Limpar
+              🚫 Bloquear Todos
             </button>
           </div>
         </div>
 
-        {/* Tabela / Grid Granular dos Módulos */}
-        <div className="grid grid-cols-1 gap-3">
-          {MODULOS_INSCRITO.map(mod => {
-            const isModuloAtivo = activeRegra.modulosPermitidos.includes(mod.id);
-            const acoes = activeRegra.permissoesAcoes[mod.id] || {
-              visualizar: isModuloAtivo,
-              editar: isModuloAtivo,
-              deletar: false
-            };
-            const ModIcon = mod.icon;
-
-            return (
-              <div
-                key={mod.id}
-                className={`p-3.5 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
-                  isModuloAtivo
-                    ? 'bg-slate-50/80 border-indigo-200 shadow-2xs'
-                    : 'bg-white border-slate-200 opacity-75 hover:opacity-100'
-                }`}
-              >
-                {/* Checkbox Mestre & Descrição do Módulo */}
-                <div 
-                  onClick={() => handleToggleModulo(mod.id)}
-                  className="flex items-start space-x-3 cursor-pointer flex-1"
-                >
-                  <input
-                    type="checkbox"
-                    checked={isModuloAtivo}
-                    onChange={() => {}} // tratado pelo container
-                    className="mt-1 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 pointer-events-none"
-                  />
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <ModIcon className={`w-4 h-4 ${isModuloAtivo ? 'text-indigo-600' : 'text-slate-400'}`} />
-                      <span className={`font-bold text-xs uppercase ${isModuloAtivo ? 'text-slate-900' : 'text-slate-600'}`}>
-                        {mod.nome}
-                      </span>
-                      {isModuloAtivo && (
-                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-100 text-indigo-800 font-bold uppercase">
-                          Liberado
-                        </span>
-                      )}
+        {/* Lista de Recursos PF */}
+        {subTab === 'PF' && (
+          <div className="space-y-3">
+            {/* 1. Dados Cadastrais & Perfil */}
+            {(() => {
+              const rec = getRecursoState('dadosCadastrais');
+              return (
+                <div className={`p-4 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                  rec.liberado ? 'bg-slate-50 border-emerald-200' : 'bg-white border-slate-200 opacity-60'
+                }`}>
+                  <div className="flex items-start space-x-3 flex-1">
+                    <div className={`p-2 rounded-lg ${rec.liberado ? 'bg-cyan-100 text-cyan-800' : 'bg-slate-100 text-slate-400'}`}>
+                      <User className="w-5 h-5" />
                     </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      {mod.descricao}
-                    </p>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-xs uppercase text-slate-900">
+                          1. Dados Cadastrais & Perfil do Profissional
+                        </span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                          rec.liberado ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {rec.liberado ? 'Disponível no Portal' : 'Oculto'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Exibe nome, CPF, RG, número de inscrição CRF e situação do farmacêutico/técnico com dados oficiais do banco.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3 shrink-0 pl-11 md:pl-0">
+                    {/* Permite Editar Endereço/Contatos */}
+                    <label className="flex items-center space-x-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(rec.permiteEditar)}
+                        disabled={!rec.liberado}
+                        onChange={(e) => setRecursoField('dadosCadastrais', 'permiteEditar', e.target.checked)}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                      />
+                      <span>Permitir Alterar Endereço / Contatos</span>
+                    </label>
+
+                    {/* Toggle Ativar/Desativar */}
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rec.liberado}
+                        onChange={(e) => setRecursoField('dadosCadastrais', 'liberado', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
                   </div>
                 </div>
+              );
+            })()}
 
-                {/* Opções Granulares: Visualizar, Editar, Deletar */}
-                <div className="flex items-center space-x-2 pl-7 md:pl-0 pt-2 md:pt-0 border-t md:border-t-0 border-slate-200 shrink-0">
-                  {/* Visualizar */}
-                  <button
-                    type="button"
-                    onClick={(e) => handleToggleAcao(mod.id, 'visualizar', e)}
-                    className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                      acoes.visualizar
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                        : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-100'
-                    }`}
-                    title="Permite consultar e visualizar este módulo"
-                  >
-                    <Eye className="w-3.5 h-3.5" />
-                    <span>Visualizar</span>
-                  </button>
+            {/* 2. Meus Vínculos com Estabelecimentos */}
+            {(() => {
+              const rec = getRecursoState('vinculosProfissionais');
+              return (
+                <div className={`p-4 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                  rec.liberado ? 'bg-slate-50 border-emerald-200' : 'bg-white border-slate-200 opacity-60'
+                }`}>
+                  <div className="flex items-start space-x-3 flex-1">
+                    <div className={`p-2 rounded-lg ${rec.liberado ? 'bg-cyan-100 text-cyan-800' : 'bg-slate-100 text-slate-400'}`}>
+                      <Building className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-xs uppercase text-slate-900">
+                          2. Vínculos com Estabelecimentos Farmacêuticos
+                        </span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                          rec.liberado ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {rec.liberado ? 'Disponível no Portal' : 'Oculto'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Permite ao profissional consultar farmácias e drogarias onde é RT ou assistente, horários de assistência, CRT e situação sanitária.
+                      </p>
+                    </div>
+                  </div>
 
-                  {/* Editar */}
-                  <button
-                    type="button"
-                    onClick={(e) => handleToggleAcao(mod.id, 'editar', e)}
-                    className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                      acoes.editar
-                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
-                        : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-100'
-                    }`}
-                    title="Permite criar, alterar ou preencher dados neste módulo"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                    <span>Editar</span>
-                  </button>
-
-                  {/* Deletar */}
-                  <button
-                    type="button"
-                    onClick={(e) => handleToggleAcao(mod.id, 'deletar', e)}
-                    className={`flex items-center space-x-1 px-2.5 py-1.5 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                      acoes.deletar
-                        ? 'bg-rose-600 text-white border-rose-600 shadow-2xs'
-                        : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-100'
-                    }`}
-                    title="Permite excluir/cancelar registros cadastrados neste módulo"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Deletar</span>
-                  </button>
+                  <div className="flex items-center space-x-3 shrink-0 pl-11 md:pl-0">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rec.liberado}
+                        onChange={(e) => setRecursoField('vinculosProfissionais', 'liberado', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+              );
+            })()}
 
-      {/* Seção 2: Serviços & Documentos Específicos do Autoatendimento */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
-        <div className="border-b border-slate-100 pb-3">
-          <div className="flex items-center space-x-2">
-            <BadgeCheck className="w-4 h-4 text-emerald-600" />
-            <h3 className="font-extrabold text-sm text-slate-900 uppercase tracking-wider">
-              Serviços de Autoatendimento & Emissão de Documentos Regulatórios
-            </h3>
-          </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Defina quais documentos e ferramentas digitais estarão disponíveis para o inscrito ({subTab}) emitir ou solicitar diretamente pelo portal.
-          </p>
-        </div>
+            {/* 3. Certidão de Quitação e Regularidade */}
+            {(() => {
+              const rec = getRecursoState('certidaoQuitacao');
+              return (
+                <div className={`p-4 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                  rec.liberado ? 'bg-slate-50 border-emerald-200' : 'bg-white border-slate-200 opacity-60'
+                }`}>
+                  <div className="flex items-start space-x-3 flex-1">
+                    <div className={`p-2 rounded-lg ${rec.liberado ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-400'}`}>
+                      <FileCheck2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-xs uppercase text-slate-900">
+                          3. Certidão de Quitação
+                        </span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                          rec.liberado ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {rec.liberado ? 'Emissão Permitida' : 'Bloqueada'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Emissão instantânea da certidão negativa de débitos com validade jurídica e código de verificação digital.
+                      </p>
+                    </div>
+                  </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {/* Certidão de Regularidade */}
-          <div 
-            onClick={() => handleToggleRecurso('emissaoCertidaoRegularidade')}
-            className={`p-3 rounded-xl border flex items-start space-x-3 cursor-pointer transition-all ${
-              activeRegra.recursosPermitidos?.emissaoCertidaoRegularidade
-                ? 'bg-emerald-50/70 border-emerald-300'
-                : 'bg-white border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <input
-              type="checkbox"
-              checked={Boolean(activeRegra.recursosPermitidos?.emissaoCertidaoRegularidade)}
-              onChange={() => {}}
-              className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 pointer-events-none"
-            />
-            <div>
-              <div className="font-bold text-xs text-slate-800 uppercase">
-                Certidão de Regularidade
-              </div>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                Emissão imediata com validação QR Code e autenticidade eletrônica
-              </p>
-            </div>
-          </div>
+                  <div className="flex items-center space-x-3 shrink-0 pl-11 md:pl-0">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rec.liberado}
+                        onChange={(e) => setRecursoField('certidaoQuitacao', 'liberado', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+                </div>
+              );
+            })()}
 
-          {/* Certidão de Quitação Eleitoral / Débitos */}
-          <div 
-            onClick={() => handleToggleRecurso('emissaoCertidaoQuitacao')}
-            className={`p-3 rounded-xl border flex items-start space-x-3 cursor-pointer transition-all ${
-              activeRegra.recursosPermitidos?.emissaoCertidaoQuitacao
-                ? 'bg-emerald-50/70 border-emerald-300'
-                : 'bg-white border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <input
-              type="checkbox"
-              checked={Boolean(activeRegra.recursosPermitidos?.emissaoCertidaoQuitacao)}
-              onChange={() => {}}
-              className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 pointer-events-none"
-            />
-            <div>
-              <div className="font-bold text-xs text-slate-800 uppercase">
-                Certidão de Quitação Financeira
-              </div>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                Comprovante oficial de inexistência de débitos junto ao conselho
-              </p>
-            </div>
-          </div>
+            {/* 4. Anuidade & Posição Financeira */}
+            {(() => {
+              const rec = getRecursoState('anuidadeFinanceiro');
+              return (
+                <div className={`p-4 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                  rec.liberado ? 'bg-slate-50 border-emerald-200' : 'bg-white border-slate-200 opacity-60'
+                }`}>
+                  <div className="flex items-start space-x-3 flex-1">
+                    <div className={`p-2 rounded-lg ${rec.liberado ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-400'}`}>
+                      <Coins className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-xs uppercase text-slate-900">
+                          4. Anuidade & Posição Financeira
+                        </span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                          rec.liberado ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {rec.liberado ? 'Disponível no Portal' : 'Oculto'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Permite consultar débitos em aberto, anuidades do exercício e histórico de pagamentos do profissional.
+                      </p>
+                    </div>
+                  </div>
 
-          {/* Certidão de Regularidade Técnica (CRT - Especial PJ) */}
-          <div 
-            onClick={() => handleToggleRecurso('emissaoCrt')}
-            className={`p-3 rounded-xl border flex items-start space-x-3 cursor-pointer transition-all ${
-              activeRegra.recursosPermitidos?.emissaoCrt
-                ? 'bg-emerald-50/70 border-emerald-300'
-                : 'bg-white border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <input
-              type="checkbox"
-              checked={Boolean(activeRegra.recursosPermitidos?.emissaoCrt)}
-              onChange={() => {}}
-              className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 pointer-events-none"
-            />
-            <div>
-              <div className="font-bold text-xs text-slate-800 uppercase flex items-center gap-1">
-                <span>Certidão CRT de Estabelecimento</span>
-                <span className="text-[9px] bg-teal-100 text-teal-800 px-1 rounded font-bold">PJ</span>
-              </div>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                Download da CRT oficial com os Responsáveis Técnicos e horários
-              </p>
-            </div>
-          </div>
+                  <div className="flex items-center space-x-3 shrink-0 pl-11 md:pl-0">
+                    <label className="flex items-center space-x-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(rec.permiteEmitir)}
+                        disabled={!rec.liberado}
+                        onChange={(e) => setRecursoField('anuidadeFinanceiro', 'permiteEmitir', e.target.checked)}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                      />
+                      <span>Permitir Emissão de Boletos e Pix</span>
+                    </label>
 
-          {/* Anotação e Baixa de ART / RT */}
-          <div 
-            onClick={() => handleToggleRecurso('solicitacaoAnotacaoRT')}
-            className={`p-3 rounded-xl border flex items-start space-x-3 cursor-pointer transition-all ${
-              activeRegra.recursosPermitidos?.solicitacaoAnotacaoRT
-                ? 'bg-emerald-50/70 border-emerald-300'
-                : 'bg-white border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <input
-              type="checkbox"
-              checked={Boolean(activeRegra.recursosPermitidos?.solicitacaoAnotacaoRT)}
-              onChange={() => {}}
-              className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 pointer-events-none"
-            />
-            <div>
-              <div className="font-bold text-xs text-slate-800 uppercase">
-                Averbação e Baixa de RT / ART
-              </div>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                Requerimento de responsabilidade técnica ou encerramento de vínculo
-              </p>
-            </div>
-          </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rec.liberado}
+                        onChange={(e) => setRecursoField('anuidadeFinanceiro', 'liberado', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+                </div>
+              );
+            })()}
 
-          {/* Emissão de Boletos & Pix Instantâneo */}
-          <div 
-            onClick={() => handleToggleRecurso('emissaoBoletosAnuidade')}
-            className={`p-3 rounded-xl border flex items-start space-x-3 cursor-pointer transition-all ${
-              activeRegra.recursosPermitidos?.emissaoBoletosAnuidade
-                ? 'bg-emerald-50/70 border-emerald-300'
-                : 'bg-white border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <input
-              type="checkbox"
-              checked={Boolean(activeRegra.recursosPermitidos?.emissaoBoletosAnuidade)}
-              onChange={() => {}}
-              className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 pointer-events-none"
-            />
-            <div>
-              <div className="font-bold text-xs text-slate-800 uppercase">
-                Boletos Bancários & Pix Copia-e-Cola
-              </div>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                Emissão da guia de anuidade do exercício e parcelas vigentes
-              </p>
-            </div>
-          </div>
+            {/* 5. Protocolos & Processos em Andamento */}
+            {(() => {
+              const rec = getRecursoState('protocolosProcessos');
+              return (
+                <div className={`p-4 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                  rec.liberado ? 'bg-slate-50 border-emerald-200' : 'bg-white border-slate-200 opacity-60'
+                }`}>
+                  <div className="flex items-start space-x-3 flex-1">
+                    <div className={`p-2 rounded-lg ${rec.liberado ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-400'}`}>
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-xs uppercase text-slate-900">
+                          5. Protocolos & Processos em Andamento
+                        </span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                          rec.liberado ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {rec.liberado ? 'Disponível no Portal' : 'Oculto'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Permite ao profissional acompanhar processos, pareceres da diretoria e status de requerimentos protocolados.
+                      </p>
+                    </div>
+                  </div>
 
-          {/* Carteira Digital (Virtual) */}
-          <div 
-            onClick={() => handleToggleRecurso('carteiraDigitalVirtual')}
-            className={`p-3 rounded-xl border flex items-start space-x-3 cursor-pointer transition-all ${
-              activeRegra.recursosPermitidos?.carteiraDigitalVirtual
-                ? 'bg-emerald-50/70 border-emerald-300'
-                : 'bg-white border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <input
-              type="checkbox"
-              checked={Boolean(activeRegra.recursosPermitidos?.carteiraDigitalVirtual)}
-              onChange={() => {}}
-              className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 pointer-events-none"
-            />
-            <div>
-              <div className="font-bold text-xs text-slate-800 uppercase flex items-center gap-1">
-                <span>Carteira Digital Profissional</span>
-                <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1 rounded font-bold">PF</span>
-              </div>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                Exibição da cédula digital de identidade profissional com QR Code
-              </p>
-            </div>
-          </div>
+                  <div className="flex items-center space-x-3 shrink-0 pl-11 md:pl-0">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rec.liberado}
+                        onChange={(e) => setRecursoField('protocolosProcessos', 'liberado', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+                </div>
+              );
+            })()}
 
-          {/* Atualização Cadastral de Endereço & Contatos */}
-          <div 
-            onClick={() => handleToggleRecurso('atualizacaoCadastralEndereco')}
-            className={`p-3 rounded-xl border flex items-start space-x-3 cursor-pointer transition-all ${
-              activeRegra.recursosPermitidos?.atualizacaoCadastralEndereco
-                ? 'bg-emerald-50/70 border-emerald-300'
-                : 'bg-white border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <input
-              type="checkbox"
-              checked={Boolean(activeRegra.recursosPermitidos?.atualizacaoCadastralEndereco)}
-              onChange={() => {}}
-              className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 pointer-events-none"
-            />
-            <div>
-              <div className="font-bold text-xs text-slate-800 uppercase">
-                Atualização de Endereço & Contatos
-              </div>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                Permite ao inscrito atualizar seu e-mail, telefone e endereço
-              </p>
-            </div>
-          </div>
+            {/* 6. Requerimento Eletrônico (Peticionamento) */}
+            {(() => {
+              const rec = getRecursoState('requerimentoEletronico');
+              return (
+                <div className={`p-4 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                  rec.liberado ? 'bg-slate-50 border-emerald-200' : 'bg-white border-slate-200 opacity-60'
+                }`}>
+                  <div className="flex items-start space-x-3 flex-1">
+                    <div className={`p-2 rounded-lg ${rec.liberado ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-400'}`}>
+                      <Send className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-xs uppercase text-slate-900">
+                          6. Requerimento Eletrônico (Peticionamento Online)
+                        </span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                          rec.liberado ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {rec.liberado ? 'Disponível no Portal' : 'Oculto'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Permite abrir solicitações digitais com os assuntos regulamentares de PF (Cadastros Básicos) e justificativa.
+                      </p>
+                    </div>
+                  </div>
 
-          {/* Requerimentos e Petições Eletrônicas */}
-          <div 
-            onClick={() => handleToggleRecurso('envioProtocolosRequerimentos')}
-            className={`p-3 rounded-xl border flex items-start space-x-3 cursor-pointer transition-all ${
-              activeRegra.recursosPermitidos?.envioProtocolosRequerimentos
-                ? 'bg-emerald-50/70 border-emerald-300'
-                : 'bg-white border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <input
-              type="checkbox"
-              checked={Boolean(activeRegra.recursosPermitidos?.envioProtocolosRequerimentos)}
-              onChange={() => {}}
-              className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 pointer-events-none"
-            />
-            <div>
-              <div className="font-bold text-xs text-slate-800 uppercase">
-                Abertura de Protocolos e Requerimentos
-              </div>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                Peticionamento online e upload de certidões e diplomas
-              </p>
-            </div>
-          </div>
+                  <div className="flex items-center space-x-3 shrink-0 pl-11 md:pl-0">
+                    <label className="flex items-center space-x-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(rec.permiteEditar)}
+                        disabled={!rec.liberado}
+                        onChange={(e) => setRecursoField('requerimentoEletronico', 'permiteEditar', e.target.checked)}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                      />
+                      <span>Permitir Envio de Novos Requerimentos</span>
+                    </label>
 
-          {/* Formulários Dinâmicos Normativos */}
-          <div 
-            onClick={() => handleToggleRecurso('preenchimentoFormularios')}
-            className={`p-3 rounded-xl border flex items-start space-x-3 cursor-pointer transition-all ${
-              activeRegra.recursosPermitidos?.preenchimentoFormularios
-                ? 'bg-emerald-50/70 border-emerald-300'
-                : 'bg-white border-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <input
-              type="checkbox"
-              checked={Boolean(activeRegra.recursosPermitidos?.preenchimentoFormularios)}
-              onChange={() => {}}
-              className="mt-0.5 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300 pointer-events-none"
-            />
-            <div>
-              <div className="font-bold text-xs text-slate-800 uppercase">
-                Formulários Normativos Dinâmicos
-              </div>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                Preenchimento e envio de questionários e declarações exigidas
-              </p>
-            </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rec.liberado}
+                        onChange={(e) => setRecursoField('requerimentoEletronico', 'liberado', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
-        </div>
+        )}
+
+        {/* Lista de Recursos PJ */}
+        {subTab === 'PJ' && (
+          <div className="space-y-3">
+            {/* 1. Dados do Estabelecimento & Condição Sanitária */}
+            {(() => {
+              const rec = getRecursoState('dadosEstabelecimento');
+              return (
+                <div className={`p-4 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                  rec.liberado ? 'bg-slate-50 border-emerald-200' : 'bg-white border-slate-200 opacity-60'
+                }`}>
+                  <div className="flex items-start space-x-3 flex-1">
+                    <div className={`p-2 rounded-lg ${rec.liberado ? 'bg-teal-100 text-teal-800' : 'bg-slate-100 text-slate-400'}`}>
+                      <Building2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-xs uppercase text-slate-900">
+                          1. Dados do Estabelecimento & Condição Sanitária
+                        </span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                          rec.liberado ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {rec.liberado ? 'Disponível no Portal' : 'Oculto'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Exibe razão social, CNPJ, inscrição, tipo de estabelecimento, validade de CRT e condição cadastral da empresa.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3 shrink-0 pl-11 md:pl-0">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rec.liberado}
+                        onChange={(e) => setRecursoField('dadosEstabelecimento', 'liberado', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* 2. Certidão de Regularidade Técnica (CRT Digital) */}
+            {(() => {
+              const rec = getRecursoState('certidaoCrtDigital');
+              return (
+                <div className={`p-4 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                  rec.liberado ? 'bg-slate-50 border-emerald-200' : 'bg-white border-slate-200 opacity-60'
+                }`}>
+                  <div className="flex items-start space-x-3 flex-1">
+                    <div className={`p-2 rounded-lg ${rec.liberado ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-400'}`}>
+                      <FileCheck2 className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-xs uppercase text-slate-900">
+                          2. Certidão de Regularidade Técnica (CRT Digital)
+                        </span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                          rec.liberado ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {rec.liberado ? 'Emissão Permitida' : 'Bloqueada'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Emissão e download da CRT com QR Code de autenticação, relação de Responsáveis Técnicos e horários de assistência.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3 shrink-0 pl-11 md:pl-0">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rec.liberado}
+                        onChange={(e) => setRecursoField('certidaoCrtDigital', 'liberado', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* 3. Anuidade & Financeiro PJ */}
+            {(() => {
+              const rec = getRecursoState('anuidadeFinanceiro');
+              return (
+                <div className={`p-4 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                  rec.liberado ? 'bg-slate-50 border-emerald-200' : 'bg-white border-slate-200 opacity-60'
+                }`}>
+                  <div className="flex items-start space-x-3 flex-1">
+                    <div className={`p-2 rounded-lg ${rec.liberado ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-400'}`}>
+                      <Coins className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-xs uppercase text-slate-900">
+                          3. Anuidade & Débitos da Empresa
+                        </span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                          rec.liberado ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {rec.liberado ? 'Disponível no Portal' : 'Oculto'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Permite à empresa consultar anuidades, taxas e débitos com emissão de boletos bancários e Pix Copia-e-Cola.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3 shrink-0 pl-11 md:pl-0">
+                    <label className="flex items-center space-x-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(rec.permiteEmitir)}
+                        disabled={!rec.liberado}
+                        onChange={(e) => setRecursoField('anuidadeFinanceiro', 'permiteEmitir', e.target.checked)}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                      />
+                      <span>Permitir Boletos e Pix PJ</span>
+                    </label>
+
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rec.liberado}
+                        onChange={(e) => setRecursoField('anuidadeFinanceiro', 'liberado', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* 4. Protocolos & Processos da Empresa */}
+            {(() => {
+              const rec = getRecursoState('protocolosProcessos');
+              return (
+                <div className={`p-4 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                  rec.liberado ? 'bg-slate-50 border-emerald-200' : 'bg-white border-slate-200 opacity-60'
+                }`}>
+                  <div className="flex items-start space-x-3 flex-1">
+                    <div className={`p-2 rounded-lg ${rec.liberado ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-400'}`}>
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-xs uppercase text-slate-900">
+                          4. Protocolos & Processos da Empresa
+                        </span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                          rec.liberado ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {rec.liberado ? 'Disponível no Portal' : 'Oculto'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Acompanhamento de processos, juntada de documentos e andamento de petições da empresa.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3 shrink-0 pl-11 md:pl-0">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rec.liberado}
+                        onChange={(e) => setRecursoField('protocolosProcessos', 'liberado', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* 5. Requerimento Eletrônico PJ */}
+            {(() => {
+              const rec = getRecursoState('requerimentoEletronico');
+              return (
+                <div className={`p-4 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                  rec.liberado ? 'bg-slate-50 border-emerald-200' : 'bg-white border-slate-200 opacity-60'
+                }`}>
+                  <div className="flex items-start space-x-3 flex-1">
+                    <div className={`p-2 rounded-lg ${rec.liberado ? 'bg-purple-100 text-purple-800' : 'bg-slate-100 text-slate-400'}`}>
+                      <Send className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-xs uppercase text-slate-900">
+                          5. Requerimento Eletrônico PJ (Peticionamento)
+                        </span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                          rec.liberado ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {rec.liberado ? 'Disponível no Portal' : 'Oculto'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        Permite ao representante legal abrir requerimentos corporativos vinculados a Cadastros Básicos PJ.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-3 shrink-0 pl-11 md:pl-0">
+                    <label className="flex items-center space-x-2 text-xs font-semibold text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(rec.permiteEditar)}
+                        disabled={!rec.liberado}
+                        onChange={(e) => setRecursoField('requerimentoEletronico', 'permiteEditar', e.target.checked)}
+                        className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
+                      />
+                      <span>Permitir Envio de Novos Requerimentos</span>
+                    </label>
+
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={rec.liberado}
+                        onChange={(e) => setRecursoField('requerimentoEletronico', 'liberado', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+                    </label>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
       </div>
     </div>
   );

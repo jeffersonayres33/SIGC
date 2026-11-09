@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS public.council_config (
     validar_cnpj BOOLEAN DEFAULT TRUE,
     validar_cep BOOLEAN DEFAULT TRUE,
     auto_preencher_endereco_cep BOOLEAN DEFAULT TRUE,
+    acessos_inscrito_pf JSONB DEFAULT '{}'::jsonb,
+    acessos_inscrito_pj JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -68,6 +70,7 @@ CREATE TABLE IF NOT EXISTS public.cadastros_basicos (
     descricao TEXT,
     ativo BOOLEAN DEFAULT TRUE,
     ordem NUMERIC(10,2) DEFAULT 0,
+    selecionar_empresa_vinculada BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );

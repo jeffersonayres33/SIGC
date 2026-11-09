@@ -84,6 +84,7 @@ export type CategoriaCadastroBasico =
   | 'CARGO_FUNCIONARIO'
   | 'SETOR_LOTACAO'
   | 'GRUPO_ACESSO_FUNCIONARIO'
+  | 'CATEGORIA_FORMULARIO_DINAMICO'
   | 'ADMIN_PARAMETRO';
 
 export interface ItemCadastroBasico {
@@ -99,6 +100,7 @@ export interface ItemCadastroBasico {
   cargoNome?: string;
   setorId?: string;
   setorNome?: string;
+  selecionarEmpresaVinculada?: boolean;
 }
 
 export type TipoExigenciaAssistencia = 'ASSISTENCIA_PLENA' | 'HORAS_DIARIAS' | 'HORAS_SEMANAIS' | 'SEM_HORA_DEFINIDA';
@@ -537,6 +539,8 @@ export interface ProtocoloProcesso {
   parecerRelator?: string;
   decisaoPlenario?: string;
   anexos: string[];
+  anexosDetalhados?: { nome: string; tamanho: number; tipo: string; url?: string }[];
+  conteudoCompletoFormulario?: Record<string, any>;
   historico: {
     data: string;
     setor: string;
@@ -548,12 +552,32 @@ export interface ProtocoloProcesso {
 export interface FormFieldConfig {
   id: string;
   label: string;
-  tipo: 'text' | 'number' | 'date' | 'select' | 'textarea' | 'checkbox' | 'file' | 'signature' | 'gps' | 'cpf_cnpj' | string;
+  tipo: 'text' | 'number' | 'email' | 'date' | 'select' | 'textarea' | 'radio' | 'checkbox' | 'cpf' | 'cnpj' | 'endereco_cep' | string;
   obrigatorio: boolean;
   opcoes?: string[];
   placeholder?: string;
   ajuda?: string;
   larguraCol?: number | string;
+}
+
+export interface HistoricoVinculoProfissional {
+  id: string;
+  profissionalId: string;
+  profissionalInscricao?: string;
+  profissionalNome?: string;
+  empresaId: string;
+  empresaRazaoSocial: string;
+  empresaNomeFantasia?: string;
+  empresaCnpj: string;
+  empresaInscricao?: string;
+  cargo: string;
+  situacaoVinculo?: string;
+  cargaHorariaSemanal: number;
+  dataInicio: string;
+  dataBaixa?: string;
+  motivoBaixa?: string;
+  protocoloBaixa?: string;
+  status: 'Ativo' | 'Baixado' | 'Suspenso';
 }
 
 export type FormularioCampo = FormFieldConfig;
@@ -563,12 +587,28 @@ export interface FormularioDinamico {
   titulo: string;
   categoria: string;
   descricao: string;
-  publicoAlvo: 'Profissionais' | 'Empresas' | 'Ambos' | 'Cidadão' | 'Fiscais' | 'Público Geral' | string;
+  publicoAlvo?: string;
   versao: string | number;
   ativo: boolean;
   campos: FormFieldConfig[];
   respostasRecebidas: number;
   dataCriacao: string;
+  
+  // Destinos de publicação
+  publicarProfissional?: boolean;
+  publicarEmpresa?: boolean;
+  publicarSite?: boolean;
+
+  // Configuração de Tramitação Automática de Protocolos
+  setorTramitacaoId?: string;
+  setorTramitacaoNome?: string;
+  statusProtocoloInicial?: string;
+
+  // Configuração de Anexos
+  permiteAnexos?: boolean;
+  tiposAnexosPermitidos?: string[]; // ['.pdf', '.docx', '.jpg', '.png']
+  tamanhoMaximoMb?: number;
+  instrucoesAnexo?: string;
 }
 
 export interface RespostaFormulario {
@@ -577,10 +617,14 @@ export interface RespostaFormulario {
   formularioTitulo: string;
   autorNome: string;
   autorDocumento: string;
+  autorEmail?: string;
+  autorTelefone?: string;
+  canalOrigem?: 'PROFISSIONAL' | 'EMPRESA' | 'SITE' | string;
   protocoloGerado: string;
-  dataEnvio: string;
+  dataEnvio: string; // ISO ou DD/MM/AAAA HH:mm
   respostas?: Record<string, any>;
   dadosCampos?: Record<string, any>;
+  anexos?: { nome: string; tamanho: number; tipo: string; url?: string; dataUpload?: string }[];
   status: 'Em Análise' | 'Aprovado' | 'Indeferido' | 'Concluído' | 'Pendente' | string;
 }
 
@@ -622,15 +666,36 @@ export interface PermissoesAcoesModulo {
   deletar: boolean;
 }
 
+export interface RecursoConfigPortal {
+  liberado: boolean;
+  permiteEditar?: boolean;
+  permiteEmitir?: boolean;
+}
+
 export interface RegraAcessoInscrito {
   permiteAcessoAoPortal: boolean;
+  recursosPortal?: {
+    // Recursos PF
+    dadosCadastrais?: RecursoConfigPortal;
+    vinculosProfissionais?: RecursoConfigPortal;
+    certidaoQuitacao?: RecursoConfigPortal;
+    anuidadeFinanceiro?: RecursoConfigPortal;
+    protocolosProcessos?: RecursoConfigPortal;
+    requerimentoEletronico?: RecursoConfigPortal;
+
+    // Recursos PJ
+    dadosEstabelecimento?: RecursoConfigPortal;
+    certidaoCrtDigital?: RecursoConfigPortal;
+
+    [key: string]: RecursoConfigPortal | undefined;
+  };
   modulosPermitidos: string[];
   permissoesAcoes: Record<string, PermissoesAcoesModulo>;
   recursosPermitidos: {
     emissaoCertidaoRegularidade?: boolean;
     emissaoCertidaoQuitacao?: boolean;
     emissaoDeclaracaoInscricao?: boolean;
-    emissaoCrt?: boolean; // Principalmente para PJ
+    emissaoCrt?: boolean;
     solicitacaoAnotacaoRT?: boolean;
     baixaResponsabilidadeTecnica?: boolean;
     emissaoBoletosAnuidade?: boolean;

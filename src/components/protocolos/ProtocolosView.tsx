@@ -30,7 +30,8 @@ import {
   User,
   ZoomIn,
   AlertCircle,
-  MapPin
+  MapPin,
+  Paperclip
 } from 'lucide-react';
 import { ProtocoloProcesso, ItemCadastroBasico, Profissional, Empresa } from '../../types';
 import { storageService } from '../../services/storageService';
@@ -835,6 +836,67 @@ export const ProtocolosView: React.FC = () => {
                 <div>Última Atualização: <span className="font-mono text-slate-500">{selectedProcesso.dataUltimaAtualizacao}</span></div>
               </div>
             </div>
+
+            {/* Conteúdo Completo do Requerimento & Respostas do Formulário */}
+            {selectedProcesso.vinculoDetalhes && (
+              <div className="p-4 bg-blue-50/50 border border-blue-200 rounded-xl space-y-2">
+                <div className="font-bold text-blue-900 uppercase text-[11px] flex items-center gap-1.5 border-b border-blue-200/60 pb-1.5">
+                  <FileText className="w-4 h-4 text-blue-600" />
+                  <span>Texto Completo do Requerimento / Respostas Submetidas</span>
+                </div>
+                <div className="text-slate-800 text-xs font-mono whitespace-pre-wrap leading-relaxed bg-white p-3 rounded-lg border border-blue-100 max-h-48 overflow-y-auto">
+                  {selectedProcesso.vinculoDetalhes}
+                </div>
+              </div>
+            )}
+
+            {/* Documentos Anexados aos Autos */}
+            {((selectedProcesso.anexosDetalhados && selectedProcesso.anexosDetalhados.length > 0) || (selectedProcesso.anexos && selectedProcesso.anexos.length > 0)) && (
+              <div className="p-4 bg-amber-50/50 border border-amber-200 rounded-xl space-y-2">
+                <div className="font-bold text-amber-900 uppercase text-[11px] flex items-center gap-1.5 border-b border-amber-200/60 pb-1.5">
+                  <Paperclip className="w-4 h-4 text-amber-600" />
+                  <span>Documentos & Anexos Anexados aos Autos ({selectedProcesso.anexosDetalhados?.length || selectedProcesso.anexos?.length || 0})</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  {selectedProcesso.anexosDetalhados && selectedProcesso.anexosDetalhados.length > 0 ? (
+                    selectedProcesso.anexosDetalhados.map((arq, idx) => (
+                      <div key={idx} className="p-2.5 bg-white rounded-lg border border-amber-200/80 flex items-center justify-between text-xs">
+                        <div className="flex items-center space-x-2 truncate pr-1">
+                          <FileText className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                          <div className="truncate">
+                            <span className="font-bold text-slate-800 block truncate">{arq.nome}</span>
+                            <span className="text-[10px] text-slate-400 font-mono">{arq.tamanho} MB • Autenticado</span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => toastService.info('Download de Documento', `Baixando arquivo autenticado: ${arq.nome}`)}
+                          className="p-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-md font-bold text-[10px] shrink-0 cursor-pointer"
+                        >
+                          Visualizar
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    selectedProcesso.anexos?.map((nomeArq, idx) => (
+                      <div key={idx} className="p-2.5 bg-white rounded-lg border border-amber-200/80 flex items-center justify-between text-xs">
+                        <div className="flex items-center space-x-2 truncate">
+                          <FileText className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                          <span className="font-bold text-slate-800 truncate">{nomeArq}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => toastService.info('Download de Documento', `Baixando documento: ${nomeArq}`)}
+                          className="p-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-md font-bold text-[10px] shrink-0 cursor-pointer"
+                        >
+                          Visualizar
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Linha do Tempo e Histórico de Despachos */}
             <div className="space-y-2">

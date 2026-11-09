@@ -51,8 +51,11 @@ const MODULOS_DISPONIVEIS: { id: string; nome: string; descricao: string }[] = [
   { id: 'fiscalizacao', nome: 'Fiscalização de Campo', descricao: 'Autos de fiscalização, GPS e offline' },
   { id: 'protocolos', nome: 'Protocolos & Requerimentos', descricao: 'Processos e despachos administrativos' },
   { id: 'relatorios', nome: 'Relatórios & BI Diretoria', descricao: 'Exportações e inteligência de dados' },
-  { id: 'formularios', nome: 'Formulários Dinâmicos', descricao: 'Criação e respostas de formulários' },
-  { id: 'portal_inscrito', nome: 'Portal do Inscrito (PF/PJ)', descricao: 'Autoatendimento de profissionais e empresas' },
+  { id: 'formularios', nome: 'Formulários Dinâmicos', descricao: 'Criação e estatísticas de formulários' },
+  { id: 'portal_inscrito', nome: 'Portal do Inscrito (Geral)', descricao: 'Autoatendimento unificado' },
+  { id: 'portal_inscrito_pf', nome: 'Portal do Inscrito — Profissional (PF)', descricao: 'Autoatendimento exclusivo PF, anuidades, requerimentos e certidões' },
+  { id: 'portal_inscrito_pj', nome: 'Portal do Inscrito — Empresas (PJ)', descricao: 'Autoatendimento exclusivo PJ, CRT Digital e requerimentos' },
+  { id: 'site_publico', nome: 'Site Oficial & Portal Público', descricao: 'Acesso público liberado a notícias e formulários' },
   { id: 'configuracoes', nome: 'Painel Admin / Configurações', descricao: 'Parâmetros do conselho e numerações' },
   { id: 'microsservicos', nome: 'Microsserviços & Cloud', descricao: 'Status dos serviços e gateway' }
 ];

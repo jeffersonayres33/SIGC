@@ -26,7 +26,9 @@ import {
   Tablet,
   Sliders,
   SlidersHorizontal,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Send,
+  Globe
 } from 'lucide-react';
 import { UserRole, AuthUser } from '../types';
 import { CouncilConfig, storageService } from '../services/storageService';
@@ -45,9 +47,18 @@ export type MainSection =
   | 'protocolos'
   | 'relatorios'
   | 'formularios'
+  | 'site_publico'
   | 'portal_inscrito'
   | 'portal_inscrito_pf'
   | 'portal_inscrito_pj'
+  | 'portal_profissional_perfil'
+  | 'portal_profissional_anuidade'
+  | 'portal_profissional_protocolo'
+  | 'portal_profissional_requerimento'
+  | 'portal_empresa_perfil'
+  | 'portal_empresa_anuidade'
+  | 'portal_empresa_protocolo'
+  | 'portal_empresa_requerimento'
   | 'configuracoes'
   | 'painel_admin'
   | 'backup_restore'
@@ -103,6 +114,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     configuracaoMenu: true,
     inscritoMenu: true
   });
+
+  const isProfissionalAccess = currentRole === 'PORTAL_PROFISSIONAL' || authUser?.tipo === 'PROFISSIONAL';
+  const isEmpresaAccess = currentRole === 'PORTAL_EMPRESA' || authUser?.tipo === 'EMPRESA';
+  const isInternalAdmin = !isProfissionalAccess && !isEmpresaAccess;
 
   const checkPerm = (sec: string) => hasModulePermission(authUser, sec, currentRole);
 
@@ -239,7 +254,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Scrollable Navigation List */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto text-xs">
-          {/* 1. Profissionais (PF) */}
+          {/* Profissionais (PF) */}
           {checkPerm( 'profissionais') && (
             <button
               onClick={() => handleSelect('profissionais')}
@@ -250,11 +265,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }`}
             >
               <Users className="w-4 h-4 text-blue-600" />
-              <span>1. Profissionais (PF)</span>
+              <span>Profissionais (PF)</span>
             </button>
           )}
 
-          {/* 2. Empresas (PJ) */}
+          {/* Empresas (PJ) */}
           {checkPerm( 'empresas') && (
             <button
               onClick={() => handleSelect('empresas')}
@@ -265,11 +280,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }`}
             >
               <Building className="w-4 h-4 text-cyan-600" />
-              <span>2. Empresas (PJ)</span>
+              <span>Empresas (PJ)</span>
             </button>
           )}
 
-          {/* 3. Protocolos */}
+          {/* Protocolos */}
           {checkPerm( 'protocolos') && (
             <button
               onClick={() => handleSelect('protocolos')}
@@ -280,11 +295,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }`}
             >
               <FileText className="w-4 h-4 text-blue-600" />
-              <span>3. Protocolos & Requerimentos</span>
+              <span>Protocolos & Requerimentos</span>
             </button>
           )}
 
-          {/* 4. Cadastros Básicos (com seções próprias para Profissionais, Empresas, Protocolo e Processo) */}
+          {/* Cadastros Básicos */}
           {checkPerm( 'cadastros_basicos') && (
             <div>
               <div className="flex items-center justify-between rounded-xl">
@@ -297,7 +312,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   }`}
                 >
                   <FolderTree className="w-4 h-4 text-blue-600" />
-                  <span>4. Cadastros Básicos</span>
+                  <span>Cadastros Básicos</span>
                 </button>
                 <button
                   onClick={() => toggleGroup('cadastros')}
@@ -362,7 +377,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
 
-          {/* 5. Financeiro & Arrecadação */}
+          {/* Financeiro & Arrecadação */}
           {checkPerm( 'financeiro') && (
             <div>
               <button
@@ -371,7 +386,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <div className="flex items-center space-x-2">
                   <Coins className="w-3.5 h-3.5 text-amber-600" />
-                  <span>5. Financeiro & Arrecadação</span>
+                  <span>Financeiro & Arrecadação</span>
                 </div>
                 {openGroups.financeiro ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
               </button>
@@ -394,7 +409,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
 
-          {/* 6. Jurídico & Dívida Ativa */}
+          {/* Jurídico & Dívida Ativa */}
           {checkPerm( 'cobranca_juridico') && (
             <div>
               <button
@@ -403,7 +418,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <div className="flex items-center space-x-2">
                   <Scale className="w-3.5 h-3.5 text-purple-600" />
-                  <span>6. Jurídico & Dívida Ativa</span>
+                  <span>Jurídico & Dívida Ativa</span>
                 </div>
                 {openGroups.juridico ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
               </button>
@@ -426,7 +441,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
 
-          {/* 7. Fiscalização */}
+          {/* Fiscalização */}
           {checkPerm( 'fiscalizacao') && (
             <div>
               <button
@@ -435,7 +450,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <div className="flex items-center space-x-2">
                   <Compass className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>7. Fiscalização</span>
+                  <span>Fiscalização</span>
                 </div>
                 {openGroups.fiscalizacao ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
               </button>
@@ -470,7 +485,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           )}
 
-          {/* 8. Relatórios Analíticos */}
+          {/* Relatórios Analíticos */}
           {checkPerm( 'relatorios') && (
             <button
               onClick={() => handleSelect('relatorios')}
@@ -481,11 +496,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }`}
             >
               <BarChart3 className="w-4 h-4 text-cyan-600" />
-              <span>8. Relatórios & BI Diretoria</span>
+              <span>Relatórios & BI Diretoria</span>
             </button>
           )}
 
-          {/* 9. Formulários Dinâmicos */}
+          {/* Formulários Dinâmicos */}
           {checkPerm( 'formularios') && (
             <button
               onClick={() => handleSelect('formularios')}
@@ -496,43 +511,200 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }`}
             >
               <FormInput className="w-4 h-4 text-pink-600" />
-              <span>9. Formulários Dinâmicos</span>
+              <span>Formulários Dinâmicos</span>
             </button>
           )}
 
-          {/* 10. Portal do Profissional (PF) */}
-          {checkPerm('portal_inscrito') && (
-            <button
-              onClick={() => handleSelect('portal_inscrito_pf')}
-              className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
-                activeSection === 'portal_inscrito_pf' || activeSection === 'portal_inscrito'
-                  ? 'bg-cyan-50 text-cyan-800 font-bold border-l-2 border-cyan-500'
-                  : 'text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <User className="w-4 h-4 text-cyan-600" />
-              <span>10. Portal do Profissional (PF)</span>
-            </button>
+          {/* Site Oficial & Portal Público */}
+          <button
+            onClick={() => handleSelect('site_publico')}
+            className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+              activeSection === 'site_publico'
+                ? 'bg-purple-50 text-purple-700 font-bold border-l-2 border-purple-600'
+                : 'text-slate-700 hover:bg-slate-100'
+            }`}
+          >
+            <Globe className="w-4 h-4 text-purple-600" />
+            <span className="flex items-center justify-between w-full">
+              <span>Site Oficial / Portal Público</span>
+              <span className="text-[9px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.5 rounded uppercase">
+                Livre
+              </span>
+            </span>
+          </button>
+
+          {/* Profissional */}
+          {(isProfissionalAccess || isInternalAdmin) && checkPerm('portal_inscrito') && (
+            <div>
+              <button
+                onClick={() => toggleGroup('portalProfissional')}
+                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeSection === 'portal_inscrito' || 
+                  activeSection === 'portal_inscrito_pf' || 
+                  activeSection === 'portal_profissional_perfil' || 
+                  activeSection === 'portal_profissional_anuidade' || 
+                  activeSection === 'portal_profissional_protocolo' || 
+                  activeSection === 'portal_profissional_requerimento'
+                    ? 'bg-cyan-50 text-cyan-900 border-l-2 border-cyan-500 font-bold'
+                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <User className="w-4 h-4 text-cyan-600" />
+                  <span>Profissional</span>
+                </div>
+                {openGroups.portalProfissional ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
+              </button>
+
+              {openGroups.portalProfissional && (
+                <div className="ml-3 pl-2.5 border-l-2 border-slate-100 space-y-1 mt-1">
+                  {checkPerm('portal_profissional_perfil') && (
+                    <button
+                      onClick={() => handleSelect('portal_profissional_perfil')}
+                      className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                        activeSection === 'portal_profissional_perfil' || activeSection === 'portal_inscrito_pf' || activeSection === 'portal_inscrito'
+                          ? 'bg-cyan-50 text-cyan-800 font-bold border-l-2 border-cyan-500'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                    >
+                      <User className="w-3.5 h-3.5 text-cyan-600" />
+                      <span>Dados Cadastrais</span>
+                    </button>
+                  )}
+
+                  {checkPerm('portal_profissional_anuidade') && (
+                    <button
+                      onClick={() => handleSelect('portal_profissional_anuidade')}
+                      className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                        activeSection === 'portal_profissional_anuidade'
+                          ? 'bg-amber-50 text-amber-800 font-bold border-l-2 border-amber-500'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                    >
+                      <Coins className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Anuidade</span>
+                    </button>
+                  )}
+
+                  {checkPerm('portal_profissional_protocolo') && (
+                    <button
+                      onClick={() => handleSelect('portal_profissional_protocolo')}
+                      className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                        activeSection === 'portal_profissional_protocolo'
+                          ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-500'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                    >
+                      <FileText className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Protocolo</span>
+                    </button>
+                  )}
+
+                  {checkPerm('portal_profissional_requerimento') && (
+                    <button
+                      onClick={() => handleSelect('portal_profissional_requerimento')}
+                      className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                        activeSection === 'portal_profissional_requerimento'
+                          ? 'bg-purple-50 text-purple-800 font-bold border-l-2 border-purple-500'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                    >
+                      <Send className="w-3.5 h-3.5 text-purple-600" />
+                      <span>Requerimento</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
-          {/* 11. Portal da Empresa (PJ) */}
-          {checkPerm('portal_inscrito') && (
-            <button
-              onClick={() => handleSelect('portal_inscrito_pj')}
-              className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
-                activeSection === 'portal_inscrito_pj'
-                  ? 'bg-teal-50 text-teal-800 font-bold border-l-2 border-teal-500'
-                  : 'text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <Building2 className="w-4 h-4 text-teal-600" />
-              <span>11. Portal da Empresa (PJ)</span>
-            </button>
+          {/* Empresa */}
+          {(isEmpresaAccess || isInternalAdmin) && checkPerm('portal_inscrito') && (
+            <div>
+              <button
+                onClick={() => toggleGroup('portalEmpresa')}
+                className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  activeSection === 'portal_inscrito_pj' || 
+                  activeSection === 'portal_empresa_perfil' || 
+                  activeSection === 'portal_empresa_anuidade' || 
+                  activeSection === 'portal_empresa_protocolo' || 
+                  activeSection === 'portal_empresa_requerimento'
+                    ? 'bg-teal-50 text-teal-900 border-l-2 border-teal-500 font-bold'
+                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <div className="flex items-center space-x-2">
+                  <Building2 className="w-4 h-4 text-teal-600" />
+                  <span>Empresa</span>
+                </div>
+                {openGroups.portalEmpresa ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
+              </button>
+
+              {openGroups.portalEmpresa && (
+                <div className="ml-3 pl-2.5 border-l-2 border-slate-100 space-y-1 mt-1">
+                  {checkPerm('portal_empresa_perfil') && (
+                    <button
+                      onClick={() => handleSelect('portal_empresa_perfil')}
+                      className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                        activeSection === 'portal_empresa_perfil' || activeSection === 'portal_inscrito_pj'
+                          ? 'bg-teal-50 text-teal-800 font-bold border-l-2 border-teal-500'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                    >
+                      <Building2 className="w-3.5 h-3.5 text-teal-600" />
+                      <span>Dados Cadastrais</span>
+                    </button>
+                  )}
+
+                  {checkPerm('portal_empresa_anuidade') && (
+                    <button
+                      onClick={() => handleSelect('portal_empresa_anuidade')}
+                      className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                        activeSection === 'portal_empresa_anuidade'
+                          ? 'bg-amber-50 text-amber-800 font-bold border-l-2 border-amber-500'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                    >
+                      <Coins className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Anuidade</span>
+                    </button>
+                  )}
+
+                  {checkPerm('portal_empresa_protocolo') && (
+                    <button
+                      onClick={() => handleSelect('portal_empresa_protocolo')}
+                      className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                        activeSection === 'portal_empresa_protocolo'
+                          ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-500'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                    >
+                      <FileText className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Protocolo</span>
+                    </button>
+                  )}
+
+                  {checkPerm('portal_empresa_requerimento') && (
+                    <button
+                      onClick={() => handleSelect('portal_empresa_requerimento')}
+                      className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                        activeSection === 'portal_empresa_requerimento'
+                          ? 'bg-purple-50 text-purple-800 font-bold border-l-2 border-purple-500'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                    >
+                      <Send className="w-3.5 h-3.5 text-purple-600" />
+                      <span>Requerimento</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           )}
 
-          {/* Divisor do Sistema & Painel Admin */}
-          {(checkPerm( 'configuracoes') || 
-            checkPerm( 'funcionarios') || 
+          {/* Divisor do Sistema & Painel Admin (Oculto estritamente para Profissionais e Empresas) */}
+          {isInternalAdmin && (checkPerm('configuracoes') || 
+            checkPerm('funcionarios') || 
             isMasterDeveloper(authUser)) && (
             <>
               <div className="pt-2 pb-1 border-t border-slate-100">
@@ -771,7 +943,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {/* Microsserviços & Cloud */}
-          {checkPerm( 'microsservicos') && (
+          {isInternalAdmin && checkPerm('microsservicos') && (
             <button
               onClick={() => handleSelect('microsservicos')}
               className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${

@@ -25,7 +25,8 @@ import {
   Clock,
   MapPin,
   Briefcase,
-  FileSpreadsheet
+  FileSpreadsheet,
+  FormInput
 } from 'lucide-react';
 import { ItemCadastroBasico, CategoriaCadastroBasico } from '../../types';
 import { storageService } from '../../services/storageService';
@@ -33,7 +34,7 @@ import { toastService } from '../../services/toastService';
 import { sanitizeToUpper } from '../../utils/documentUtils';
 import { exportToCSV, exportToPDF } from '../../services/exportService';
 
-export type MainGroup = 'PROFISSIONAIS' | 'EMPRESAS' | 'PROTOCOLOS' | 'FUNCIONARIOS' | 'ADMIN';
+export type MainGroup = 'PROFISSIONAIS' | 'EMPRESAS' | 'PROTOCOLOS' | 'FUNCIONARIOS' | 'FORMULARIOS' | 'ADMIN';
 
 const LISTA_MODULOS_SISTEMA: { id: string; nome: string }[] = [
   { id: 'dashboard', nome: 'Painel Executivo / Dashboard' },
@@ -47,7 +48,10 @@ const LISTA_MODULOS_SISTEMA: { id: string; nome: string }[] = [
   { id: 'protocolos', nome: 'Protocolos & Requerimentos' },
   { id: 'relatorios', nome: 'Relatórios & BI Diretoria' },
   { id: 'formularios', nome: 'Formulários Dinâmicos' },
-  { id: 'portal_inscrito', nome: 'Portal do Inscrito (PF/PJ)' },
+  { id: 'portal_inscrito', nome: 'Portal do Inscrito (Geral)' },
+  { id: 'portal_inscrito_pf', nome: 'Portal do Inscrito — Profissional (PF)' },
+  { id: 'portal_inscrito_pj', nome: 'Portal do Inscrito — Empresas (PJ)' },
+  { id: 'site_publico', nome: 'Site Oficial & Portal Público' },
   { id: 'configuracoes', nome: 'Painel Admin / Configurações' },
   { id: 'microsservicos', nome: 'Microsserviços & Cloud' },
 ];
@@ -238,6 +242,15 @@ const SUBGROUPS_FUNCIONARIOS: SubGroupConfig[] = [
 
 const SUBGROUPS_ADMIN: SubGroupConfig[] = [
   {
+    key: 'CATEGORIA_FORMULARIO_DINAMICO',
+    label: 'Categorias de Formulários Dinâmicos',
+    icon: FormInput,
+    singular: 'Categoria de Formulário',
+    description: 'Categorias regulamentares para classificação e publicação de formulários digitais e requerimentos.',
+    linkInfo: 'Vinculado à seleção de Categoria Regulamentar no construtor de Formulários Dinâmicos.',
+    badgeColor: 'bg-blue-50 text-blue-700 border-blue-200'
+  },
+  {
     key: 'ADMIN_PARAMETRO',
     label: 'Parâmetros Administrativos & Segurança',
     icon: ShieldAlert,
@@ -285,6 +298,8 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
       setSelectedCategory('TIPO_REQUERIMENTO_PROTOCOLO');
     } else if (group === 'FUNCIONARIOS') {
       setSelectedCategory('CARGO_FUNCIONARIO');
+    } else if (group === 'FORMULARIOS') {
+      setSelectedCategory('CATEGORIA_FORMULARIO_DINAMICO');
     } else if (group === 'ADMIN') {
       setSelectedCategory('ADMIN_PARAMETRO');
     }
@@ -300,6 +315,8 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
         return SUBGROUPS_PROTOCOLOS;
       case 'FUNCIONARIOS':
         return SUBGROUPS_FUNCIONARIOS;
+      case 'FORMULARIOS':
+        return SUBGROUPS_ADMIN.filter(s => s.key === 'CATEGORIA_FORMULARIO_DINAMICO');
       case 'ADMIN':
         return SUBGROUPS_ADMIN;
       default:
@@ -348,6 +365,16 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
           headerBg: 'from-purple-700 via-indigo-800 to-slate-900',
           badgeText: 'FUNCIONÁRIOS',
           badgeColor: 'bg-purple-50 text-purple-700 border-purple-200'
+        };
+      case 'FORMULARIOS':
+        return {
+          title: 'Cadastros Básicos • Formulários Dinâmicos',
+          subtitle: 'Categorias regulamentares e classificações de formulários digitais e peticionamentos.',
+          icon: FormInput,
+          color: 'blue',
+          headerBg: 'from-blue-700 via-indigo-800 to-slate-900',
+          badgeText: 'FORMULÁRIOS DINÂMICOS',
+          badgeColor: 'bg-blue-50 text-blue-700 border-blue-200'
         };
       case 'ADMIN':
         return {
@@ -438,7 +465,8 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
       cargoNome: defaultCat === 'GRUPO_ACESSO_FUNCIONARIO' ? defaultCargo?.nome : undefined,
       setorId: defaultCat === 'GRUPO_ACESSO_FUNCIONARIO' ? defaultSetor?.id : undefined,
       setorNome: defaultCat === 'GRUPO_ACESSO_FUNCIONARIO' ? defaultSetor?.nome : undefined,
-      modulosPermitidos: defaultCat === 'GRUPO_ACESSO_FUNCIONARIO' ? ['dashboard', 'fiscalizacao', 'protocolos', 'empresas'] : undefined
+      modulosPermitidos: defaultCat === 'GRUPO_ACESSO_FUNCIONARIO' ? ['dashboard', 'fiscalizacao', 'protocolos', 'empresas'] : undefined,
+      selecionarEmpresaVinculada: false
     });
     setIsModalOpen(true);
   };
@@ -446,6 +474,7 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
   const handleOpenEdit = (item: ItemCadastroBasico) => {
     setEditingItem({ 
       ...item,
+      selecionarEmpresaVinculada: Boolean(item.selecionarEmpresaVinculada),
       modulosPermitidos: item.modulosPermitidos 
         ? item.modulosPermitidos.map(m => String(m).toLowerCase().trim()) 
         : undefined
@@ -487,7 +516,8 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
       cargoId: editingItem.cargoId || undefined,
       cargoNome: editingItem.cargoNome || undefined,
       setorId: editingItem.setorId || undefined,
-      setorNome: editingItem.setorNome || undefined
+      setorNome: editingItem.setorNome || undefined,
+      selecionarEmpresaVinculada: Boolean(editingItem.selecionarEmpresaVinculada)
     };
 
     const finalItem = sanitizeToUpper(rawItem, ['id', 'cargoId', 'setorId', 'modulosPermitidos']);
@@ -828,6 +858,14 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
                             )}
                           </div>
                         )}
+                        {item.categoria === 'ASSUNTO_REQUERIMENTO_PF' && item.selecionarEmpresaVinculada && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">
+                              <Building2 className="w-3 h-3 text-emerald-600" />
+                              <span>Vincular Empresa ao Peticionar</span>
+                            </span>
+                          </div>
+                        )}
                       </td>
                       <td className="py-3.5 px-4">
                         <div className="text-slate-600 uppercase max-w-md line-clamp-2">
@@ -1144,6 +1182,29 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
                         })}
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {/* Opção para Assunto do Requerimento / Peticionamento PF: Selecionar Empresa Vinculada */}
+                {(editingItem.categoria === 'ASSUNTO_REQUERIMENTO_PF' || selectedCategory === 'ASSUNTO_REQUERIMENTO_PF') && (
+                  <div className="p-4 bg-emerald-50/80 border border-emerald-200 rounded-2xl space-y-2">
+                    <label className="flex items-start space-x-3 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(editingItem.selecionarEmpresaVinculada)}
+                        onChange={(e) => setEditingItem({ ...editingItem, selecionarEmpresaVinculada: e.target.checked })}
+                        className="w-4 h-4 mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 border-emerald-300 cursor-pointer"
+                      />
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-emerald-950 uppercase flex items-center gap-1.5">
+                          <Building2 className="w-4 h-4 text-emerald-600" />
+                          <span>Selecionar empresa vinculada</span>
+                        </span>
+                        <p className="text-[11px] text-emerald-800">
+                          Quando esta opção estiver ativada, o profissional que protocolar um requerimento eletrônico com este assunto pelo Portal do Inscrito poderá selecionar qual empresa (ou mais de uma) vinculada ao seu registro fará o peticionamento.
+                        </p>
+                      </div>
+                    </label>
                   </div>
                 )}
 

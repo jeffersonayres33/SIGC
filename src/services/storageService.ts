@@ -24,7 +24,8 @@ import {
   AuthProfile,
   UserRole,
   RegraAcessoInscrito,
-  PermissoesAcoesModulo
+  PermissoesAcoesModulo,
+  HistoricoVinculoProfissional
 } from '../types';
 import { 
   INITIAL_PROFISSIONAIS, 
@@ -49,6 +50,7 @@ const STORAGE_KEYS = {
   PROTOCOLOS: 'siscon_protocolos_v1',
   FORMULARIOS: 'siscon_forms_v1',
   RESPOSTAS_FORMS: 'siscon_respostas_forms_v1',
+  HISTORICO_VINCULOS: 'siscon_historico_vinculos_v1',
   OFFLINE_QUEUE: 'siscon_offline_queue_v1',
   COUNCIL_CONFIG: 'siscon_council_config_v1',
   CADASTROS_BASICOS: 'siscon_cadastros_basicos_v1',
@@ -138,15 +140,21 @@ export interface CouncilConfig {
 
 export const DEFAULT_ACESSOS_INSCRITO_PF: RegraAcessoInscrito = {
   permiteAcessoAoPortal: true,
-  modulosPermitidos: ['portal_inscrito', 'protocolos', 'financeiro', 'formularios', 'profissionais'],
+  recursosPortal: {
+    dadosCadastrais: { liberado: true, permiteEditar: true },
+    vinculosProfissionais: { liberado: true },
+    certidaoQuitacao: { liberado: true, permiteEmitir: true },
+    anuidadeFinanceiro: { liberado: true, permiteEmitir: true },
+    protocolosProcessos: { liberado: true },
+    requerimentoEletronico: { liberado: true, permiteEditar: true }
+  },
+  modulosPermitidos: ['portal_inscrito', 'dados_cadastrais', 'anuidade', 'protocolo', 'requerimento'],
   permissoesAcoes: {
     portal_inscrito: { visualizar: true, editar: true, deletar: false },
-    protocolos: { visualizar: true, editar: true, deletar: false },
-    financeiro: { visualizar: true, editar: false, deletar: false },
-    formularios: { visualizar: true, editar: true, deletar: false },
-    profissionais: { visualizar: true, editar: false, deletar: false },
-    empresas: { visualizar: false, editar: false, deletar: false },
-    dashboard: { visualizar: true, editar: false, deletar: false }
+    dados_cadastrais: { visualizar: true, editar: true, deletar: false },
+    anuidade: { visualizar: true, editar: true, deletar: false },
+    protocolo: { visualizar: true, editar: true, deletar: false },
+    requerimento: { visualizar: true, editar: true, deletar: false }
   },
   recursosPermitidos: {
     emissaoCertidaoRegularidade: true,
@@ -168,15 +176,20 @@ export const DEFAULT_ACESSOS_INSCRITO_PF: RegraAcessoInscrito = {
 
 export const DEFAULT_ACESSOS_INSCRITO_PJ: RegraAcessoInscrito = {
   permiteAcessoAoPortal: true,
-  modulosPermitidos: ['portal_inscrito', 'protocolos', 'financeiro', 'formularios', 'empresas'],
+  recursosPortal: {
+    dadosEstabelecimento: { liberado: true, permiteEditar: false },
+    certidaoCrtDigital: { liberado: true, permiteEmitir: true },
+    anuidadeFinanceiro: { liberado: true, permiteEmitir: true },
+    protocolosProcessos: { liberado: true },
+    requerimentoEletronico: { liberado: true, permiteEditar: true }
+  },
+  modulosPermitidos: ['portal_inscrito', 'dados_cadastrais', 'anuidade', 'protocolo', 'requerimento'],
   permissoesAcoes: {
     portal_inscrito: { visualizar: true, editar: true, deletar: false },
-    protocolos: { visualizar: true, editar: true, deletar: false },
-    financeiro: { visualizar: true, editar: false, deletar: false },
-    formularios: { visualizar: true, editar: true, deletar: false },
-    empresas: { visualizar: true, editar: false, deletar: false },
-    profissionais: { visualizar: true, editar: false, deletar: false },
-    dashboard: { visualizar: true, editar: false, deletar: false }
+    dados_cadastrais: { visualizar: true, editar: true, deletar: false },
+    anuidade: { visualizar: true, editar: true, deletar: false },
+    protocolo: { visualizar: true, editar: true, deletar: false },
+    requerimento: { visualizar: true, editar: true, deletar: false }
   },
   recursosPermitidos: {
     emissaoCertidaoRegularidade: true,
@@ -437,12 +450,12 @@ export const INITIAL_CADASTROS_BASICOS: ItemCadastroBasico[] = [
   { id: 'sitp-9', categoria: 'SITUACAO_PROFISSIONAL', nome: 'Falecido', codigo: 'FALEC', descricao: 'Profissional com certidão de óbito arquivada', ativo: true, ordem: 9 },
 
   // ASSUNTOS DE REQUERIMENTO / PETICIONAMENTO (PF)
-  { id: 'assp-1', categoria: 'ASSUNTO_REQUERIMENTO_PF', nome: 'Assunção de Responsabilidade Técnica (RT)', codigo: 'ASS_RT', descricao: 'Pedido de assunção de responsabilidade técnica em farmácia ou drogaria', ativo: true, ordem: 1 },
-  { id: 'assp-2', categoria: 'ASSUNTO_REQUERIMENTO_PF', nome: 'Baixa de Responsabilidade Técnica', codigo: 'BAIXA_RT', descricao: 'Desligamento voluntário de responsabilidade técnica ou farmacêutica', ativo: true, ordem: 2 },
+  { id: 'assp-1', categoria: 'ASSUNTO_REQUERIMENTO_PF', nome: 'Assunção de Responsabilidade Técnica (RT)', codigo: 'ASS_RT', descricao: 'Pedido de assunção de responsabilidade técnica em farmácia ou drogaria', ativo: true, ordem: 1, selecionarEmpresaVinculada: true },
+  { id: 'assp-2', categoria: 'ASSUNTO_REQUERIMENTO_PF', nome: 'Baixa de Responsabilidade Técnica', codigo: 'BAIXA_RT', descricao: 'Desligamento voluntário de responsabilidade técnica ou farmacêutica', ativo: true, ordem: 2, selecionarEmpresaVinculada: true },
   { id: 'assp-3', categoria: 'ASSUNTO_REQUERIMENTO_PF', nome: 'Solicitação de 2ª Via de Carteira Profissional', codigo: 'VIA_CART', descricao: 'Emissão de segunda via da cédula de identidade profissional física', ativo: true, ordem: 3 },
   { id: 'assp-4', categoria: 'ASSUNTO_REQUERIMENTO_PF', nome: 'Pedido de Transferência para Outro Regional', codigo: 'TRANSF_REG', descricao: 'Transferência de prontuário e registro para outro CRF', ativo: true, ordem: 4 },
   { id: 'assp-5', categoria: 'ASSUNTO_REQUERIMENTO_PF', nome: 'Averbação de Habilitação / Especialização', codigo: 'AVERB_HAB', descricao: 'Inclusão de título de pós-graduação, mestrado ou especialidade no cadastro', ativo: true, ordem: 5 },
-  { id: 'assp-6', categoria: 'ASSUNTO_REQUERIMENTO_PF', nome: 'Defesa Prévia de Notificação / Auto de Fiscalização', codigo: 'DEF_FISC', descricao: 'Apresentação de justificativa ou defesa perante a fiscalização do DEFIS', ativo: true, ordem: 6 },
+  { id: 'assp-6', categoria: 'ASSUNTO_REQUERIMENTO_PF', nome: 'Defesa Prévia de Notificação / Auto de Fiscalização', codigo: 'DEF_FISC', descricao: 'Apresentação de justificativa ou defesa perante a fiscalização do DEFIS', ativo: true, ordem: 6, selecionarEmpresaVinculada: true },
   { id: 'assp-7', categoria: 'ASSUNTO_REQUERIMENTO_PF', nome: 'Solicitação de Certidão Específica / Histórico', codigo: 'CERT_HIST', descricao: 'Certidão de inteiro teor, histórico de regularidade ou tempo de registro', ativo: true, ordem: 7 },
 
   // ASSUNTOS DE REQUERIMENTO / PETICIONAMENTO (PJ)
@@ -664,7 +677,15 @@ export const INITIAL_CADASTROS_BASICOS: ItemCadastroBasico[] = [
   { id: 'adm-1', categoria: 'ADMIN_PARAMETRO', nome: 'Exigência de Troca de Senha no 1º Acesso', codigo: 'PWD_FIRST_CHANGE', descricao: 'Obrigatoriedade de cadastramento de senha pessoal segura no primeiro acesso à plataforma', ativo: true, ordem: 1 },
   { id: 'adm-2', categoria: 'ADMIN_PARAMETRO', nome: 'Registro de Auditoria de Modificações', codigo: 'AUDIT_LOG_FULL', descricao: 'Armazenamento de data, hora e responsável por toda alteração em cadastros', ativo: true, ordem: 2 },
   { id: 'adm-3', categoria: 'ADMIN_PARAMETRO', nome: 'Bloqueio Automático por Inadimplência', codigo: 'AUTO_LOCK_DEBT', descricao: 'Sinalização e restrição de certidões para inscritos em dívida ativa com CDA', ativo: true, ordem: 3 },
-  { id: 'adm-4', categoria: 'ADMIN_PARAMETRO', nome: 'Autenticação com Validação de Documento', codigo: 'AUTH_DOC_CHECK', descricao: 'Validação algorítmica de CPF e CNPJ no momento do login', ativo: true, ordem: 4 }
+  { id: 'adm-4', categoria: 'ADMIN_PARAMETRO', nome: 'Autenticação com Validação de Documento', codigo: 'AUTH_DOC_CHECK', descricao: 'Validação algorítmica de CPF e CNPJ no momento do login', ativo: true, ordem: 4 },
+
+  // CATEGORIAS DE FORMULÁRIOS DINÂMICOS
+  { id: 'catfd-1', categoria: 'CATEGORIA_FORMULARIO_DINAMICO', nome: 'Responsabilidade Técnica', codigo: 'RT', descricao: 'Formulários e declarações de assunção e baixa de RT', ativo: true, ordem: 1 },
+  { id: 'catfd-2', categoria: 'CATEGORIA_FORMULARIO_DINAMICO', nome: 'Inscrição PF', codigo: 'INSC_PF', descricao: 'Requerimentos para profissionais de pessoa física', ativo: true, ordem: 2 },
+  { id: 'catfd-3', categoria: 'CATEGORIA_FORMULARIO_DINAMICO', nome: 'Inscrição PJ', codigo: 'INSC_PJ', descricao: 'Requerimentos para empresas e drogarias', ativo: true, ordem: 3 },
+  { id: 'catfd-4', categoria: 'CATEGORIA_FORMULARIO_DINAMICO', nome: 'Fiscalização & Defesas', codigo: 'DEFIS', descricao: 'Defesas, justificativas e impugnações de autos', ativo: true, ordem: 4 },
+  { id: 'catfd-5', categoria: 'CATEGORIA_FORMULARIO_DINAMICO', nome: 'Ética & Disciplina', codigo: 'ETICA', descricao: 'Solicitações e denúncias ético-disciplinares', ativo: true, ordem: 5 },
+  { id: 'catfd-6', categoria: 'CATEGORIA_FORMULARIO_DINAMICO', nome: 'Ouvidoria & Denúncias', codigo: 'OUVID', descricao: 'Manifestações de ouvidoria e denúncias da população', ativo: true, ordem: 6 }
 ];
 
 export const INITIAL_FUNCIONARIOS: Funcionario[] = [
@@ -809,6 +830,138 @@ export const INITIAL_FUNCIONARIOS: Funcionario[] = [
   }
 ];
 
+export const INITIAL_HISTORICO_VINCULOS: HistoricoVinculoProfissional[] = [
+  // Dr. Jefferson Ayres (dev-master)
+  {
+    id: 'hvin-dev-1',
+    profissionalId: 'prof-dev-master',
+    profissionalInscricao: 'CRF-AM 9999',
+    profissionalNome: 'JEFFERSON AYRES',
+    empresaId: 'emp-1',
+    empresaRazaoSocial: 'DROGARIA POPULAR DE MANAUS LTDA',
+    empresaNomeFantasia: 'DROGARIA POPULAR MATRIZ',
+    empresaCnpj: '12.345.678/0001-90',
+    empresaInscricao: '1042',
+    cargo: 'RESPONSÁVEL TÉCNICO PRINCIPAL',
+    situacaoVinculo: 'CTPS',
+    cargaHorariaSemanal: 44,
+    dataInicio: '15/03/2021',
+    status: 'Ativo'
+  },
+  {
+    id: 'hvin-dev-2',
+    profissionalId: 'prof-dev-master',
+    profissionalInscricao: 'CRF-AM 9999',
+    profissionalNome: 'JEFFERSON AYRES',
+    empresaId: 'emp-past-1',
+    empresaRazaoSocial: 'FARMÁCIA SÃO BENTO DO AMAZONAS LTDA',
+    empresaNomeFantasia: 'FARMÁCIA SÃO BENTO',
+    empresaCnpj: '01.234.567/0001-89',
+    empresaInscricao: '0854',
+    cargo: 'FARMACÊUTICO ASSISTENTE TÉCNICO',
+    situacaoVinculo: 'CTPS',
+    cargaHorariaSemanal: 30,
+    dataInicio: '10/02/2018',
+    dataBaixa: '28/02/2021',
+    motivoBaixa: 'Pedido voluntário de baixa de RT para assunção de RT principal em nova drogaria',
+    protocoloBaixa: 'PROT-PF-2021/0489',
+    status: 'Baixado'
+  },
+  {
+    id: 'hvin-dev-3',
+    profissionalId: 'prof-dev-master',
+    profissionalInscricao: 'CRF-AM 9999',
+    profissionalNome: 'JEFFERSON AYRES',
+    empresaId: 'emp-past-2',
+    empresaRazaoSocial: 'HOSPITAL E PRONTO SOCORRO 28 DE AGOSTO',
+    empresaNomeFantasia: 'FARMÁCIA HOSPITALAR HPS',
+    empresaCnpj: '04.382.491/0001-20',
+    empresaInscricao: '0310',
+    cargo: 'FARMACÊUTICO HOSPITALAR PLANTONISTA',
+    situacaoVinculo: 'ESTATUTÁRIO',
+    cargaHorariaSemanal: 24,
+    dataInicio: '05/06/2015',
+    dataBaixa: '31/12/2017',
+    motivoBaixa: 'Encerramento de contrato temporário de assistência hospitalar',
+    protocoloBaixa: 'PROT-PF-2017/1102',
+    status: 'Baixado'
+  },
+
+  // Dra. Maria Eduarda Silveira
+  {
+    id: 'hvin-1',
+    profissionalId: 'prof-1',
+    profissionalInscricao: 'CRF-AM 4150',
+    profissionalNome: 'DRA. MARIA EDUARDA SILVEIRA',
+    empresaId: 'emp-1',
+    empresaRazaoSocial: 'DROGARIA POPULAR DE MANAUS LTDA',
+    empresaNomeFantasia: 'DROGARIA POPULAR MATRIZ',
+    empresaCnpj: '12.345.678/0001-90',
+    empresaInscricao: '1042',
+    cargo: 'RESPONSÁVEL TÉCNICO PRINCIPAL',
+    situacaoVinculo: 'CTPS',
+    cargaHorariaSemanal: 44,
+    dataInicio: '01/02/2022',
+    status: 'Ativo'
+  },
+  {
+    id: 'hvin-2',
+    profissionalId: 'prof-1',
+    profissionalInscricao: 'CRF-AM 4150',
+    profissionalNome: 'DRA. MARIA EDUARDA SILVEIRA',
+    empresaId: 'emp-past-3',
+    empresaRazaoSocial: 'LABORATÓRIO BIOANALÍTICA DA AMAZÔNIA S/S',
+    empresaNomeFantasia: 'BIOANALÍTICA DIAGNÓSTICOS',
+    empresaCnpj: '08.999.111/0001-44',
+    empresaInscricao: '0920',
+    cargo: 'FARMACÊUTICA BIOQUÍMICA ANALISTA',
+    situacaoVinculo: 'CTPS',
+    cargaHorariaSemanal: 40,
+    dataInicio: '15/01/2019',
+    dataBaixa: '15/01/2022',
+    motivoBaixa: 'Pedido de demissão e desvinculação técnica a pedido da profissional',
+    protocoloBaixa: 'PROT-PF-2022/0088',
+    status: 'Baixado'
+  },
+
+  // Dr. Carlos Alberto Mendes
+  {
+    id: 'hvin-3',
+    profissionalId: 'prof-2',
+    profissionalInscricao: 'CRF-AM 5230',
+    profissionalNome: 'DR. CARLOS ALBERTO MENDES',
+    empresaId: 'emp-2',
+    empresaRazaoSocial: 'FARMÁCIA SÃO JOÃO DO AMAZONAS LTDA',
+    empresaNomeFantasia: 'DROGARIA SÃO JOÃO CENTRO',
+    empresaCnpj: '98.765.432/0001-10',
+    empresaInscricao: '2088',
+    cargo: 'RESPONSÁVEL TÉCNICO PRINCIPAL',
+    situacaoVinculo: 'CTPS',
+    cargaHorariaSemanal: 40,
+    dataInicio: '10/06/2020',
+    status: 'Ativo'
+  },
+  {
+    id: 'hvin-4',
+    profissionalId: 'prof-2',
+    profissionalInscricao: 'CRF-AM 5230',
+    profissionalNome: 'DR. CARLOS ALBERTO MENDES',
+    empresaId: 'emp-past-4',
+    empresaRazaoSocial: 'DISTRIBUIDORA DE MEDICAMENTOS AMAZONAS LTDA',
+    empresaNomeFantasia: 'AMAZONMED DISTRIBUIDORA',
+    empresaCnpj: '05.432.100/0001-99',
+    empresaInscricao: '1105',
+    cargo: 'FARMACÊUTICO RT DISTRIBUIDORA',
+    situacaoVinculo: 'CTPS',
+    cargaHorariaSemanal: 44,
+    dataInicio: '01/03/2016',
+    dataBaixa: '01/05/2020',
+    motivoBaixa: 'Baixa voluntária de responsabilidade técnica para mudança de ramo',
+    protocoloBaixa: 'PROT-PF-2020/0312',
+    status: 'Baixado'
+  }
+];
+
 class StorageService {
   private customProfissionais: Profissional[] = [];
   private empresas: Empresa[] = [];
@@ -816,8 +969,9 @@ class StorageService {
   private cobrancas: ProcessoCobranca[] = [];
   private termosFiscalizacao: TermoFiscalizacao[] = [];
   private protocolos: ProtocoloProcesso[] = [];
-  private formularios: FormularioDinamico[] = [];
+  private formularios: FormularioDinamico[] = INITIAL_DYNAMIC_FORMS;
   private respostasForms: RespostaFormulario[] = [];
+  private historicoVinculos: HistoricoVinculoProfissional[] = INITIAL_HISTORICO_VINCULOS;
   private offlineQueue: TermoFiscalizacao[] = [];
   private historicoAuditoria: HistoricoAuditoria[] = [];
   private cadastrosBasicos: ItemCadastroBasico[] = INITIAL_CADASTROS_BASICOS;
@@ -1136,6 +1290,56 @@ class StorageService {
         }
       }
 
+      // Carregamento persistente de Formulários Dinâmicos
+      const savedForms = localStorage.getItem(STORAGE_KEYS.FORMULARIOS);
+      if (savedForms) {
+        try {
+          const parsedForms = JSON.parse(savedForms);
+          if (Array.isArray(parsedForms) && parsedForms.length > 0) {
+            this.formularios = parsedForms;
+          } else {
+            this.formularios = [...INITIAL_DYNAMIC_FORMS];
+          }
+        } catch (e) {
+          this.formularios = [...INITIAL_DYNAMIC_FORMS];
+        }
+      } else {
+        this.formularios = [...INITIAL_DYNAMIC_FORMS];
+        try {
+          localStorage.setItem(STORAGE_KEYS.FORMULARIOS, JSON.stringify(this.formularios));
+        } catch (e) {}
+      }
+
+      // Carregamento de Respostas de Formulários
+      const savedRespostas = localStorage.getItem(STORAGE_KEYS.RESPOSTAS_FORMS);
+      if (savedRespostas) {
+        try {
+          this.respostasForms = JSON.parse(savedRespostas);
+        } catch (e) {
+          this.respostasForms = [];
+        }
+      }
+
+      // Carregamento de Histórico de Vínculos
+      const savedHistVinculos = localStorage.getItem(STORAGE_KEYS.HISTORICO_VINCULOS);
+      if (savedHistVinculos) {
+        try {
+          const parsed = JSON.parse(savedHistVinculos);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            this.historicoVinculos = parsed;
+          } else {
+            this.historicoVinculos = [...INITIAL_HISTORICO_VINCULOS];
+          }
+        } catch (e) {
+          this.historicoVinculos = [...INITIAL_HISTORICO_VINCULOS];
+        }
+      } else {
+        this.historicoVinculos = [...INITIAL_HISTORICO_VINCULOS];
+        try {
+          localStorage.setItem(STORAGE_KEYS.HISTORICO_VINCULOS, JSON.stringify(this.historicoVinculos));
+        } catch (e) {}
+      }
+
       // Migração automática dos dados atuais de empresas (Situação do Vínculo e Natureza de Atividade)
       this.migrateEmpresaDataToCadastrosBasicos();
     } catch (e) {
@@ -1199,7 +1403,8 @@ class StorageService {
             codigo: c.codigo || undefined,
             descricao: c.descricao || undefined,
             ativo: c.ativo,
-            ordem: c.ordem
+            ordem: c.ordem,
+            selecionarEmpresaVinculada: Boolean(c.selecionar_empresa_vinculada ?? c.selecionarempresavinculada ?? c.selecionarEmpresaVinculada ?? false)
           }));
           localStorage.setItem(STORAGE_KEYS.CADASTROS_BASICOS, JSON.stringify(this.cadastrosBasicos));
         }
@@ -1623,7 +1828,14 @@ class StorageService {
             ativo: f.ativo ?? true,
             campos: f.campos || [],
             respostasRecebidas: f.respostas_recebidas || 0,
-            dataCriacao: f.data_criacao || ''
+            dataCriacao: f.data_criacao || '',
+            publicarProfissional: Boolean(f.publicar_profissional ?? f.publicarProfissional ?? false),
+            publicarEmpresa: Boolean(f.publicar_empresa ?? f.publicarEmpresa ?? false),
+            publicarSite: Boolean(f.publicar_site ?? f.publicarSite ?? false),
+            permiteAnexos: Boolean(f.permite_anexos ?? f.permiteAnexos ?? false),
+            tiposAnexosPermitidos: f.tipos_anexos_permitidos || f.tiposAnexosPermitidos || ['.pdf', '.docx', '.jpg', '.png'],
+            tamanhoMaximoMb: Number(f.tamanho_maximo_mb ?? f.tamanhoMaximoMb ?? 15),
+            instrucoesAnexo: f.instrucoes_anexo || f.instrucoesAnexo || ''
           }));
           localStorage.setItem(STORAGE_KEYS.FORMULARIOS, JSON.stringify(this.formularios));
         }
@@ -1641,16 +1853,49 @@ class StorageService {
             formularioTitulo: r.formulario_titulo,
             autorNome: r.autor_nome,
             autorDocumento: r.autor_documento,
+            autorEmail: r.autor_email || '',
+            autorTelefone: r.autor_telefone || '',
+            canalOrigem: r.canal_origem || 'PROFISSIONAL',
             protocoloGerado: r.protocolo_gerado,
             dataEnvio: r.data_envio,
             respostas: r.respostas || {},
             dadosCampos: r.dados_campos || {},
+            anexos: r.anexos || [],
             status: r.status || 'Em Análise'
           }));
           localStorage.setItem(STORAGE_KEYS.RESPOSTAS_FORMS, JSON.stringify(this.respostasForms));
         }
       } catch (e) {
         console.warn('Erro ao carregar respostas_formularios:', e);
+      }
+
+      // 10.1 Fetch Histórico de Vínculos Profissionais
+      try {
+        const { data: vinculosData } = await supabase.from('historico_vinculos_profissionais').select('*');
+        if (vinculosData && vinculosData.length > 0) {
+          this.historicoVinculos = vinculosData.map(v => ({
+            id: v.id,
+            profissionalId: v.profissional_id,
+            profissionalInscricao: v.profissional_inscricao,
+            profissionalNome: v.profissional_nome,
+            empresaId: v.empresa_id,
+            empresaRazaoSocial: v.empresa_razao_social,
+            empresaNomeFantasia: v.empresa_nome_fantasia,
+            empresaCnpj: v.empresa_cnpj,
+            empresaInscricao: v.empresa_inscricao,
+            cargo: v.cargo,
+            situacaoVinculo: v.situacao_vinculo,
+            cargaHorariaSemanal: Number(v.carga_horaria_semanal) || 0,
+            dataInicio: v.data_inicio,
+            dataBaixa: v.data_baixa || undefined,
+            motivoBaixa: v.motivo_baixa || undefined,
+            protocoloBaixa: v.protocolo_baixa || undefined,
+            status: (v.status as any) || 'Ativo'
+          }));
+          localStorage.setItem(STORAGE_KEYS.HISTORICO_VINCULOS, JSON.stringify(this.historicoVinculos));
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar historico_vinculos_profissionais:', e);
       }
 
       // 11. Fetch Historico Auditoria
@@ -1721,7 +1966,9 @@ class StorageService {
             validarCPF: cfgData.validar_cpf ?? this.councilConfig.validarCPF,
             validarCNPJ: cfgData.validar_cnpj ?? this.councilConfig.validarCNPJ,
             validarCEP: cfgData.validar_cep ?? this.councilConfig.validarCEP,
-            autoPreencherEnderecoCEP: cfgData.auto_preencher_endereco_cep ?? this.councilConfig.autoPreencherEnderecoCEP
+            autoPreencherEnderecoCEP: cfgData.auto_preencher_endereco_cep ?? this.councilConfig.autoPreencherEnderecoCEP,
+            acessosInscritoPF: cfgData.acessos_inscrito_pf ? { ...DEFAULT_ACESSOS_INSCRITO_PF, ...cfgData.acessos_inscrito_pf } : this.councilConfig.acessosInscritoPF,
+            acessosInscritoPJ: cfgData.acessos_inscrito_pj ? { ...DEFAULT_ACESSOS_INSCRITO_PJ, ...cfgData.acessos_inscrito_pj } : this.councilConfig.acessosInscritoPJ
           };
           localStorage.setItem(STORAGE_KEYS.COUNCIL_CONFIG, JSON.stringify(this.councilConfig));
         }
@@ -1785,7 +2032,9 @@ class StorageService {
         validar_cpf: cfg.validarCPF,
         validar_cnpj: cfg.validarCNPJ,
         validar_cep: cfg.validarCEP,
-        auto_preencher_endereco_cep: cfg.autoPreencherEnderecoCEP
+        auto_preencher_endereco_cep: cfg.autoPreencherEnderecoCEP,
+        acessos_inscrito_pf: cfg.acessosInscritoPF || DEFAULT_ACESSOS_INSCRITO_PF,
+        acessos_inscrito_pj: cfg.acessosInscritoPJ || DEFAULT_ACESSOS_INSCRITO_PJ
       });
 
       if (cfgErr) throw new Error(`Falha ao migrar Council Config: ${cfgErr.message}`);
@@ -2257,7 +2506,9 @@ class StorageService {
             validar_cpf: this.councilConfig.validarCPF,
             validar_cnpj: this.councilConfig.validarCNPJ,
             validar_cep: this.councilConfig.validarCEP,
-            auto_preencher_endereco_cep: this.councilConfig.autoPreencherEnderecoCEP
+            auto_preencher_endereco_cep: this.councilConfig.autoPreencherEnderecoCEP,
+            acessos_inscrito_pf: this.councilConfig.acessosInscritoPF || DEFAULT_ACESSOS_INSCRITO_PF,
+            acessos_inscrito_pj: this.councilConfig.acessosInscritoPJ || DEFAULT_ACESSOS_INSCRITO_PJ
           })
         );
       }
@@ -2640,7 +2891,8 @@ class StorageService {
             codigo: sanitized.codigo || null,
             descricao: sanitized.descricao || null,
             ativo: sanitized.ativo,
-            ordem: sanitized.ordem || 0
+            ordem: sanitized.ordem || 0,
+            selecionar_empresa_vinculada: Boolean(sanitized.selecionarEmpresaVinculada)
           })
         );
       }
@@ -4953,11 +5205,11 @@ class StorageService {
   }
 
   // Formulários Dinâmicos
-  public getFormularios(): any[] {
+  public getFormularios(): FormularioDinamico[] {
     return [...this.formularios];
   }
 
-  public saveFormulario(form: any) {
+  public saveFormulario(form: FormularioDinamico) {
     const idx = this.formularios.findIndex(f => f.id === form.id);
     if (idx >= 0) {
       this.formularios[idx] = form;
@@ -4978,11 +5230,20 @@ class StorageService {
             ativo: form.ativo ?? true,
             campos: form.campos || [],
             respostas_recebidas: form.respostasRecebidas || 0,
-            data_criacao: form.dataCriacao || null
+            data_criacao: form.dataCriacao || null,
+            publicar_profissional: Boolean(form.publicarProfissional),
+            publicar_empresa: Boolean(form.publicarEmpresa),
+            publicar_site: Boolean(form.publicarSite),
+            permite_anexos: Boolean(form.permiteAnexos),
+            tipos_anexos_permitidos: form.tiposAnexosPermitidos || ['.pdf', '.docx', '.jpg', '.png'],
+            tamanho_maximo_mb: form.tamanhoMaximoMb || 15,
+            instrucoes_anexo: form.instrucoesAnexo || null
           }, { onConflict: 'id' })
         );
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Erro ao salvar formulário no storage:', e);
+    }
     this.notify();
   }
 
@@ -4999,31 +5260,66 @@ class StorageService {
     this.notify();
   }
 
-  public submitFormResponse(resposta: any) {
+  public getRespostasFormularios(formularioId?: string): RespostaFormulario[] {
+    if (formularioId) {
+      return this.respostasForms.filter(r => r.formularioId === formularioId);
+    }
+    return [...this.respostasForms];
+  }
+
+  public submitFormResponse(resposta: RespostaFormulario) {
+    if (!resposta.id) {
+      resposta.id = `resp-${Date.now()}`;
+    }
+    if (!resposta.dataEnvio) {
+      resposta.dataEnvio = new Date().toISOString();
+    }
+
     this.respostasForms.unshift(resposta);
+    try {
+      localStorage.setItem(STORAGE_KEYS.RESPOSTAS_FORMS, JSON.stringify(this.respostasForms));
+    } catch (e) {}
+
     const form = this.formularios.find(f => f.id === resposta.formularioId);
     if (form) {
       form.respostasRecebidas = (form.respostasRecebidas || 0) + 1;
       this.saveFormulario(form);
     }
+
+    // Formata o texto completo das respostas preenchidas pelo usuário
+    const respostasFormatadasTexto = Object.entries(resposta.dadosCampos || resposta.respostas || {})
+      .map(([k, v]) => {
+        const campo = form?.campos?.find(c => c.id === k);
+        const label = campo?.label || k;
+        const valStr = typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v);
+        return `${label}: ${valStr}`;
+      })
+      .join('\n');
+
     const novoProt: any = {
       id: `prot-${Date.now()}`,
       numeroProtocolo: resposta.protocoloGerado,
       tipo: form?.categoria || 'Processo Administrativo',
+      assunto: form?.titulo,
       interessado: resposta.autorNome,
       documentoInteressado: resposta.autorDocumento,
+      contatoEmail: resposta.autorEmail,
+      contatoTelefone: resposta.autorTelefone,
+      vinculoDetalhes: respostasFormatadasTexto,
+      conteudoCompletoFormulario: resposta.dadosCampos || resposta.respostas || {},
       dataInscricao: new Date().toLocaleDateString('pt-BR'),
       dataAbertura: new Date().toLocaleDateString('pt-BR'),
       dataUltimaAtualizacao: new Date().toLocaleDateString('pt-BR'),
       prazoResposta: new Date(Date.now() + 15 * 86400000).toLocaleDateString('pt-BR'),
-      status: 'Em Análise',
-      setorAtual: 'Secretaria Geral',
-      anexos: ['Formulario_Submetido.json'],
+      status: form?.statusProtocoloInicial || resposta.status || 'Em Análise',
+      setorAtual: form?.setorTramitacaoNome || 'Secretaria Geral / Protocolo',
+      anexos: resposta.anexos && resposta.anexos.length > 0 ? resposta.anexos.map(a => a.nome) : ['Requerimento_Submetido.pdf'],
+      anexosDetalhados: resposta.anexos || [],
       historico: [
         {
           data: new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR').slice(0, 5),
-          setor: 'Portal de Autoatendimento',
-          descricao: `Submissão do formulário: ${form?.titulo}`,
+          setor: resposta.canalOrigem === 'SITE' || resposta.canalOrigem === 'SITE_PUBLICO' ? 'Portal Público Oficial' : 'Portal do Inscrito',
+          descricao: `Abertura automática de protocolo via formulário dinâmico: "${form?.titulo}". Encaminhado para o setor ${form?.setorTramitacaoNome || 'Secretaria Geral / Protocolo'}.${resposta.anexos && resposta.anexos.length > 0 ? ` Contém ${resposta.anexos.length} arquivo(s) anexado(s).` : ''}`,
           responsavel: resposta.autorNome
         }
       ]
@@ -5033,21 +5329,205 @@ class StorageService {
     if (this.isOnline) {
       runBackgroundSupabase(
         supabase.from('respostas_formularios').insert({
-          id: resposta.id || `resp-${Date.now()}`,
+          id: resposta.id,
           formulario_id: resposta.formularioId,
           formulario_titulo: resposta.formularioTitulo,
           autor_nome: resposta.autorNome,
           autor_documento: resposta.autorDocumento,
+          autor_email: resposta.autorEmail || null,
+          autor_telefone: resposta.autorTelefone || null,
+          canal_origem: resposta.canalOrigem || 'PROFISSIONAL',
           protocolo_gerado: resposta.protocoloGerado,
-          data_envio: resposta.dataEnvio || new Date().toISOString(),
+          data_envio: resposta.dataEnvio,
           respostas: resposta.respostas || {},
           dados_campos: resposta.dadosCampos || {},
+          anexos: resposta.anexos || [],
           status: resposta.status || 'Em Análise'
         })
       );
     }
 
     this.notify();
+  }
+
+  public getEstatisticasFormularios(periodo: 'dia' | 'mes' | 'ano' | 'todos' = 'todos') {
+    const agora = new Date();
+    const hojeStr = agora.toLocaleDateString('pt-BR');
+    const mesAtual = agora.getMonth();
+    const anoAtual = agora.getFullYear();
+
+    const totalGeral = this.respostasForms.length;
+
+    const respostasFiltradas = this.respostasForms.filter(r => {
+      if (periodo === 'todos') return true;
+      const dataIso = r.dataEnvio ? new Date(r.dataEnvio) : null;
+      if (!dataIso || isNaN(dataIso.getTime())) {
+        // Fallback para strings com formato pt-BR
+        if (periodo === 'dia') return r.dataEnvio?.includes(hojeStr);
+        return true;
+      }
+
+      if (periodo === 'dia') {
+        return (
+          dataIso.getDate() === agora.getDate() &&
+          dataIso.getMonth() === mesAtual &&
+          dataIso.getFullYear() === anoAtual
+        );
+      }
+      if (periodo === 'mes') {
+        return dataIso.getMonth() === mesAtual && dataIso.getFullYear() === anoAtual;
+      }
+      if (periodo === 'ano') {
+        return dataIso.getFullYear() === anoAtual;
+      }
+      return true;
+    });
+
+    const enviosHoje = this.respostasForms.filter(r => {
+      const d = r.dataEnvio ? new Date(r.dataEnvio) : null;
+      if (d && !isNaN(d.getTime())) {
+        return d.getDate() === agora.getDate() && d.getMonth() === mesAtual && d.getFullYear() === anoAtual;
+      }
+      return r.dataEnvio?.includes(hojeStr);
+    }).length;
+
+    const enviosMes = this.respostasForms.filter(r => {
+      const d = r.dataEnvio ? new Date(r.dataEnvio) : null;
+      if (d && !isNaN(d.getTime())) {
+        return d.getMonth() === mesAtual && d.getFullYear() === anoAtual;
+      }
+      return true;
+    }).length;
+
+    const enviosAno = this.respostasForms.filter(r => {
+      const d = r.dataEnvio ? new Date(r.dataEnvio) : null;
+      if (d && !isNaN(d.getTime())) {
+        return d.getFullYear() === anoAtual;
+      }
+      return true;
+    }).length;
+
+    const porCanal = {
+      profissional: this.respostasForms.filter(r => r.canalOrigem === 'PROFISSIONAL').length,
+      empresa: this.respostasForms.filter(r => r.canalOrigem === 'EMPRESA').length,
+      site: this.respostasForms.filter(r => r.canalOrigem === 'SITE').length
+    };
+
+    return {
+      totalGeral,
+      enviosHoje,
+      enviosMes,
+      enviosAno,
+      porCanal,
+      respostas: respostasFiltradas
+    };
+  }
+
+  // ==============================================================================
+  // HISTÓRICO DE VÍNCULOS PROFISSIONAIS & CARGA HORÁRIA
+  // ==============================================================================
+  public getHistoricoVinculosProfissional(profIdOuInscricao: string): HistoricoVinculoProfissional[] {
+    const cleanInsc = String(profIdOuInscricao || '').toLowerCase().trim();
+    return this.historicoVinculos.filter(v => 
+      v.profissionalId === profIdOuInscricao || 
+      (v.profissionalInscricao && v.profissionalInscricao.toLowerCase().trim() === cleanInsc)
+    );
+  }
+
+  public saveHistoricoVinculo(vinculo: HistoricoVinculoProfissional) {
+    const idx = this.historicoVinculos.findIndex(v => v.id === vinculo.id);
+    if (idx >= 0) {
+      this.historicoVinculos[idx] = vinculo;
+    } else {
+      this.historicoVinculos.unshift(vinculo);
+    }
+
+    try {
+      localStorage.setItem(STORAGE_KEYS.HISTORICO_VINCULOS, JSON.stringify(this.historicoVinculos));
+      if (this.isOnline) {
+        runBackgroundSupabase(
+          supabase.from('historico_vinculos_profissionais').upsert({
+            id: vinculo.id,
+            profissional_id: vinculo.profissionalId,
+            profissional_inscricao: vinculo.profissionalInscricao || null,
+            profissional_nome: vinculo.profissionalNome || null,
+            empresa_id: vinculo.empresaId,
+            empresa_razao_social: vinculo.empresaRazaoSocial,
+            empresa_nome_fantasia: vinculo.empresaNomeFantasia || null,
+            empresa_cnpj: vinculo.empresaCnpj,
+            empresa_inscricao: vinculo.empresaInscricao || null,
+            cargo: vinculo.cargo,
+            situacao_vinculo: vinculo.situacaoVinculo || 'CTPS',
+            carga_horaria_semanal: vinculo.cargaHorariaSemanal || 0,
+            data_inicio: vinculo.dataInicio,
+            data_baixa: vinculo.dataBaixa || null,
+            motivo_baixa: vinculo.motivoBaixa || null,
+            protocolo_baixa: vinculo.protocoloBaixa || null,
+            status: vinculo.status || 'Ativo'
+          }, { onConflict: 'id' })
+        );
+      }
+    } catch (e) {}
+
+    this.notify();
+  }
+
+  public getCargaHorariaProfissional(profIdOuInscricao: string, empresaId?: string): { totalSemanal: number; detalhes: string; vinculosAtivos: any[] } {
+    const cleanInsc = String(profIdOuInscricao || '').toLowerCase().trim();
+
+    // Procura empresas onde o profissional é RT
+    const empresasComVinculo = this.empresas.filter(emp => 
+      emp.responsaveisTecnicos?.some(rt => 
+        rt.profissionalId === profIdOuInscricao || 
+        (rt.profissionalInscricao && rt.profissionalInscricao.toLowerCase().trim() === cleanInsc)
+      )
+    );
+
+    let totalHoras = 0;
+    const detalhesLista: string[] = [];
+    const vinculos: any[] = [];
+
+    empresasComVinculo.forEach(emp => {
+      const rt = emp.responsaveisTecnicos?.find(r => 
+        r.profissionalId === profIdOuInscricao || 
+        (r.profissionalInscricao && r.profissionalInscricao.toLowerCase().trim() === cleanInsc)
+      );
+
+      if (rt) {
+        let ch = Number(rt.cargaHorariaSemanal) || 0;
+        // Se ch não estiver definido no RT, tenta calcular da grade de assistência da empresa para esse profissional
+        if (ch === 0 && emp.horariosAssistencia && emp.horariosAssistencia.length > 0) {
+          const meusHorarios = emp.horariosAssistencia.filter(h => 
+            h.ativo && (
+              h.profissionalInscricao?.toLowerCase().trim() === cleanInsc ||
+              h.profissionalNome?.toLowerCase().trim() === rt.profissionalNome?.toLowerCase().trim()
+            )
+          );
+          ch = meusHorarios.reduce((sum, h) => sum + (Number(h.totalHorasDia) || 8), 0);
+        }
+        if (ch === 0) ch = 44; // Default padrão de lei para RT
+
+        if (!empresaId || emp.id === empresaId) {
+          totalHoras += ch;
+          detalhesLista.push(`${emp.razaoSocial}: ${ch}h/semana (${rt.cargo || 'Responsável Técnico'})`);
+          vinculos.push({
+            empresaId: emp.id,
+            razaoSocial: emp.razaoSocial,
+            cnpj: emp.cnpj,
+            cargo: rt.cargo,
+            cargaHorariaSemanal: ch,
+            dataInicio: rt.dataInicio || '10/01/2021',
+            horarios: rt.horarios || []
+          });
+        }
+      }
+    });
+
+    return {
+      totalSemanal: totalHoras,
+      detalhes: detalhesLista.join('; ') || 'Carga horária integral conforme escala homologada',
+      vinculosAtivos: vinculos
+    };
   }
 
   public getMicroservices(): MicrosservicoStatus[] {
@@ -5196,10 +5676,6 @@ class StorageService {
   // ==============================================================================
   // BACKUP & RESTORE SERVICE ENGINE
   // ==============================================================================
-
-  public getRespostasFormularios(): RespostaFormulario[] {
-    return [...this.respostasForms];
-  }
 
   public getHistoricoAuditoria(): HistoricoAuditoria[] {
     return [...this.historicoAuditoria];
