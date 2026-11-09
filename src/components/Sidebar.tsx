@@ -372,6 +372,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <Briefcase className="w-3.5 h-3.5 text-purple-600" />
                     <span>Cargos, Setores e Acessos</span>
                   </button>
+
+                  <button
+                    onClick={() => handleSelect('cadastros_basicos', 'FORMULARIOS')}
+                    className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                      activeSection === 'cadastros_basicos' && activeSubTab === 'FORMULARIOS'
+                        ? 'bg-blue-50 text-blue-700 font-bold border-l-2 border-blue-600'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    <FormInput className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Formulários Dinâmicos</span>
+                  </button>
                 </div>
               )}
             </div>

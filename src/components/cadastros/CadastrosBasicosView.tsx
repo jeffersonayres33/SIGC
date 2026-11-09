@@ -612,6 +612,83 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* 0. Barra Principal de Submenus dos Cadastros Básicos */}
+      <div className="bg-white border border-slate-200 p-2 rounded-2xl shadow-xs overflow-x-auto">
+        <div className="flex items-center gap-2 min-w-max">
+          <button
+            onClick={() => handleSelectMainGroup('PROFISSIONAIS')}
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer ${
+              activeMainGroup === 'PROFISSIONAIS'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Profissionais (PF)</span>
+          </button>
+
+          <button
+            onClick={() => handleSelectMainGroup('EMPRESAS')}
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer ${
+              activeMainGroup === 'EMPRESAS'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <Building2 className="w-4 h-4" />
+            <span>Empresas (PJ)</span>
+          </button>
+
+          <button
+            onClick={() => handleSelectMainGroup('PROTOCOLOS')}
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer ${
+              activeMainGroup === 'PROTOCOLOS'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            <span>Protocolo e Processo</span>
+          </button>
+
+          <button
+            onClick={() => handleSelectMainGroup('FUNCIONARIOS')}
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer ${
+              activeMainGroup === 'FUNCIONARIOS'
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <Briefcase className="w-4 h-4" />
+            <span>Funcionários & Permissões</span>
+          </button>
+
+          <button
+            onClick={() => handleSelectMainGroup('FORMULARIOS')}
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer ${
+              activeMainGroup === 'FORMULARIOS'
+                ? 'bg-blue-700 text-white shadow-sm ring-2 ring-blue-400'
+                : 'text-blue-900 bg-blue-50 border border-blue-200 hover:bg-blue-100 font-extrabold'
+            }`}
+          >
+            <FormInput className="w-4 h-4 text-blue-600" />
+            <span>Formulários Dinâmicos</span>
+          </button>
+
+          <button
+            onClick={() => handleSelectMainGroup('ADMIN')}
+            className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer ${
+              activeMainGroup === 'ADMIN'
+                ? 'bg-rose-600 text-white shadow-sm'
+                : 'text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <ShieldAlert className="w-4 h-4" />
+            <span>Governança & Segurança</span>
+          </button>
+        </div>
+      </div>
+
       {/* 1. Header Dedicado do Grupo Ativo (Acesso Exclusivo via Menu de Navegação) */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
         <div className="flex items-center space-x-3.5">

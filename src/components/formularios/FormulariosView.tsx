@@ -1046,6 +1046,8 @@ export const FormulariosView: React.FC = () => {
                             <option value="cpf">CPF (com máscara e validação)</option>
                             <option value="cnpj">CNPJ (com máscara e validação)</option>
                             <option value="endereco_cep">Endereço Completo via CEP</option>
+                            <option value="empresa_vinculada">Empresa(s) Vinculada(s) ao Peticionamento (Vínculos PF)</option>
+                            <option value="profissional_vinculado">Profissional(is) Vinculado(s) ao Peticionamento (Vínculos PJ)</option>
                           </select>
                         </div>
                         <div className="flex items-center justify-between">

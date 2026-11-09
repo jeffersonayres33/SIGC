@@ -2973,6 +2973,12 @@ class StorageService {
       if (count > 0) return { canDelete: false, count, reason: `Existem ${count} requerimentos/protocolos vinculados a este Assunto.` };
     }
 
+    if (item.categoria === 'CATEGORIA_FORMULARIO_DINAMICO') {
+      const fCount = this.formularios.filter(f => (f.categoria || '').toUpperCase() === itemName).length;
+      count += fCount;
+      if (count > 0) return { canDelete: false, count, reason: `Existem ${count} modelo(s) de formulário dinâmico cadastrado(s) utilizando esta Categoria Regulamentar.` };
+    }
+
     return { canDelete: true, count: 0 };
   }
 
@@ -5426,7 +5432,8 @@ class StorageService {
   // ==============================================================================
   // HISTÓRICO DE VÍNCULOS PROFISSIONAIS & CARGA HORÁRIA
   // ==============================================================================
-  public getHistoricoVinculosProfissional(profIdOuInscricao: string): HistoricoVinculoProfissional[] {
+  public getHistoricoVinculosProfissional(profIdOuInscricao?: string): HistoricoVinculoProfissional[] {
+    if (!profIdOuInscricao) return [...this.historicoVinculos];
     const cleanInsc = String(profIdOuInscricao || '').toLowerCase().trim();
     return this.historicoVinculos.filter(v => 
       v.profissionalId === profIdOuInscricao || 
@@ -7234,6 +7241,14 @@ class StorageService {
     }
 
     return this.currentAuthUser;
+  }
+
+  public getAuthUser(): AuthUser | null {
+    return this.getCurrentAuthUser();
+  }
+
+  public getHistoricoVinculosProfissionais(profIdOuInscricao?: string): HistoricoVinculoProfissional[] {
+    return this.getHistoricoVinculosProfissional(profIdOuInscricao);
   }
 
   public setCurrentAuthUser(user: AuthUser | null): void {

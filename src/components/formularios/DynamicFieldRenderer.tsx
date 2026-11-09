@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { FormFieldConfig } from '../../types';
 import { maskCPF, maskCNPJ, maskCEP, validateCPF, validateCNPJ, fetchAddressByCEP } from '../../utils/documentUtils';
-import { Check, AlertCircle, Loader2, MapPin, Search } from 'lucide-react';
+import { Check, AlertCircle, Loader2, MapPin, Search, Building2, UserCheck, Briefcase } from 'lucide-react';
 import { toastService } from '../../services/toastService';
+import { storageService } from '../../services/storageService';
 
 interface DynamicFieldRendererProps {
   campo: FormFieldConfig;
@@ -18,6 +19,155 @@ export const DynamicFieldRenderer: React.FC<DynamicFieldRendererProps> = ({
   disabled = false
 }) => {
   const [isSearchingCep, setIsSearchingCep] = useState(false);
+
+  // Tratamento do tipo 'empresa_vinculada' (Empresas vinculadas ao profissional logado)
+  if (campo.tipo === 'empresa_vinculada') {
+    const authUser = storageService.getAuthUser();
+    const allEmpresas = storageService.getEmpresas();
+    const allVinculos = storageService.getHistoricoVinculosProfissionais();
+
+    let linkedEmpresas: { id: string; razaoSocial: string; cnpj: string; inscricao: string; tipo: string }[] = [];
+
+    if (authUser && (authUser.tipo === 'PROFISSIONAL' || authUser.role === 'PORTAL_PROFISSIONAL')) {
+      const docClean = authUser.documentoLimpo || authUser.documento?.replace(/\D/g, '') || '';
+      const inscricaoClean = authUser.numeroInscricao || '';
+
+      linkedEmpresas = allEmpresas.filter(emp => {
+        const isRT = emp.responsaveisTecnicos?.some(rt => 
+          (inscricaoClean && rt.profissionalInscricao === inscricaoClean) || 
+          rt.profissionalNome?.toUpperCase() === authUser.nome.toUpperCase()
+        );
+        const isSocio = emp.socios?.some(s => s.cpf?.replace(/\D/g, '') === docClean);
+        const hasVinculo = allVinculos.some(v => 
+          (v.profissionalInscricao === inscricaoClean || v.profissionalNome?.toUpperCase() === authUser.nome.toUpperCase()) && 
+          v.empresaCnpj?.replace(/\D/g, '') === emp.cnpj.replace(/\D/g, '') &&
+          v.status === 'Ativo'
+        );
+        return isRT || isSocio || hasVinculo;
+      }).map(e => ({
+        id: e.id,
+        razaoSocial: e.razaoSocial,
+        cnpj: e.cnpj,
+        inscricao: e.inscricao,
+        tipo: e.tipoEstabelecimento || 'Estabelecimento Registrado'
+      }));
+    }
+
+    // Fallback de pré-visualização no admin ou simulação de envio
+    if (linkedEmpresas.length === 0) {
+      linkedEmpresas = allEmpresas.map(e => ({
+        id: e.id,
+        razaoSocial: e.razaoSocial,
+        cnpj: e.cnpj,
+        inscricao: e.inscricao,
+        tipo: e.tipoEstabelecimento || 'Estabelecimento Registrado'
+      }));
+    }
+
+    return (
+      <div className="space-y-1">
+        <label className="block text-slate-700 font-bold text-xs flex items-center gap-1.5">
+          <Building2 className="w-3.5 h-3.5 text-emerald-600" />
+          <span>{campo.label || 'Empresa(s) Vinculada(s) ao Peticionamento'}</span> {campo.obrigatorio && <span className="text-rose-500">*</span>}
+        </label>
+        <select
+          disabled={disabled}
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value)}
+          required={campo.obrigatorio}
+          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs font-semibold uppercase focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600"
+        >
+          <option value="">Selecione a empresa vinculada...</option>
+          {linkedEmpresas.map(emp => (
+            <option key={emp.id} value={`${emp.razaoSocial} (CNPJ: ${emp.cnpj})`}>
+              {emp.razaoSocial} — CNPJ: {emp.cnpj} ({emp.tipo})
+            </option>
+          ))}
+        </select>
+        <p className="text-[10px] text-slate-400">
+          Mostra todos os estabelecimentos farmacêuticos ou empresas vinculados ao profissional autenticado.
+        </p>
+        {campo.ajuda && <p className="text-[10px] text-slate-400">{campo.ajuda}</p>}
+      </div>
+    );
+  }
+
+  // Tratamento do tipo 'profissional_vinculado' (Profissionais vinculados à empresa logada)
+  if (campo.tipo === 'profissional_vinculado') {
+    const authUser = storageService.getAuthUser();
+    const allProfs = storageService.getProfissionais();
+    const allEmpresas = storageService.getEmpresas();
+    const allVinculos = storageService.getHistoricoVinculosProfissionais();
+
+    let linkedProfs: { id: string; nome: string; cpf: string; inscricao: string; tipo: string }[] = [];
+
+    if (authUser && (authUser.tipo === 'EMPRESA' || authUser.role === 'PORTAL_EMPRESA')) {
+      const cnpjClean = authUser.documentoLimpo || authUser.documento?.replace(/\D/g, '') || '';
+      const emp = allEmpresas.find(e => e.cnpj.replace(/\D/g, '') === cnpjClean);
+
+      if (emp && emp.responsaveisTecnicos) {
+        emp.responsaveisTecnicos.forEach(rt => {
+          linkedProfs.push({
+            id: rt.profissionalId || `rt-${rt.profissionalInscricao}`,
+            nome: rt.profissionalNome,
+            cpf: '',
+            inscricao: rt.profissionalInscricao,
+            tipo: rt.cargo || 'Responsável Técnico'
+          });
+        });
+      }
+
+      allVinculos.filter(v => v.empresaCnpj.replace(/\D/g, '') === cnpjClean && v.status === 'Ativo').forEach(v => {
+        if (!linkedProfs.some(p => p.inscricao === v.profissionalInscricao)) {
+          linkedProfs.push({
+            id: v.profissionalId,
+            nome: v.profissionalNome || 'Profissional',
+            cpf: '',
+            inscricao: v.profissionalInscricao || '-',
+            tipo: v.cargo || 'Assistente Farmacêutico'
+          });
+        }
+      });
+    }
+
+    // Fallback de pré-visualização no admin ou simulação de envio
+    if (linkedProfs.length === 0) {
+      linkedProfs = allProfs.map(p => ({
+        id: p.id,
+        nome: p.nome,
+        cpf: p.cpf,
+        inscricao: p.inscricao,
+        tipo: p.tipoAssociado || 'Farmacêutico'
+      }));
+    }
+
+    return (
+      <div className="space-y-1">
+        <label className="block text-slate-700 font-bold text-xs flex items-center gap-1.5">
+          <UserCheck className="w-3.5 h-3.5 text-purple-600" />
+          <span>{campo.label || 'Profissional(is) Vinculado(s) ao Peticionamento'}</span> {campo.obrigatorio && <span className="text-rose-500">*</span>}
+        </label>
+        <select
+          disabled={disabled}
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value)}
+          required={campo.obrigatorio}
+          className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-xs font-semibold uppercase focus:bg-white focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600"
+        >
+          <option value="">Selecione o profissional vinculado...</option>
+          {linkedProfs.map(prof => (
+            <option key={prof.id} value={`${prof.nome} (CRF: ${prof.inscricao})`}>
+              {prof.nome} — CRF: {prof.inscricao} ({prof.tipo})
+            </option>
+          ))}
+        </select>
+        <p className="text-[10px] text-slate-400">
+          Mostra todos os profissionais e responsáveis técnicos vinculados ao estabelecimento autenticado.
+        </p>
+        {campo.ajuda && <p className="text-[10px] text-slate-400">{campo.ajuda}</p>}
+      </div>
+    );
+  }
 
   // Tratamento do tipo 'cpf'
   if (campo.tipo === 'cpf') {
