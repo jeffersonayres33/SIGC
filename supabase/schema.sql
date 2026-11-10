@@ -454,8 +454,15 @@ CREATE TABLE IF NOT EXISTS public.protocolos_processos (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     numero_protocolo VARCHAR(50) NOT NULL,
     tipo VARCHAR(100) NOT NULL,
+    assunto TEXT,
     interessado VARCHAR(255) NOT NULL,
-    documento_interessado VARCHAR(20) NOT NULL,
+    documento_interessado VARCHAR(100) NOT NULL,
+    tipo_interessado VARCHAR(30) DEFAULT 'PUBLICO',
+    vinculo_id TEXT,
+    vinculo_inscricao VARCHAR(50),
+    vinculo_detalhes TEXT,
+    contato_email VARCHAR(150),
+    contato_telefone VARCHAR(50),
     data_inscricao VARCHAR(20),
     data_abertura VARCHAR(20) NOT NULL,
     data_ultima_atualizacao VARCHAR(20),
@@ -466,15 +473,27 @@ CREATE TABLE IF NOT EXISTS public.protocolos_processos (
     parecer_relator TEXT,
     decisao_plenario TEXT,
     anexos JSONB DEFAULT '[]'::jsonb,
+    anexos_detalhados JSONB DEFAULT '[]'::jsonb,
+    conteudo_completo_formulario JSONB DEFAULT '{}'::jsonb,
     historico JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Em Análise';
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS assunto TEXT;
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS tipo_interessado VARCHAR(30) DEFAULT 'PUBLICO';
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS vinculo_id TEXT;
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS vinculo_inscricao VARCHAR(50);
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS vinculo_detalhes TEXT;
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS contato_email VARCHAR(150);
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS contato_telefone VARCHAR(50);
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS anexos_detalhados JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS conteudo_completo_formulario JSONB DEFAULT '{}'::jsonb;
 
 CREATE INDEX IF NOT EXISTS idx_protocolos_numero ON public.protocolos_processos(numero_protocolo);
 CREATE INDEX IF NOT EXISTS idx_protocolos_status ON public.protocolos_processos(status);
+CREATE INDEX IF NOT EXISTS idx_protocolos_interessado ON public.protocolos_processos(documento_interessado);
 
 -- ------------------------------------------------------------------------------
 -- 10. FORMULÁRIOS DINÂMICOS E RESPOSTAS
@@ -490,6 +509,18 @@ CREATE TABLE IF NOT EXISTS public.formularios_dinamicos (
     campos JSONB NOT NULL DEFAULT '[]'::jsonb,
     respostas_recebidas INTEGER DEFAULT 0,
     data_criacao VARCHAR(20),
+    publicar_profissional BOOLEAN DEFAULT false,
+    publicar_empresa BOOLEAN DEFAULT false,
+    publicar_site BOOLEAN DEFAULT false,
+    permite_anexos BOOLEAN DEFAULT true,
+    tipos_anexos_permitidos JSONB DEFAULT '[]'::jsonb,
+    tamanho_maximo_mb INTEGER DEFAULT 15,
+    instrucoes_anexo TEXT,
+    setor_tramitacao_id TEXT,
+    setor_tramitacao_nome VARCHAR(100),
+    status_protocolo_inicial VARCHAR(50),
+    vincular_empresas_profissional BOOLEAN DEFAULT false,
+    vincular_profissionais_empresa BOOLEAN DEFAULT false,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
@@ -499,17 +530,25 @@ CREATE TABLE IF NOT EXISTS public.respostas_formularios (
     formulario_id TEXT NOT NULL,
     formulario_titulo VARCHAR(255) NOT NULL,
     autor_nome VARCHAR(255) NOT NULL,
-    autor_documento VARCHAR(30) NOT NULL,
+    autor_documento VARCHAR(100) NOT NULL,
     protocolo_gerado VARCHAR(50) NOT NULL,
     data_envio VARCHAR(30) NOT NULL,
     respostas JSONB DEFAULT '{}'::jsonb,
     dados_campos JSONB DEFAULT '{}'::jsonb,
+    canal_origem VARCHAR(50) DEFAULT 'PROFISSIONAL',
+    autor_email VARCHAR(150),
+    autor_telefone VARCHAR(50),
+    anexos JSONB DEFAULT '[]'::jsonb,
     status VARCHAR(50) DEFAULT 'Em Análise',
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Em Análise';
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS canal_origem VARCHAR(50) DEFAULT 'PROFISSIONAL';
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS autor_email VARCHAR(150);
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS autor_telefone VARCHAR(50);
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS anexos JSONB DEFAULT '[]'::jsonb;
 
 -- ------------------------------------------------------------------------------
 -- 11. HISTÓRICO DE AUDITORIA

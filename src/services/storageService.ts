@@ -968,7 +968,7 @@ class StorageService {
   private lancamentos: LancamentoFinanceiro[] = [];
   private cobrancas: ProcessoCobranca[] = [];
   private termosFiscalizacao: TermoFiscalizacao[] = [];
-  private protocolos: ProtocoloProcesso[] = [];
+  private protocolos: ProtocoloProcesso[] = INITIAL_PROTOCOLOS;
   private formularios: FormularioDinamico[] = INITIAL_DYNAMIC_FORMS;
   private respostasForms: RespostaFormulario[] = [];
   private historicoVinculos: HistoricoVinculoProfissional[] = INITIAL_HISTORICO_VINCULOS;
@@ -1108,6 +1108,26 @@ class StorageService {
       }
 
       this.termosFiscalizacao = loadedTermos;
+
+      // Carregamento persistente de Protocolos e Processos Administrativos
+      const savedProtocolos = localStorage.getItem(STORAGE_KEYS.PROTOCOLOS);
+      if (savedProtocolos) {
+        try {
+          const parsed = JSON.parse(savedProtocolos);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            this.protocolos = parsed;
+          } else {
+            this.protocolos = [...INITIAL_PROTOCOLOS];
+          }
+        } catch (e) {
+          this.protocolos = [...INITIAL_PROTOCOLOS];
+        }
+      } else {
+        this.protocolos = [...INITIAL_PROTOCOLOS];
+        try {
+          localStorage.setItem(STORAGE_KEYS.PROTOCOLOS, JSON.stringify(this.protocolos));
+        } catch (e) {}
+      }
 
       const savedCadastrosBasicos = localStorage.getItem(STORAGE_KEYS.CADASTROS_BASICOS);
       if (savedCadastrosBasicos) {
@@ -1790,12 +1810,19 @@ class StorageService {
       try {
         const { data: protData } = await supabase.from('protocolos_processos').select('*');
         if (protData && protData.length > 0) {
-          this.protocolos = protData.map(p => ({
+          const remoteProtocolos: ProtocoloProcesso[] = protData.map(p => ({
             id: p.id,
             numeroProtocolo: p.numero_protocolo,
             tipo: p.tipo,
+            assunto: p.assunto || undefined,
             interessado: p.interessado,
             documentoInteressado: p.documento_interessado,
+            tipoInteressado: p.tipo_interessado || undefined,
+            vinculoId: p.vinculo_id || undefined,
+            vinculoInscricao: p.vinculo_inscricao || undefined,
+            vinculoDetalhes: p.vinculo_detalhes || undefined,
+            contatoEmail: p.contato_email || undefined,
+            contatoTelefone: p.contato_telefone || undefined,
             dataInscricao: p.data_inscricao || '',
             dataAbertura: p.data_abertura,
             dataUltimaAtualizacao: p.data_ultima_atualizacao || '',
@@ -1806,9 +1833,21 @@ class StorageService {
             parecerRelator: p.parecer_relator || undefined,
             decisaoPlenario: p.decisao_plenario || undefined,
             anexos: p.anexos || [],
+            anexosDetalhados: p.anexos_detalhados || [],
+            conteudoCompletoFormulario: p.conteudo_completo_formulario || undefined,
             historico: p.historico || []
           }));
+
+          // MERGE CRÍTICO: Não descartar protocolos criados localmente que ainda não foram persistidos no Supabase
+          const remoteIds = new Set(remoteProtocolos.map(rp => rp.id));
+          const localOnly = this.protocolos.filter(lp => !remoteIds.has(lp.id));
+          this.protocolos = [...localOnly, ...remoteProtocolos];
           localStorage.setItem(STORAGE_KEYS.PROTOCOLOS, JSON.stringify(this.protocolos));
+
+          // Tentar sincronizar protocolos locais pendentes com o Supabase
+          if (localOnly.length > 0 && this.isOnline) {
+            localOnly.forEach(locProt => this.syncSingleProtocoloToSupabase(locProt));
+          }
         }
       } catch (e) {
         console.warn('Erro ao carregar protocolos_processos:', e);
@@ -1818,7 +1857,7 @@ class StorageService {
       try {
         const { data: formData } = await supabase.from('formularios_dinamicos').select('*');
         if (formData && formData.length > 0) {
-          this.formularios = formData.map(f => ({
+          const remoteForms: FormularioDinamico[] = formData.map(f => ({
             id: f.id,
             titulo: f.titulo,
             categoria: f.categoria,
@@ -1835,8 +1874,18 @@ class StorageService {
             permiteAnexos: Boolean(f.permite_anexos ?? f.permiteAnexos ?? false),
             tiposAnexosPermitidos: f.tipos_anexos_permitidos || f.tiposAnexosPermitidos || ['.pdf', '.docx', '.jpg', '.png'],
             tamanhoMaximoMb: Number(f.tamanho_maximo_mb ?? f.tamanhoMaximoMb ?? 15),
-            instrucoesAnexo: f.instrucoes_anexo || f.instrucoesAnexo || ''
+            instrucoesAnexo: f.instrucoes_anexo || f.instrucoesAnexo || '',
+            setorTramitacaoId: f.setor_tramitacao_id || f.setorTramitacaoId || undefined,
+            setorTramitacaoNome: f.setor_tramitacao_nome || f.setorTramitacaoNome || undefined,
+            statusProtocoloInicial: f.status_protocolo_inicial || f.statusProtocoloInicial || undefined,
+            vincularEmpresasProfissional: Boolean(f.vincular_empresas_profissional ?? f.vincularEmpresasProfissional ?? false),
+            vincularProfissionaisEmpresa: Boolean(f.vincular_profissionais_empresa ?? f.vincularProfissionaisEmpresa ?? false)
           }));
+
+          // MERGE CRÍTICO: Não descartar formulários criados localmente
+          const remoteIds = new Set(remoteForms.map(rf => rf.id));
+          const localOnly = this.formularios.filter(lf => !remoteIds.has(lf.id));
+          this.formularios = [...localOnly, ...remoteForms];
           localStorage.setItem(STORAGE_KEYS.FORMULARIOS, JSON.stringify(this.formularios));
         }
       } catch (e) {
@@ -1847,7 +1896,7 @@ class StorageService {
       try {
         const { data: respData } = await supabase.from('respostas_formularios').select('*');
         if (respData && respData.length > 0) {
-          this.respostasForms = respData.map(r => ({
+          const remoteRespostas: RespostaFormulario[] = respData.map(r => ({
             id: r.id,
             formularioId: r.formulario_id,
             formularioTitulo: r.formulario_titulo,
@@ -1863,6 +1912,11 @@ class StorageService {
             anexos: r.anexos || [],
             status: r.status || 'Em Análise'
           }));
+
+          // MERGE CRÍTICO: Não descartar respostas salvas localmente
+          const remoteIds = new Set(remoteRespostas.map(rr => rr.id));
+          const localOnly = this.respostasForms.filter(lr => !remoteIds.has(lr.id));
+          this.respostasForms = [...localOnly, ...remoteRespostas];
           localStorage.setItem(STORAGE_KEYS.RESPOSTAS_FORMS, JSON.stringify(this.respostasForms));
         }
       } catch (e) {
@@ -5162,6 +5216,64 @@ class StorageService {
     return [...this.protocolos];
   }
 
+  public syncSingleProtocoloToSupabase(prot: any) {
+    if (!this.isOnline) return;
+
+    runBackgroundSupabase((async () => {
+      const fullPayload: Record<string, any> = {
+        id: prot.id,
+        numero_protocolo: prot.numeroProtocolo,
+        tipo: prot.tipo,
+        assunto: prot.assunto || null,
+        interessado: prot.interessado,
+        documento_interessado: prot.documentoInteressado,
+        tipo_interessado: prot.tipoInteressado || null,
+        vinculo_id: prot.vinculoId || null,
+        vinculo_inscricao: prot.vinculoInscricao || null,
+        vinculo_detalhes: prot.vinculoDetalhes || null,
+        contato_email: prot.contatoEmail || null,
+        contato_telefone: prot.contatoTelefone || null,
+        data_inscricao: prot.dataInscricao || null,
+        data_abertura: prot.dataAbertura,
+        data_ultima_atualizacao: prot.dataUltimaAtualizacao || null,
+        prazo_resposta: prot.prazoResposta || null,
+        status: prot.status || 'Em Análise',
+        setor_atual: prot.setorAtual || 'Secretaria Geral',
+        conselheiro_relator: prot.conselheiroRelator || null,
+        parecer_relator: prot.parecerRelator || null,
+        decisao_plenario: prot.decisaoPlenario || null,
+        anexos: prot.anexos || [],
+        anexos_detalhados: prot.anexosDetalhados || [],
+        conteudo_completo_formulario: prot.conteudoCompletoFormulario || {},
+        historico: prot.historico || []
+      };
+
+      const { error } = await supabase.from('protocolos_processos').upsert(fullPayload, { onConflict: 'id' });
+      if (error && (error.message.includes('column') || error.code === '42703' || error.message.includes('schema cache'))) {
+        // Fallback para colunas básicas se a tabela no Supabase ainda não tiver as novas colunas
+        const basePayload = {
+          id: prot.id,
+          numero_protocolo: prot.numeroProtocolo,
+          tipo: prot.tipo,
+          interessado: prot.interessado,
+          documento_interessado: prot.documentoInteressado,
+          data_inscricao: prot.dataInscricao || null,
+          data_abertura: prot.dataAbertura,
+          data_ultima_atualizacao: prot.dataUltimaAtualizacao || null,
+          prazo_resposta: prot.prazoResposta || null,
+          status: prot.status || 'Em Análise',
+          setor_atual: prot.setorAtual || 'Secretaria Geral',
+          conselheiro_relator: prot.conselheiroRelator || null,
+          parecer_relator: prot.parecerRelator || null,
+          decisao_plenario: prot.decisaoPlenario || null,
+          anexos: prot.anexos || [],
+          historico: prot.historico || []
+        };
+        await supabase.from('protocolos_processos').upsert(basePayload, { onConflict: 'id' });
+      }
+    })());
+  }
+
   public saveProtocolo(prot: any) {
     const idx = this.protocolos.findIndex(p => p.id === prot.id);
     if (idx >= 0) {
@@ -5172,28 +5284,11 @@ class StorageService {
     try {
       localStorage.setItem(STORAGE_KEYS.PROTOCOLOS, JSON.stringify(this.protocolos));
       if (this.isOnline) {
-        runBackgroundSupabase(
-          supabase.from('protocolos_processos').upsert({
-            id: prot.id,
-            numero_protocolo: prot.numeroProtocolo,
-            tipo: prot.tipo,
-            interessado: prot.interessado,
-            documento_interessado: prot.documentoInteressado,
-            data_inscricao: prot.dataInscricao || null,
-            data_abertura: prot.dataAbertura,
-            data_ultima_atualizacao: prot.dataUltimaAtualizacao || null,
-            prazo_resposta: prot.prazoResposta || null,
-            status: prot.status || 'Em Análise',
-            setor_atual: prot.setorAtual || 'Secretaria Geral',
-            conselheiro_relator: prot.conselheiroRelator || null,
-            parecer_relator: prot.parecerRelator || null,
-            decisao_plenario: prot.decisaoPlenario || null,
-            anexos: prot.anexos || [],
-            historico: prot.historico || []
-          }, { onConflict: 'id' })
-        );
+        this.syncSingleProtocoloToSupabase(prot);
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Erro ao salvar protocolo no localStorage:', e);
+    }
     this.notify();
   }
 
@@ -5309,6 +5404,7 @@ class StorageService {
       assunto: form?.titulo,
       interessado: resposta.autorNome,
       documentoInteressado: resposta.autorDocumento,
+      tipoInteressado: resposta.canalOrigem === 'PORTAL_EMPRESA' ? 'EMPRESA' : (resposta.canalOrigem === 'SITE_PUBLICO' || resposta.canalOrigem === 'SITE' ? 'PUBLICO' : 'PROFISSIONAL'),
       contatoEmail: resposta.autorEmail,
       contatoTelefone: resposta.autorTelefone,
       vinculoDetalhes: respostasFormatadasTexto,
