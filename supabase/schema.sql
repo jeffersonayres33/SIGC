@@ -1,5 +1,5 @@
 -- ==============================================================================
--- SISCON - SISTEMA INTEGRADO DE GESTÃO E FISCALIZAÇÃO PROFISSIONAL
+-- SIGCON - SISTEMA INTEGRADO DE GESTÃO E FISCALIZAÇÃO PROFISSIONAL
 -- SCRIPT MESTRE DE BANCO DE DADOS POSTGRESQL (SUPABASE) - 100% IDEMPOTENTE
 -- ==============================================================================
 

@@ -221,7 +221,7 @@ export const BackupRestoreConfig: React.FC = () => {
       const dateStr = new Date().toISOString().slice(0, 10);
       const timeStr = new Date().toTimeString().slice(0, 8).replace(/:/g, '-');
       a.href = url;
-      a.download = `backup_siscon_${isAllSelected ? 'completo' : 'personalizado'}_${dateStr}_${timeStr}.json`;
+      a.download = `backup_sigcon_${isAllSelected ? 'completo' : 'personalizado'}_${dateStr}_${timeStr}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -253,7 +253,7 @@ export const BackupRestoreConfig: React.FC = () => {
       const a = document.createElement('a');
       const dateStr = new Date().toISOString().slice(0, 10);
       a.href = url;
-      a.download = `backup_siscon_${isAllSelected ? 'completo' : 'personalizado'}_${dateStr}.sql`;
+      a.download = `backup_sigcon_${isAllSelected ? 'completo' : 'personalizado'}_${dateStr}.sql`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -268,6 +268,17 @@ export const BackupRestoreConfig: React.FC = () => {
     } finally {
       setIsExporting(false);
     }
+  };
+
+  // State para modal de exclusão de snapshot
+  const [snapshotToDelete, setSnapshotToDelete] = useState<{ id: string; nome: string } | null>(null);
+
+  const handleConfirmDeleteSnapshot = () => {
+    if (!snapshotToDelete) return;
+    storageService.deleteLocalSnapshot(snapshotToDelete.id);
+    refreshCounts();
+    toastService.info('Snapshot Removido', `Ponto de restauração "${snapshotToDelete.nome}" foi excluído.`);
+    setSnapshotToDelete(null);
   };
 
   // 3. Processamento do arquivo de restore
@@ -632,7 +643,7 @@ export const BackupRestoreConfig: React.FC = () => {
               Selecione o Arquivo de Backup JSON (.json)
             </h3>
             <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 mb-4">
-              Clique no botão abaixo ou arraste o arquivo gerado previamente pelo SISCON para restaurar os registros.
+              Clique no botão abaixo ou arraste o arquivo gerado previamente pelo SIGCON para restaurar os registros.
             </p>
 
             <label
@@ -860,8 +871,8 @@ export const BackupRestoreConfig: React.FC = () => {
 
                     <button
                       type="button"
-                      onClick={() => handleDeleteSnapshot(snap.id)}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                      onClick={() => setSnapshotToDelete({ id: snap.id, nome: snap.nome })}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                       title="Excluir Snapshot"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -870,6 +881,37 @@ export const BackupRestoreConfig: React.FC = () => {
                 </div>
               ))
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão de Snapshot */}
+      {snapshotToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900">Confirmar Exclusão de Snapshot</h3>
+            <p className="text-xs text-slate-600 mt-2">
+              Tem certeza que deseja excluir permanentemente o ponto de restauração <strong className="text-slate-900">{snapshotToDelete.nome}</strong>?
+            </p>
+            <div className="flex items-center justify-end space-x-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setSnapshotToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteSnapshot}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-md shadow-rose-600/20 cursor-pointer"
+              >
+                Excluir Definitivamente
+              </button>
+            </div>
           </div>
         </div>
       )}

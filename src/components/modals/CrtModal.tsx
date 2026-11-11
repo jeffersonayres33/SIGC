@@ -472,25 +472,52 @@ export const CrtModal: React.FC<CrtModalProps> = ({ empresa, onClose }) => {
               </div>
             </div>
 
-            {/* Bloco de Assinatura do Presidente */}
-            <div className="flex justify-end pt-2">
-              <div className="w-64 text-center">
-                <div className="h-10 flex items-center justify-center relative">
-                  <svg className="w-44 h-9 text-slate-900 opacity-90" viewBox="0 0 200 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M10 28 C 30 10, 50 35, 75 18 C 90 8, 105 32, 130 15 C 145 5, 160 38, 190 20" stroke="#000" strokeWidth="1.8" strokeLinecap="round" />
-                    <path d="M40 32 C 60 25, 90 28, 120 22" stroke="#000" strokeWidth="1.2" />
-                  </svg>
-                </div>
-                <div className="border-t border-black pt-1">
-                  <div className="font-bold uppercase text-[10px] text-black">
-                    {council.presidente || 'REGINALDO DA SILVA COSTA'}
+            {/* Bloco de Assinatura Oficial da Diretoria */}
+            {(() => {
+              const role = council.assinaturaCertidaoPapel || 'PRESIDENTE';
+              let nome = council.presidente || 'DRA. LUANA SANTANA DA SILVA';
+              let cargo = `PRESIDENTE DO ${council.sigla}`;
+              let url = council.assinaturaPresidenteUrl;
+
+              if (role === 'VICE_PRESIDENTE') {
+                nome = council.vicePresidente || 'DRA. VANESSA COSTA LIMA';
+                cargo = `VICE-PRESIDENTE DO ${council.sigla}`;
+                url = council.assinaturaVicePresidenteUrl;
+              } else if (role === 'SECRETARIO_GERAL') {
+                nome = council.secretarioGeral || 'DR. JORGE CAVALCANTE RAMOS';
+                cargo = `SECRETÁRIO-GERAL DO ${council.sigla}`;
+                url = council.assinaturaSecretarioGeralUrl;
+              } else if (role === 'TESOUREIRO') {
+                nome = council.tesoureiro || 'DR. VALTER SILVEIRA GOMES';
+                cargo = `TESOUREIRO DO ${council.sigla}`;
+                url = council.assinaturaTesoureiroUrl;
+              }
+
+              return (
+                <div className="flex justify-end pt-2">
+                  <div className="w-64 text-center">
+                    <div className="h-12 flex items-center justify-center relative">
+                      {url ? (
+                        <img src={url} alt="Assinatura Oficial" className="max-h-11 max-w-full object-contain" />
+                      ) : (
+                        <svg className="w-44 h-9 text-slate-900 opacity-90" viewBox="0 0 200 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M10 28 C 30 10, 50 35, 75 18 C 90 8, 105 32, 130 15 C 145 5, 160 38, 190 20" stroke="#000" strokeWidth="1.8" strokeLinecap="round" />
+                          <path d="M40 32 C 60 25, 90 28, 120 22" stroke="#000" strokeWidth="1.2" />
+                        </svg>
+                      )}
+                    </div>
+                    <div className="border-t border-black pt-1">
+                      <div className="font-bold uppercase text-[10px] text-black">
+                        {nome}
+                      </div>
+                      <div className="text-[9px] uppercase font-semibold text-slate-700">
+                        {cargo}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-[9px] uppercase font-semibold text-slate-700">
-                    PRESIDENTE DO {council.sigla}
-                  </div>
                 </div>
-              </div>
-            </div>
+              );
+            })()}
 
             {/* Aviso em Destaque */}
             <div className="bg-black text-white text-center font-black py-1.5 px-3 uppercase text-[10px] tracking-wider">

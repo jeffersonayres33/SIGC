@@ -95,7 +95,7 @@ export function exportToPDF({
   doc.setTextColor(203, 213, 225); // slate-300
   const now = new Date();
   const dateStr = now.toLocaleDateString('pt-BR') + ' às ' + now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  doc.text(`SISCON Cloud - Sistema Integrado de Gestão do Conselho | Gerado em ${dateStr}`, 30, 36);
+  doc.text(`SIGCON Cloud - Sistema Integrado de Gestão do Conselho | Gerado em ${dateStr}`, 30, 36);
 
   // Título e Subtítulo
   doc.setTextColor(15, 23, 42);
@@ -146,7 +146,7 @@ export function exportToPDF({
       doc.setFontSize(7.5);
       doc.setTextColor(148, 163, 184);
       doc.text(str, 30, pageHeight - 12);
-      doc.text('Documento gerado automaticamente pelo SISCON Cloud', pageWidth - 30, pageHeight - 12, { align: 'right' });
+      doc.text('Documento gerado automaticamente pelo SIGCON Cloud', pageWidth - 30, pageHeight - 12, { align: 'right' });
     }
   });
 

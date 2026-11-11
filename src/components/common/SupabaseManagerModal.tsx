@@ -196,7 +196,7 @@ export const SupabaseManagerModal: React.FC<SupabaseManagerModalProps> = ({ isOp
                     )}
                   </div>
                   <p className="text-xs mt-1 text-slate-600">
-                    {health?.error || 'O SISCON está autenticado e pronto para ler e persistir dados diretamente nas tabelas do PostgreSQL no Supabase.'}
+                    {health?.error || 'O SIGCON está autenticado e pronto para ler e persistir dados diretamente nas tabelas do PostgreSQL no Supabase.'}
                   </p>
                 </div>
               </div>
@@ -353,7 +353,7 @@ const TABLES_LIST = [
 ];
 
 const SQL_SCHEMA_SNIPPET = `-- ==============================================================================
--- SISCON - SISTEMA INTEGRADO DE GESTÃO E FISCALIZAÇÃO PROFISSIONAL
+-- SIGCON - SISTEMA INTEGRADO DE GESTÃO E FISCALIZAÇÃO PROFISSIONAL
 -- SCRIPT DE CRIAÇÃO DO BANCO DE DADOS POSTGRESQL (SUPABASE)
 -- Execute no SQL Editor do seu projeto Supabase
 -- ==============================================================================

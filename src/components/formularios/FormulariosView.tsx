@@ -29,7 +29,8 @@ import {
   CheckSquare,
   Network,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  AlertTriangle
 } from 'lucide-react';
 import { FormularioDinamico, FormFieldConfig, RespostaFormulario } from '../../types';
 import { storageService } from '../../services/storageService';
@@ -54,6 +55,8 @@ export const FormulariosView: React.FC = () => {
   const [formSetorTramitacaoId, setFormSetorTramitacaoId] = useState<string>('');
   const [formSetorTramitacaoNome, setFormSetorTramitacaoNome] = useState<string>('');
   const [formStatusProtocoloInicial, setFormStatusProtocoloInicial] = useState<string>('');
+  const [formPrazoDiasConclusao, setFormPrazoDiasConclusao] = useState<number>(15);
+  const [formPermiteAnonimo, setFormPermiteAnonimo] = useState<boolean>(false);
   
   // Publicação em canais
   const [publicarProfissional, setPublicarProfissional] = useState(true);
@@ -105,6 +108,8 @@ export const FormulariosView: React.FC = () => {
     setFormSetorTramitacaoId(defaultSetor?.id || '');
     setFormSetorTramitacaoNome(defaultSetor?.nome || 'SECRETARIA REGULATORIA');
     setFormStatusProtocoloInicial(defaultStatus?.nome || 'EM ANÁLISE PROTOCOLO');
+    setFormPrazoDiasConclusao(15);
+    setFormPermiteAnonimo(false);
     setPublicarProfissional(true);
     setPublicarEmpresa(false);
     setPublicarSite(false);
@@ -148,6 +153,8 @@ export const FormulariosView: React.FC = () => {
     setFormSetorTramitacaoId(form.setorTramitacaoId || setoresProtocolo[0]?.id || '');
     setFormSetorTramitacaoNome(form.setorTramitacaoNome || form.categoria || setoresProtocolo[0]?.nome || 'SECRETARIA REGULATORIA');
     setFormStatusProtocoloInicial(form.statusProtocoloInicial || statusProtocoloList[0]?.nome || 'EM ANÁLISE PROTOCOLO');
+    setFormPrazoDiasConclusao(form.prazoDiasConclusao || 15);
+    setFormPermiteAnonimo(Boolean(form.permiteAnonimo));
     setPublicarProfissional(Boolean(form.publicarProfissional));
     setPublicarEmpresa(Boolean(form.publicarEmpresa));
     setPublicarSite(Boolean(form.publicarSite));
@@ -217,6 +224,8 @@ export const FormulariosView: React.FC = () => {
       setorTramitacaoId: formSetorTramitacaoId,
       setorTramitacaoNome: formSetorTramitacaoNome,
       statusProtocoloInicial: formStatusProtocoloInicial,
+      prazoDiasConclusao: formPrazoDiasConclusao,
+      permiteAnonimo: formPermiteAnonimo,
       ativo: true,
       dataCriacao: editingFormId && selectedForm ? selectedForm.dataCriacao : new Date().toLocaleDateString('pt-BR'),
       versao: editingFormId ? currentVersao + 1 : 1,
@@ -243,14 +252,18 @@ export const FormulariosView: React.FC = () => {
     );
   };
 
-  const handleDeleteForm = (formId: string) => {
-    if (confirm('Tem certeza que deseja excluir permanentemente este modelo de formulário?')) {
-      storageService.deleteFormulario(formId);
-      const updated = storageService.getFormularios();
-      setFormularios(updated);
+  const [formToDelete, setFormToDelete] = useState<FormularioDinamico | null>(null);
+
+  const handleConfirmDeleteForm = () => {
+    if (!formToDelete) return;
+    storageService.deleteFormulario(formToDelete.id);
+    const updated = storageService.getFormularios();
+    setFormularios(updated);
+    if (selectedForm?.id === formToDelete.id) {
       setSelectedForm(updated[0] || null);
-      toastService.delete('Formulário Excluído', 'O modelo de formulário dinâmico foi removido com sucesso.');
     }
+    toastService.delete('Formulário Excluído', `O modelo "${formToDelete.titulo}" foi removido com sucesso.`);
+    setFormToDelete(null);
   };
 
   const handleSimularUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -272,7 +285,7 @@ export const FormulariosView: React.FC = () => {
     e.preventDefault();
     if (!selectedForm) return;
 
-    const protocolo = `PROT-${new Date().getFullYear()}/${Math.floor(1000 + Math.random() * 9000)}`;
+    const protocolo = storageService.generateNextProtocoloNumero();
 
     let autorNome = 'SOLICITANTE ANÔNIMO / CIDADÃO';
     let autorDoc = '000.000.000-00';
@@ -429,8 +442,8 @@ export const FormulariosView: React.FC = () => {
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => handleDeleteForm(form.id)}
-                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-white rounded transition-colors"
+                          onClick={() => setFormToDelete(form)}
+                          className="p-1 text-slate-400 hover:text-rose-600 hover:bg-white rounded transition-colors cursor-pointer"
                           title="Excluir Formulário"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -943,12 +956,12 @@ export const FormulariosView: React.FC = () => {
                   </span>
                 </div>
                 <p className="text-[11px] text-purple-800">
-                  Estes 2 campos são configurados apenas nesta tela de gestão. Ao submeter a resposta, o sistema criará o protocolo encaminhado diretamente para o setor e status definidos abaixo:
+                  Estes parâmetros configuram o direcionamento automático do protocolo gerado ao submeter o formulário:
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">
-                      Setor de Tramitação (Cadastros Básicos • Protocolo e Processo) *
+                      Setor de Tramitação (Cadastros Básicos) *
                     </label>
                     <select
                       value={formSetorTramitacaoId}
@@ -972,7 +985,7 @@ export const FormulariosView: React.FC = () => {
 
                   <div>
                     <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">
-                      Status do Protocolo Inicial (Cadastros Básicos • Protocolo e Processo) *
+                      Status do Protocolo Inicial *
                     </label>
                     <select
                       value={formStatusProtocoloInicial}
@@ -988,6 +1001,34 @@ export const FormulariosView: React.FC = () => {
                       )}
                     </select>
                   </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">
+                      Prazo Limite para Conclusão (Dias) *
+                    </label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={180}
+                      value={formPrazoDiasConclusao}
+                      onChange={(e) => setFormPrazoDiasConclusao(Math.max(1, parseInt(e.target.value, 10) || 15))}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-950 font-bold font-mono text-xs focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-purple-200/60">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formPermiteAnonimo}
+                      onChange={(e) => setFormPermiteAnonimo(e.target.checked)}
+                      className="rounded text-purple-600 w-4 h-4"
+                    />
+                    <span className="font-bold text-purple-900 text-xs uppercase">
+                      Permitir Envio Anônimo (Ideal para denúncias, ouvidoria e reclamações)
+                    </span>
+                  </label>
                 </div>
               </div>
 
@@ -1243,6 +1284,37 @@ export const FormulariosView: React.FC = () => {
                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
               >
                 Fechar Detalhes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmação de Exclusão de Modelo de Formulário */}
+      {formToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+              <AlertTriangle className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-slate-900">Excluir Modelo de Formulário</h3>
+            <p className="text-xs text-slate-600 mt-2">
+              Tem certeza que deseja excluir permanentemente o modelo <strong className="text-slate-900">{formToDelete.titulo}</strong>? Esta ação não poderá ser desfeita.
+            </p>
+            <div className="flex items-center justify-end space-x-3 mt-6">
+              <button
+                type="button"
+                onClick={() => setFormToDelete(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDeleteForm}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-md shadow-rose-600/20 cursor-pointer"
+              >
+                Excluir Definitivamente
               </button>
             </div>
           </div>

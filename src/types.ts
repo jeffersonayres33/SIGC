@@ -603,6 +603,12 @@ export interface FormularioDinamico {
   setorTramitacaoId?: string;
   setorTramitacaoNome?: string;
   statusProtocoloInicial?: string;
+  prazoDiasConclusao?: number; // Prazo limite em dias para conclusão do processo
+  permiteAnonimo?: boolean; // Habilitar envio de denúncia/manifestação anônima
+
+  // Vínculos ao Peticionamento
+  vincularEmpresasProfissional?: boolean;
+  vincularProfissionaisEmpresa?: boolean;
 
   // Configuração de Anexos
   permiteAnexos?: boolean;

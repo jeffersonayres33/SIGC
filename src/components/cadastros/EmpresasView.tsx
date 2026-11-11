@@ -378,7 +378,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
 
     exportToPDF({
       title: 'Relatório Oficial de Empresas e Estabelecimentos (PJ)',
-      subtitle: `${empresas.length} empresas filtradas | Emitido pelo SISCON Cloud`,
+      subtitle: `${empresas.length} empresas filtradas | Emitido pelo SIGCON Cloud`,
       filename: `empresas_filtradas_${Date.now()}`,
       headers,
       rows,

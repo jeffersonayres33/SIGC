@@ -29,11 +29,14 @@ import {
   Database,
   ExternalLink,
   Scale,
-  ShieldAlert
+  ShieldAlert,
+  Upload,
+  PenTool,
+  Calendar,
+  Layers
 } from 'lucide-react';
 import { storageService, CouncilConfig, DEFAULT_COUNCIL_CONFIG } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
-import { SupabaseManagerModal } from '../common/SupabaseManagerModal';
 import { AssistenciaFarmaceuticaConfig } from './AssistenciaFarmaceuticaConfig';
 import { ImpedimentosArtConfig } from './ImpedimentosArtConfig';
 import { BackupRestoreConfig } from './BackupRestoreConfig';
@@ -60,8 +63,6 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
   const [config, setConfig] = useState<CouncilConfig>(storageService.getCouncilConfig());
   const [hasChanges, setHasChanges] = useState(false);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
-  const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
-  const supabaseStatus = storageService.getSupabaseStatus();
 
   useEffect(() => {
     const unsub = storageService.subscribe(() => {
@@ -71,6 +72,21 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
       unsub();
     };
   }, []);
+
+  const handleSignatureFileChange = (field: keyof CouncilConfig, file: File | null) => {
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toastService.warning('Arquivo Muito Grande', 'Selecione uma imagem de assinatura de até 2MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      handleChange(field, result);
+      toastService.success('Assinatura Anexada', 'Imagem da assinatura digital gravada.');
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleChange = (field: keyof CouncilConfig, value: any) => {
     let finalVal = value;
@@ -694,7 +710,7 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 pt-1 text-xs">
             {/* Toggle Validação CPF */}
             <div className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-2 shadow-xs flex flex-col justify-between">
               <div>
@@ -802,6 +818,32 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
                 <span>{config.autoPreencherEnderecoCEP ? 'VIACEP AUTO (ATIVO)' : 'PREENCHIMENTO MANUAL'}</span>
               </button>
             </div>
+
+            {/* Limite de Tamanho de Anexos (MB) */}
+            <div className="bg-white border border-amber-300 rounded-xl p-3.5 space-y-2 shadow-xs flex flex-col justify-between bg-amber-50/30">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-amber-950 uppercase text-[11px]">LIMITE DE ANEXOS (MB)</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200 font-mono">
+                    {config.tamanhoMaximoAnexoMb || 10} MB
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 leading-tight">
+                  Define o tamanho máximo permitido por arquivo anexado nos processos administrativos e formulários.
+                </p>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-slate-700 uppercase mb-1">Tamanho Máximo (MB):</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={config.tamanhoMaximoAnexoMb || 10}
+                  onChange={(e) => handleChange('tamanhoMaximoAnexoMb', Math.max(1, parseInt(e.target.value, 10) || 10))}
+                  className="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-amber-950 font-bold font-mono text-sm focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -898,6 +940,61 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
                 placeholder="AM"
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all font-mono font-bold uppercase"
               />
+            </div>
+          </div>
+        </div>
+
+        {/* Bloco: Numeração Cronológica de Protocolos */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-xs space-y-4">
+          <div className="flex items-center space-x-2.5 border-b border-slate-100 pb-3">
+            <Hash className="w-5 h-5 text-indigo-600" />
+            <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+              2. CONFIGURAÇÃO DA NUMERAÇÃO CRONOLÓGICA DE PROTOCOLOS
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1 uppercase">
+                Próximo Número do Protocolo (Sequencial)
+              </label>
+              <input
+                type="number"
+                min={1}
+                value={config.protocoloProximoNumero ?? 1}
+                onChange={(e) => handleChange('protocoloProximoNumero', Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all font-mono font-bold"
+              />
+              <span className="text-[10px] text-slate-400 mt-1 block">
+                Exemplo do próximo protocolo: <strong className="text-indigo-700 font-mono">{(config.protocoloProximoNumero ?? 1)}/{new Date().getFullYear()}</strong>
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-slate-700 font-semibold mb-1 uppercase">
+                Ano Vigente da Numeração
+              </label>
+              <div className="px-3.5 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-slate-800 font-mono font-bold">
+                {config.protocoloUltimoAno || new Date().getFullYear()}
+              </div>
+              <span className="text-[10px] text-slate-400 mt-1 block">
+                Ano do último registro gerado no sistema
+              </span>
+            </div>
+
+            <div className="flex items-center pt-5">
+              <label className="flex items-center space-x-2.5 cursor-pointer bg-indigo-50/60 hover:bg-indigo-50 p-3 rounded-xl border border-indigo-200/80 transition-all w-full">
+                <input
+                  type="checkbox"
+                  checked={config.protocoloReiniciaAno ?? true}
+                  onChange={(e) => handleChange('protocoloReiniciaAno', e.target.checked)}
+                  className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                />
+                <div>
+                  <span className="font-bold text-slate-900 block text-xs">Zerar numeração ao iniciar novo ano</span>
+                  <span className="text-[10px] text-slate-500 block">No início do novo ano a sequência reinicia em 1/ANO</span>
+                </div>
+              </label>
             </div>
           </div>
         </div>
@@ -1045,52 +1142,185 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
           </div>
 
           {/* Diretoria Executiva */}
-          <div className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-xs space-y-4">
-            <div className="flex items-center space-x-2.5 border-b border-slate-100 pb-3">
-              <ShieldCheck className="w-5 h-5 text-emerald-600" />
-              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-                6. DIRETORIA & ASSINATURAS OFICIAIS
-              </h2>
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-xs space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2.5">
+                <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                  6. DIRETORIA & ASSINATURAS OFICIAIS
+                </h2>
+              </div>
+              <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg">
+                Arquivamento de Assinaturas Digitais
+              </span>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-700 font-semibold mb-1 uppercase">Nome do(a) Presidente do Conselho</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
+              {/* Presidente */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <label className="block text-slate-800 font-bold uppercase">Nome do(a) Presidente do Conselho</label>
                 <input
                   type="text"
-                  value={config.presidente}
+                  value={config.presidente || ''}
                   onChange={(e) => handleChange('presidente', e.target.value)}
                   placeholder="DRA. LUANA SANTANA DA SILVA"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all font-medium uppercase"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all font-medium uppercase"
                 />
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Assinatura Digital (PNG/JPG):</label>
+                  <div className="flex items-center space-x-3">
+                    {config.assinaturaPresidenteUrl ? (
+                      <div className="h-12 w-28 bg-white border border-slate-300 rounded-lg p-1 flex items-center justify-center">
+                        <img src={config.assinaturaPresidenteUrl} alt="Assinatura Presidente" className="max-h-full max-w-full object-contain" />
+                      </div>
+                    ) : (
+                      <div className="h-12 w-28 bg-slate-100 border border-dashed border-slate-300 rounded-lg flex items-center justify-center text-[10px] text-slate-400 font-semibold">
+                        Sem Assinatura
+                      </div>
+                    )}
+                    <label className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold border border-slate-300 rounded-xl text-[11px] cursor-pointer inline-flex items-center space-x-1.5 shadow-2xs">
+                      <Upload className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Anexar Assinatura</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => handleSignatureFileChange('assinaturaPresidenteUrl', e.target.files?.[0] || null)} />
+                    </label>
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-slate-700 font-semibold mb-1 uppercase">Nome do(a) Diretor(a) Tesoureiro(a)</label>
+              {/* Vice-Presidente */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <label className="block text-slate-800 font-bold uppercase">Nome do(a) Vice-Presidente do Conselho</label>
                 <input
                   type="text"
-                  value={config.tesoureiro}
-                  onChange={(e) => handleChange('tesoureiro', e.target.value)}
-                  placeholder="DR. VALTER SILVEIRA GOMES"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all font-medium uppercase"
+                  value={config.vicePresidente || ''}
+                  onChange={(e) => handleChange('vicePresidente', e.target.value)}
+                  placeholder="DRA. VANESSA COSTA LIMA"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all font-medium uppercase"
                 />
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Assinatura Digital (PNG/JPG):</label>
+                  <div className="flex items-center space-x-3">
+                    {config.assinaturaVicePresidenteUrl ? (
+                      <div className="h-12 w-28 bg-white border border-slate-300 rounded-lg p-1 flex items-center justify-center">
+                        <img src={config.assinaturaVicePresidenteUrl} alt="Assinatura Vice-Presidente" className="max-h-full max-w-full object-contain" />
+                      </div>
+                    ) : (
+                      <div className="h-12 w-28 bg-slate-100 border border-dashed border-slate-300 rounded-lg flex items-center justify-center text-[10px] text-slate-400 font-semibold">
+                        Sem Assinatura
+                      </div>
+                    )}
+                    <label className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold border border-slate-300 rounded-xl text-[11px] cursor-pointer inline-flex items-center space-x-1.5 shadow-2xs">
+                      <Upload className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Anexar Assinatura</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => handleSignatureFileChange('assinaturaVicePresidenteUrl', e.target.files?.[0] || null)} />
+                    </label>
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-slate-700 font-semibold mb-1 uppercase">Nome do(a) Secretário(a)-Geral</label>
+              {/* Tesoureiro */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <label className="block text-slate-800 font-bold uppercase">Nome do(a) Diretor(a) Tesoureiro(a)</label>
+                <input
+                  type="text"
+                  value={config.tesoureiro || ''}
+                  onChange={(e) => handleChange('tesoureiro', e.target.value)}
+                  placeholder="DR. VALTER SILVEIRA GOMES"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all font-medium uppercase"
+                />
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Assinatura Digital (PNG/JPG):</label>
+                  <div className="flex items-center space-x-3">
+                    {config.assinaturaTesoureiroUrl ? (
+                      <div className="h-12 w-28 bg-white border border-slate-300 rounded-lg p-1 flex items-center justify-center">
+                        <img src={config.assinaturaTesoureiroUrl} alt="Assinatura Tesoureiro" className="max-h-full max-w-full object-contain" />
+                      </div>
+                    ) : (
+                      <div className="h-12 w-28 bg-slate-100 border border-dashed border-slate-300 rounded-lg flex items-center justify-center text-[10px] text-slate-400 font-semibold">
+                        Sem Assinatura
+                      </div>
+                    )}
+                    <label className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold border border-slate-300 rounded-xl text-[11px] cursor-pointer inline-flex items-center space-x-1.5 shadow-2xs">
+                      <Upload className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Anexar Assinatura</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => handleSignatureFileChange('assinaturaTesoureiroUrl', e.target.files?.[0] || null)} />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Secretário-Geral */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <label className="block text-slate-800 font-bold uppercase">Nome do(a) Secretário(a)-Geral</label>
                 <input
                   type="text"
                   value={config.secretarioGeral || ''}
                   onChange={(e) => handleChange('secretarioGeral', e.target.value)}
                   placeholder="DR. JORGE CAVALCANTE RAMOS"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all font-medium uppercase"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all font-medium uppercase"
                 />
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Assinatura Digital (PNG/JPG):</label>
+                  <div className="flex items-center space-x-3">
+                    {config.assinaturaSecretarioGeralUrl ? (
+                      <div className="h-12 w-28 bg-white border border-slate-300 rounded-lg p-1 flex items-center justify-center">
+                        <img src={config.assinaturaSecretarioGeralUrl} alt="Assinatura Secretário-Geral" className="max-h-full max-w-full object-contain" />
+                      </div>
+                    ) : (
+                      <div className="h-12 w-28 bg-slate-100 border border-dashed border-slate-300 rounded-lg flex items-center justify-center text-[10px] text-slate-400 font-semibold">
+                        Sem Assinatura
+                      </div>
+                    )}
+                    <label className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold border border-slate-300 rounded-xl text-[11px] cursor-pointer inline-flex items-center space-x-1.5 shadow-2xs">
+                      <Upload className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Anexar Assinatura</span>
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => handleSignatureFileChange('assinaturaSecretarioGeralUrl', e.target.files?.[0] || null)} />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Seleção da Assinatura Oficial para Certidão de Regularidade */}
+            <div className="pt-4 border-t border-slate-200">
+              <label className="block text-slate-900 font-bold mb-2 uppercase text-xs">
+                Assinatura Oficial Escolhida para Sair na Certidão de Regularidade / CRT:
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                {[
+                  { key: 'PRESIDENTE', label: 'Presidente', nome: config.presidente || 'DRA. LUANA SANTANA DA SILVA' },
+                  { key: 'VICE_PRESIDENTE', label: 'Vice-Presidente', nome: config.vicePresidente || 'DRA. VANESSA COSTA LIMA' },
+                  { key: 'SECRETARIO_GERAL', label: 'Secretário-Geral', nome: config.secretarioGeral || 'DR. JORGE CAVALCANTE RAMOS' },
+                  { key: 'TESOUREIRO', label: 'Tesoureiro', nome: config.tesoureiro || 'DR. VALTER SILVEIRA GOMES' }
+                ].map((item) => (
+                  <label
+                    key={item.key}
+                    className={`flex items-start space-x-2.5 p-3 rounded-xl border cursor-pointer transition-all ${
+                      (config.assinaturaCertidaoPapel || 'PRESIDENTE') === item.key
+                        ? 'bg-blue-50 border-blue-300 text-blue-900 font-bold ring-2 ring-blue-500/20'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="assinaturaCertidaoPapel"
+                      value={item.key}
+                      checked={(config.assinaturaCertidaoPapel || 'PRESIDENTE') === item.key}
+                      onChange={() => handleChange('assinaturaCertidaoPapel', item.key)}
+                      className="mt-0.5 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <div>
+                      <span className="block font-bold uppercase">{item.label}</span>
+                      <span className="text-[10px] text-slate-500 block truncate">{item.nome}</span>
+                    </div>
+                  </label>
+                ))}
               </div>
             </div>
           </div>
         </div>
 
-        {/* Bloco 6: Parâmetros Financeiros & Anuidade */}
+        {/* Bloco 7: Parâmetros Financeiros & Anuidade */}
         <div className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-xs space-y-4">
           <div className="flex items-center space-x-2.5 border-b border-slate-100 pb-3">
             <Coins className="w-5 h-5 text-amber-600" />
@@ -1154,61 +1384,6 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
           </div>
         </div>
 
-        {/* Bloco 8: Banco de Dados Supabase (PostgreSQL) */}
-        <div className="bg-linear-to-br from-slate-900 via-teal-950 to-slate-900 border border-emerald-500/30 text-white rounded-2xl p-5 md:p-6 shadow-md space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-white/10 pb-4">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-400/30 flex items-center justify-center">
-                <Database className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-sm font-bold uppercase tracking-wider flex items-center space-x-2">
-                  <span>8. BANCO DE DADOS SUPABASE (POSTGRESQL CLOUD)</span>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-300 border border-emerald-400/30 text-[10px] font-bold">
-                    PRODUÇÃO
-                  </span>
-                </h2>
-                <p className="text-[11px] text-slate-300">
-                  Gerenciamento da infraestrutura PostgreSQL, DDL de tabelas, sincronização e migração de registros do conselho.
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setIsSupabaseModalOpen(true)}
-              className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl font-bold text-xs shadow-md transition-all cursor-pointer"
-            >
-              <Database className="w-4 h-4" />
-              <span>Gerenciar Banco & Migração</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-1">
-              <div className="text-slate-400 font-semibold uppercase text-[10px]">Status da Conexão</div>
-              <div className="flex items-center gap-2 font-bold text-emerald-400">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span>{supabaseStatus.connected ? 'Conectado ao Cluster Supabase' : 'Aguardando Sincronização'}</span>
-              </div>
-            </div>
-
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-1">
-              <div className="text-slate-400 font-semibold uppercase text-[10px]">Endpoint do Projeto</div>
-              <div className="font-mono text-slate-200 truncate" title="https://ajcdrtsdozbjvsdyhdly.supabase.co">
-                https://ajcdrtsdozbjvsdyhdly.supabase.co
-              </div>
-            </div>
-
-            <div className="bg-white/5 border border-white/10 rounded-xl p-3 space-y-1">
-              <div className="text-slate-400 font-semibold uppercase text-[10px]">Tabelas Integradas</div>
-              <div className="font-semibold text-slate-200">
-                10 Tabelas com RLS & Triggers
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Action Button Footer */}
         <div className="flex justify-end space-x-3 pt-2">
           <button
@@ -1228,11 +1403,6 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
         </div>
       </form>
       )}
-
-      <SupabaseManagerModal
-        isOpen={isSupabaseModalOpen}
-        onClose={() => setIsSupabaseModalOpen(false)}
-      />
     </div>
   );
 };

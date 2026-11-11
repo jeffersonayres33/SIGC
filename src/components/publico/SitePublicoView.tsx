@@ -111,18 +111,26 @@ export const SitePublicoView: React.FC<SitePublicoViewProps> = ({
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const novos: { nome: string; tamanho: number; tipo: string }[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const f = files[i];
-      novos.push({
-        nome: f.name,
-        tamanho: Math.round(f.size / 1024), // KB
-        tipo: f.type || 'documento'
-      });
-    }
+    Array.from(files).forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64Url = reader.result as string;
+        const tamanhoKB = Math.round(file.size / 1024);
+        setAnexosSelecionados(prev => [
+          ...prev,
+          {
+            nome: file.name,
+            tamanho: tamanhoKB,
+            tipo: file.type || 'documento',
+            url: base64Url
+          } as any
+        ]);
+      };
+      reader.readAsDataURL(file);
+    });
 
-    setAnexosSelecionados(prev => [...prev, ...novos]);
     toastService.info('Anexo Adicionado', `${files.length} arquivo(s) selecionado(s) com sucesso.`);
+    e.target.value = '';
   };
 
   const handleRemoveAnexo = (index: number) => {
@@ -161,7 +169,7 @@ export const SitePublicoView: React.FC<SitePublicoViewProps> = ({
 
     setIsSubmitting(true);
 
-    const protNum = `PUB-${new Date().getFullYear()}/${Math.floor(10000 + Math.random() * 90000)}`;
+    const protNum = storageService.generateNextProtocoloNumero();
 
     const novaResposta: RespostaFormulario = {
       id: `resp-pub-${Date.now()}`,

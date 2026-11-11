@@ -32,6 +32,8 @@ ALTER TABLE public.formularios_dinamicos
     ADD COLUMN IF NOT EXISTS setor_tramitacao_id TEXT,
     ADD COLUMN IF NOT EXISTS setor_tramitacao_nome VARCHAR(100),
     ADD COLUMN IF NOT EXISTS status_protocolo_inicial VARCHAR(50),
+    ADD COLUMN IF NOT EXISTS prazo_dias_conclusao INTEGER DEFAULT 15,
+    ADD COLUMN IF NOT EXISTS permite_anonimo BOOLEAN DEFAULT false,
     ADD COLUMN IF NOT EXISTS vincular_empresas_profissional BOOLEAN DEFAULT false,
     ADD COLUMN IF NOT EXISTS vincular_profissionais_empresa BOOLEAN DEFAULT false;
 

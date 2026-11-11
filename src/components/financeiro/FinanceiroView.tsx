@@ -103,7 +103,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({ onOpenBoletoPix 
     const councilConfig = storageService.getCouncilConfig();
     exportToPDF({
       title: 'Relatório Financeiro de Títulos e Anuidades',
-      subtitle: `${lancamentos.length} títulos filtrados | SISCON Cloud`,
+      subtitle: `${lancamentos.length} títulos filtrados | SIGCON Cloud`,
       filename: `financeiro_titulos_${Date.now()}`,
       headers,
       rows,

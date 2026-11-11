@@ -503,7 +503,7 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
 
     exportToPDF({
       title: 'Relatório Oficial de Profissionais Cadastrados (PF)',
-      subtitle: `${result.total} profissionais filtrados | Emitido pelo SISCON Cloud`,
+      subtitle: `${result.total} profissionais filtrados | Emitido pelo SIGCON Cloud`,
       filename: `profissionais_filtrados_${Date.now()}`,
       headers,
       rows,

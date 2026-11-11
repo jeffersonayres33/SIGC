@@ -83,8 +83,22 @@ export interface CouncilConfig {
   email: string;
   site: string;
   presidente: string;
+  vicePresidente?: string;
   tesoureiro: string;
   secretarioGeral: string;
+  
+  // Assinaturas Oficiais da Diretoria (URLs ou Base64)
+  assinaturaPresidenteUrl?: string;
+  assinaturaVicePresidenteUrl?: string;
+  assinaturaTesoureiroUrl?: string;
+  assinaturaSecretarioGeralUrl?: string;
+  assinaturaCertidaoPapel?: 'PRESIDENTE' | 'VICE_PRESIDENTE' | 'SECRETARIO_GERAL' | 'TESOUREIRO';
+
+  // Configurações de Numeração Sequencial de Protocolo
+  protocoloProximoNumero?: number;
+  protocoloUltimoAno?: number;
+  protocoloReiniciaAno?: boolean;
+
   resolucaoAnuidade: string;
   valorAnuidadePF: number;
   valorAnuidadePJ: number;
@@ -121,6 +135,7 @@ export interface CouncilConfig {
   validarCNPJ: boolean;
   validarCEP: boolean;
   autoPreencherEnderecoCEP: boolean;
+  tamanhoMaximoAnexoMb?: number;
 
   // Situações que impedem o profissional de assumir Responsabilidade Técnica (ART)
   situacoesImpedidasRT: string[];
@@ -223,8 +238,18 @@ export const DEFAULT_COUNCIL_CONFIG: CouncilConfig = {
   email: 'CONTATO@CRF-AM.ORG.BR',
   site: 'HTTPS://CRF-AM.ORG.BR',
   presidente: 'DRA. LUANA SANTANA DA SILVA',
+  vicePresidente: 'DRA. VANESSA COSTA LIMA',
   tesoureiro: 'DR. VALTER SILVEIRA GOMES',
   secretarioGeral: 'DR. JORGE CAVALCANTE RAMOS',
+  assinaturaPresidenteUrl: '',
+  assinaturaVicePresidenteUrl: '',
+  assinaturaTesoureiroUrl: '',
+  assinaturaSecretarioGeralUrl: '',
+  assinaturaCertidaoPapel: 'PRESIDENTE',
+
+  protocoloProximoNumero: 1,
+  protocoloUltimoAno: new Date().getFullYear(),
+  protocoloReiniciaAno: true,
   resolucaoAnuidade: 'RESOLUÇÃO CFF Nº 750/2025',
   valorAnuidadePF: 620.00,
   valorAnuidadePJ: 1240.00,
@@ -258,6 +283,7 @@ export const DEFAULT_COUNCIL_CONFIG: CouncilConfig = {
   validarCNPJ: true,
   validarCEP: true,
   autoPreencherEnderecoCEP: true,
+  tamanhoMaximoAnexoMb: 10,
 
   situacoesImpedidasRT: [
     'Suspenso',
@@ -1878,6 +1904,8 @@ class StorageService {
             setorTramitacaoId: f.setor_tramitacao_id || f.setorTramitacaoId || undefined,
             setorTramitacaoNome: f.setor_tramitacao_nome || f.setorTramitacaoNome || undefined,
             statusProtocoloInicial: f.status_protocolo_inicial || f.statusProtocoloInicial || undefined,
+            prazoDiasConclusao: Number(f.prazo_dias_conclusao ?? f.prazoDiasConclusao ?? 15),
+            permiteAnonimo: Boolean(f.permite_anonimo ?? f.permiteAnonimo ?? false),
             vincularEmpresasProfissional: Boolean(f.vincular_empresas_profissional ?? f.vincularEmpresasProfissional ?? false),
             vincularProfissionaisEmpresa: Boolean(f.vincular_profissionais_empresa ?? f.vincularProfissionaisEmpresa ?? false)
           }));
@@ -1991,8 +2019,17 @@ class StorageService {
             email: cfgData.email || this.councilConfig.email,
             site: cfgData.site || this.councilConfig.site,
             presidente: cfgData.presidente || this.councilConfig.presidente,
+            vicePresidente: cfgData.vice_presidente || this.councilConfig.vicePresidente,
             tesoureiro: cfgData.tesoureiro || this.councilConfig.tesoureiro,
             secretarioGeral: cfgData.secretario_geral || this.councilConfig.secretarioGeral,
+            assinaturaPresidenteUrl: cfgData.assinatura_presidente_url ?? this.councilConfig.assinaturaPresidenteUrl,
+            assinaturaVicePresidenteUrl: cfgData.assinatura_vice_presidente_url ?? this.councilConfig.assinaturaVicePresidenteUrl,
+            assinaturaTesoureiroUrl: cfgData.assinatura_tesoureiro_url ?? this.councilConfig.assinaturaTesoureiroUrl,
+            assinaturaSecretarioGeralUrl: cfgData.assinatura_secretario_geral_url ?? this.councilConfig.assinaturaSecretarioGeralUrl,
+            assinaturaCertidaoPapel: cfgData.assinatura_certidao_papel || this.councilConfig.assinaturaCertidaoPapel || 'PRESIDENTE',
+            protocoloProximoNumero: cfgData.protocolo_proximo_numero ?? this.councilConfig.protocoloProximoNumero ?? 1,
+            protocoloUltimoAno: cfgData.protocolo_ultimo_ano ?? this.councilConfig.protocoloUltimoAno ?? new Date().getFullYear(),
+            protocoloReiniciaAno: cfgData.protocolo_reinicia_ano ?? this.councilConfig.protocoloReiniciaAno ?? true,
             resolucaoAnuidade: cfgData.resolucao_anuidade || this.councilConfig.resolucaoAnuidade,
             valorAnuidadePF: Number(cfgData.valor_anuidade_pf) || this.councilConfig.valorAnuidadePF,
             valorAnuidadePJ: Number(cfgData.valor_anuidade_pj) || this.councilConfig.valorAnuidadePJ,
@@ -2510,6 +2547,27 @@ class StorageService {
     return { ...this.councilConfig };
   }
 
+  public generateNextProtocoloNumero(): string {
+    const cfg = this.getCouncilConfig();
+    const currentYear = new Date().getFullYear();
+    let num = cfg.protocoloProximoNumero ?? 1;
+    let lastYear = cfg.protocoloUltimoAno ?? currentYear;
+
+    if (cfg.protocoloReiniciaAno && currentYear !== lastYear) {
+      num = 1;
+      lastYear = currentYear;
+    }
+
+    const formatted = `${num}/${currentYear}`;
+
+    this.updateCouncilConfig({
+      protocoloProximoNumero: num + 1,
+      protocoloUltimoAno: currentYear
+    });
+
+    return formatted;
+  }
+
   public updateCouncilConfig(cfg: Partial<CouncilConfig>) {
     this.councilConfig = { ...this.councilConfig, ...cfg };
     try {
@@ -2531,8 +2589,17 @@ class StorageService {
             email: this.councilConfig.email,
             site: this.councilConfig.site,
             presidente: this.councilConfig.presidente,
+            vice_presidente: this.councilConfig.vicePresidente,
             tesoureiro: this.councilConfig.tesoureiro,
             secretario_geral: this.councilConfig.secretarioGeral,
+            assinatura_presidente_url: this.councilConfig.assinaturaPresidenteUrl,
+            assinatura_vice_presidente_url: this.councilConfig.assinaturaVicePresidenteUrl,
+            assinatura_tesoureiro_url: this.councilConfig.assinaturaTesoureiroUrl,
+            assinatura_secretario_geral_url: this.councilConfig.assinaturaSecretarioGeralUrl,
+            assinatura_certidao_papel: this.councilConfig.assinaturaCertidaoPapel,
+            protocolo_proximo_numero: this.councilConfig.protocoloProximoNumero,
+            protocolo_ultimo_ano: this.councilConfig.protocoloUltimoAno,
+            protocolo_reinicia_ano: this.councilConfig.protocoloReiniciaAno,
             resolucao_anuidade: this.councilConfig.resolucaoAnuidade,
             valor_anuidade_pf: this.councilConfig.valorAnuidadePF,
             valor_anuidade_pj: this.councilConfig.valorAnuidadePJ,
@@ -5320,8 +5387,8 @@ class StorageService {
     try {
       localStorage.setItem(STORAGE_KEYS.FORMULARIOS, JSON.stringify(this.formularios));
       if (this.isOnline) {
-        runBackgroundSupabase(
-          supabase.from('formularios_dinamicos').upsert({
+        runBackgroundSupabase((async () => {
+          const fullPayload = {
             id: form.id,
             titulo: form.titulo,
             categoria: form.categoria,
@@ -5338,9 +5405,34 @@ class StorageService {
             permite_anexos: Boolean(form.permiteAnexos),
             tipos_anexos_permitidos: form.tiposAnexosPermitidos || ['.pdf', '.docx', '.jpg', '.png'],
             tamanho_maximo_mb: form.tamanhoMaximoMb || 15,
-            instrucoes_anexo: form.instrucoesAnexo || null
-          }, { onConflict: 'id' })
-        );
+            instrucoes_anexo: form.instrucoesAnexo || null,
+            setor_tramitacao_id: form.setorTramitacaoId || null,
+            setor_tramitacao_nome: form.setorTramitacaoNome || null,
+            status_protocolo_inicial: form.statusProtocoloInicial || null,
+            prazo_dias_conclusao: form.prazoDiasConclusao || 15,
+            permite_anonimo: Boolean(form.permiteAnonimo),
+            vincular_empresas_profissional: Boolean(form.vincularEmpresasProfissional),
+            vincular_profissionais_empresa: Boolean(form.vincularProfissionaisEmpresa)
+          };
+
+          const { error } = await supabase.from('formularios_dinamicos').upsert(fullPayload, { onConflict: 'id' });
+          if (error && (error.message.includes('column') || error.code === '42703' || error.message.includes('schema cache'))) {
+            // Fallback caso colunas ainda não existam no Supabase
+            const basePayload = {
+              id: form.id,
+              titulo: form.titulo,
+              categoria: form.categoria,
+              descricao: form.descricao || null,
+              publico_alvo: form.publicoAlvo || 'Ambos',
+              versao: String(form.versao || '1.0'),
+              ativo: form.ativo ?? true,
+              campos: form.campos || [],
+              respostas_recebidas: form.respostasRecebidas || 0,
+              data_criacao: form.dataCriacao || null
+            };
+            await supabase.from('formularios_dinamicos').upsert(basePayload, { onConflict: 'id' });
+          }
+        })());
       }
     } catch (e) {
       console.warn('Erro ao salvar formulário no storage:', e);
@@ -5387,15 +5479,49 @@ class StorageService {
       this.saveFormulario(form);
     }
 
-    // Formata o texto completo das respostas preenchidas pelo usuário
+    // Formata o texto completo das respostas preenchidas pelo usuário (tratando objetos de endereço e JSON)
+    const formatValorCampo = (val: any): string => {
+      if (val === null || val === undefined) return '';
+      if (typeof val === 'object') {
+        if ('logradouro' in val || 'rua' in val || 'cep' in val || 'bairro' in val || 'cidade' in val) {
+          const parts: string[] = [];
+          const rua = val.logradouro || val.rua || '';
+          const num = val.numero ? `Nº ${val.numero}` : 'S/N';
+          if (rua) parts.push(`${rua}, ${num}`);
+          else if (val.numero) parts.push(`Nº ${val.numero}`);
+
+          if (val.complemento) parts.push(`Compl: ${val.complemento}`);
+          if (val.bairro) parts.push(`Bairro: ${val.bairro}`);
+          if (val.cidade || val.uf) {
+            const cidUf = [val.cidade, val.uf].filter(Boolean).join(' - ');
+            parts.push(cidUf);
+          }
+          if (val.cep) parts.push(`CEP: ${val.cep}`);
+          return parts.filter(Boolean).join(', ');
+        }
+        if (Array.isArray(val)) {
+          return val.map(item => formatValorCampo(item)).join(', ');
+        }
+        return JSON.stringify(val);
+      }
+      return String(val);
+    };
+
     const respostasFormatadasTexto = Object.entries(resposta.dadosCampos || resposta.respostas || {})
       .map(([k, v]) => {
         const campo = form?.campos?.find(c => c.id === k);
         const label = campo?.label || k;
-        const valStr = typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v);
-        return `${label}: ${valStr}`;
+        return `${label}: ${formatValorCampo(v)}`;
       })
       .join('\n');
+
+    // Cálculo do prazo em dias definido no formulário dinâmico
+    const diasPrazo = form?.prazoDiasConclusao || 15;
+    const prazoCalculado = new Date(Date.now() + diasPrazo * 86400000).toLocaleDateString('pt-BR');
+
+    // Definição de setor de tramitação e status inicial configurados no modelo do formulário
+    const setorDestino = form?.setorTramitacaoNome || (form?.categoria === 'Ouvidoria & Denúncias' || form?.titulo?.toUpperCase().includes('DENÚNCIA') ? 'JURIDICO' : 'Secretaria Geral / Protocolo');
+    const statusInicial = form?.statusProtocoloInicial || (resposta.status && resposta.status !== 'Em Análise' ? resposta.status : 'PENDENTE');
 
     const novoProt: any = {
       id: `prot-${Date.now()}`,
@@ -5412,16 +5538,16 @@ class StorageService {
       dataInscricao: new Date().toLocaleDateString('pt-BR'),
       dataAbertura: new Date().toLocaleDateString('pt-BR'),
       dataUltimaAtualizacao: new Date().toLocaleDateString('pt-BR'),
-      prazoResposta: new Date(Date.now() + 15 * 86400000).toLocaleDateString('pt-BR'),
-      status: form?.statusProtocoloInicial || resposta.status || 'Em Análise',
-      setorAtual: form?.setorTramitacaoNome || 'Secretaria Geral / Protocolo',
+      prazoResposta: prazoCalculado,
+      status: statusInicial,
+      setorAtual: setorDestino,
       anexos: resposta.anexos && resposta.anexos.length > 0 ? resposta.anexos.map(a => a.nome) : ['Requerimento_Submetido.pdf'],
       anexosDetalhados: resposta.anexos || [],
       historico: [
         {
           data: new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR').slice(0, 5),
           setor: resposta.canalOrigem === 'SITE' || resposta.canalOrigem === 'SITE_PUBLICO' ? 'Portal Público Oficial' : 'Portal do Inscrito',
-          descricao: `Abertura automática de protocolo via formulário dinâmico: "${form?.titulo}". Encaminhado para o setor ${form?.setorTramitacaoNome || 'Secretaria Geral / Protocolo'}.${resposta.anexos && resposta.anexos.length > 0 ? ` Contém ${resposta.anexos.length} arquivo(s) anexado(s).` : ''}`,
+          descricao: `Abertura automática de protocolo via formulário dinâmico: "${form?.titulo}". Encaminhado para o setor ${setorDestino} com status inicial ${statusInicial}.${resposta.anexos && resposta.anexos.length > 0 ? ` Contém ${resposta.anexos.length} arquivo(s) anexado(s).` : ''}`,
           responsavel: resposta.autorNome
         }
       ]
