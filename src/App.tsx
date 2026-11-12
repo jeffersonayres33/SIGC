@@ -34,6 +34,7 @@ import { AccessDeniedView } from './components/common/AccessDeniedView';
 
 export default function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => storageService.getCurrentAuthUser());
+  const [showLoginScreen, setShowLoginScreen] = useState(false);
   const [activeSection, setActiveSection] = useState<MainSection>(() => getDefaultAllowedSection(storageService.getCurrentAuthUser(), storageService.getCurrentAuthUser()?.role));
   const [configTab, setConfigTab] = useState<ConfigTab>('geral');
   const [cadastrosBasicosGroup, setCadastrosBasicosGroup] = useState<'PROFISSIONAIS' | 'EMPRESAS' | 'PROTOCOLOS' | 'FUNCIONARIOS' | 'ADMIN'>('PROFISSIONAIS');
@@ -112,17 +113,32 @@ export default function App() {
     }
   };
 
-  // Se não houver usuário autenticado, renderiza a tela de login unificada
+  // Se não houver usuário autenticado, a tela principal é o Site Oficial Público
   if (!authUser) {
+    if (showLoginScreen) {
+      return (
+        <div className="min-h-screen bg-slate-900 font-sans selection:bg-blue-600 selection:text-white">
+          <LoginView
+            councilConfig={councilConfig}
+            onBackToSite={() => setShowLoginScreen(false)}
+            onLoginSuccess={(user) => {
+              setAuthUser(user);
+              setCurrentUserRole(user.role);
+              setActiveSection(getDefaultAllowedSection(user, user.role));
+              setShowLoginScreen(false);
+            }}
+          />
+          <ToastContainer />
+        </div>
+      );
+    }
+
     return (
-      <div className="min-h-screen bg-slate-900 font-sans selection:bg-blue-600 selection:text-white">
-        <LoginView
+      <div className="min-h-screen bg-slate-50 font-sans selection:bg-blue-600 selection:text-white">
+        <SitePublicoView
           councilConfig={councilConfig}
-          onLoginSuccess={(user) => {
-            setAuthUser(user);
-            setCurrentUserRole(user.role);
-            setActiveSection(getDefaultAllowedSection(user, user.role));
-          }}
+          isStandalonePublic={true}
+          onOpenLogin={() => setShowLoginScreen(true)}
         />
         <ToastContainer />
       </div>
@@ -161,6 +177,7 @@ export default function App() {
           onLogout={() => {
             storageService.logout();
             setAuthUser(null);
+            setShowLoginScreen(false);
             toastService.info('Sessão Encerrada', 'Você saiu do sistema com segurança.');
           }}
           onSwitchProfile={(targetTipo) => {

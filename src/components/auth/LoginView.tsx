@@ -21,7 +21,8 @@ import {
   Briefcase,
   Layers,
   ArrowRightLeft,
-  ShieldCheck
+  ShieldCheck,
+  ArrowLeft
 } from 'lucide-react';
 import { storageService, CouncilConfig } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
@@ -32,9 +33,10 @@ import { SIGCON_LOGO } from '../../constants/assets';
 interface LoginViewProps {
   onLoginSuccess: (user: AuthUser) => void;
   councilConfig: CouncilConfig;
+  onBackToSite?: () => void;
 }
 
-export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, councilConfig }) => {
+export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, councilConfig, onBackToSite }) => {
   const [docType, setDocType] = useState<'CPF' | 'CNPJ'>('CPF');
   const [documento, setDocumento] = useState('');
   const [senha, setSenha] = useState('');
@@ -336,6 +338,20 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, councilCon
         <div className="absolute -top-40 -left-40 w-96 h-96 bg-blue-100/60 rounded-full blur-3xl" />
         <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-slate-200/50 rounded-full blur-3xl" />
       </div>
+
+      {/* Botão de retorno ao Site Oficial */}
+      {onBackToSite && (
+        <div className="relative z-10 w-full max-w-md mb-3 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={onBackToSite}
+            className="inline-flex items-center space-x-2 text-xs font-bold text-slate-700 hover:text-blue-700 bg-white hover:bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-xl transition-all cursor-pointer shadow-xs"
+          >
+            <ArrowLeft className="w-3.5 h-3.5 text-blue-600" />
+            <span>Voltar ao Portal Público do Conselho</span>
+          </button>
+        </div>
+      )}
 
       {/* Main Login Card */}
       <div className="relative z-10 w-full max-w-md bg-white rounded-3xl shadow-xl border border-slate-200/80 overflow-hidden animate-in fade-in zoom-in-95 duration-200">

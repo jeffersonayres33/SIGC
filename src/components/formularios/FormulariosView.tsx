@@ -283,9 +283,8 @@ export const FormulariosView: React.FC = () => {
 
   const handleSimularEnvio = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedForm) return;
-
-    const protocolo = storageService.generateNextProtocoloNumero();
+    const canalOrigem = selectedForm.publicarSite ? 'SITE_PUBLICO' : (selectedForm.publicarEmpresa ? 'PORTAL_EMPRESA' : 'PORTAL_PROFISSIONAL');
+    const protocolo = storageService.generateNextProtocoloNumero(canalOrigem === 'SITE_PUBLICO' ? 'SITE' : 'INSCRITO');
 
     let autorNome = 'SOLICITANTE ANÔNIMO / CIDADÃO';
     let autorDoc = '000.000.000-00';

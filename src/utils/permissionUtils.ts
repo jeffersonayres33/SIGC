@@ -251,6 +251,39 @@ export function hasModulePermission(
     return true;
   }
 
+  // Permissões do Portal do Inscrito para Funcionários e Colaboradores
+  const hasPortalGeral = userPerms.includes('portal_inscrito');
+  const hasPortalPF = userPerms.includes('portal_inscrito_pf') || userPerms.includes('profissionais');
+  const hasPortalPJ = userPerms.includes('portal_inscrito_pj') || userPerms.includes('empresas');
+
+  if (hasPortalGeral) {
+    if (rawSection.startsWith('portal_') || targetModule === 'portal_inscrito') {
+      return true;
+    }
+  }
+
+  if (hasPortalPF) {
+    if (
+      rawSection === 'portal_inscrito' ||
+      rawSection === 'portal_inscrito_pf' ||
+      rawSection.startsWith('portal_profissional_') ||
+      targetModule === 'portal_inscrito_pf'
+    ) {
+      return true;
+    }
+  }
+
+  if (hasPortalPJ) {
+    if (
+      rawSection === 'portal_inscrito' ||
+      rawSection === 'portal_inscrito_pj' ||
+      rawSection.startsWith('portal_empresa_') ||
+      targetModule === 'portal_inscrito_pj'
+    ) {
+      return true;
+    }
+  }
+
   if (targetModule === 'funcionarios') {
     return userPerms.includes('funcionarios') || userPerms.includes('configuracoes');
   }

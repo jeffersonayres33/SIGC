@@ -33,7 +33,8 @@ import {
   Upload,
   PenTool,
   Calendar,
-  Layers
+  Layers,
+  Trash2
 } from 'lucide-react';
 import { storageService, CouncilConfig, DEFAULT_COUNCIL_CONFIG } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
@@ -42,6 +43,7 @@ import { ImpedimentosArtConfig } from './ImpedimentosArtConfig';
 import { BackupRestoreConfig } from './BackupRestoreConfig';
 import { FiscalizacaoEletronicaConfig } from './FiscalizacaoEletronicaConfig';
 import { InscritosConfig } from './InscritosConfig';
+import { CapturaAssinaturaModal } from './CapturaAssinaturaModal';
 import { 
   maskCNPJ, 
   validateCNPJ, 
@@ -63,6 +65,30 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
   const [config, setConfig] = useState<CouncilConfig>(storageService.getCouncilConfig());
   const [hasChanges, setHasChanges] = useState(false);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
+
+  // Modal para captura de assinatura touchscreen / mouse
+  const [captureModalState, setCaptureModalState] = useState<{
+    isOpen: boolean;
+    field: keyof CouncilConfig;
+    cargo: string;
+    nome: string;
+    existingSignatureUrl?: string;
+  }>({
+    isOpen: false,
+    field: 'assinaturaPresidenteUrl',
+    cargo: '',
+    nome: ''
+  });
+
+  const handleOpenCaptureModal = (field: keyof CouncilConfig, cargo: string, nome: string, existingSignatureUrl?: string) => {
+    setCaptureModalState({
+      isOpen: true,
+      field,
+      cargo,
+      nome: nome || '',
+      existingSignatureUrl
+    });
+  };
 
   useEffect(() => {
     const unsub = storageService.subscribe(() => {
@@ -90,7 +116,17 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
 
   const handleChange = (field: keyof CouncilConfig, value: any) => {
     let finalVal = value;
-    if (typeof value === 'string' && field !== 'email' && field !== 'site' && field !== 'chavePix' && field !== 'sufixoInscricaoProfissional' && field !== 'sufixoInscricaoEmpresa') {
+    if (
+      typeof value === 'string' &&
+      field !== 'email' &&
+      field !== 'site' &&
+      field !== 'chavePix' &&
+      field !== 'sufixoInscricaoProfissional' &&
+      field !== 'sufixoInscricaoEmpresa' &&
+      !field.startsWith('assinatura') &&
+      !field.startsWith('protocoloPrefixo') &&
+      !field.startsWith('protocoloSufixo')
+    ) {
       finalVal = value.toUpperCase();
     }
     setConfig(prev => ({ ...prev, [field]: finalVal }));
@@ -945,7 +981,7 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
         </div>
 
         {/* Bloco: Numeração Cronológica de Protocolos */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-xs space-y-4">
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-xs space-y-5">
           <div className="flex items-center space-x-2.5 border-b border-slate-100 pb-3">
             <Hash className="w-5 h-5 text-indigo-600" />
             <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
@@ -966,7 +1002,7 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all font-mono font-bold"
               />
               <span className="text-[10px] text-slate-400 mt-1 block">
-                Exemplo do próximo protocolo: <strong className="text-indigo-700 font-mono">{(config.protocoloProximoNumero ?? 1)}/{new Date().getFullYear()}</strong>
+                Próximo número base da sequência: <strong className="text-indigo-700 font-mono">{(config.protocoloProximoNumero ?? 1)}</strong>
               </span>
             </div>
 
@@ -982,7 +1018,7 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
               </span>
             </div>
 
-            <div className="flex items-center pt-5">
+            <div className="flex items-center pt-2 md:pt-4">
               <label className="flex items-center space-x-2.5 cursor-pointer bg-indigo-50/60 hover:bg-indigo-50 p-3 rounded-xl border border-indigo-200/80 transition-all w-full">
                 <input
                   type="checkbox"
@@ -995,6 +1031,119 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
                   <span className="text-[10px] text-slate-500 block">No início do novo ano a sequência reinicia em 1/ANO</span>
                 </div>
               </label>
+            </div>
+          </div>
+
+          {/* Formatação, Prefixos e Sufixos por Canal / Origem de Protocolo */}
+          <div className="pt-3 border-t border-slate-100 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <span className="text-xs font-bold text-slate-900 uppercase">
+                Prefixos e Sufixos por Tipo / Canal de Protocolo
+              </span>
+              <span className="text-[10px] font-semibold text-slate-400 uppercase">
+                Formato Gerado: [PREFIXO]NÚMERO/ANO[SUFIXO]
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+              {/* 1. Protocolo Interno */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-800 uppercase text-[11px]">1. Protocolo Interno (Autuação)</span>
+                  <span className="text-[9px] bg-slate-200 text-slate-700 font-mono px-1.5 py-0.5 rounded font-bold">ADMIN</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-bold uppercase mb-0.5">Prefixo</label>
+                    <input
+                      type="text"
+                      value={config.protocoloPrefixoInterno || ''}
+                      onChange={(e) => handleChange('protocoloPrefixoInterno', e.target.value.toUpperCase())}
+                      placeholder="Ex: PROT-"
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono text-xs uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-500 font-bold uppercase mb-0.5">Sufixo</label>
+                    <input
+                      type="text"
+                      value={config.protocoloSufixoInterno || ''}
+                      onChange={(e) => handleChange('protocoloSufixoInterno', e.target.value.toUpperCase())}
+                      placeholder="Vazio"
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-300 rounded-lg text-slate-900 font-mono text-xs uppercase"
+                    />
+                  </div>
+                </div>
+                <div className="text-[10px] text-slate-600 bg-white p-2 rounded-lg border border-slate-200 font-mono">
+                  Exemplo: <strong className="text-indigo-700">{(config.protocoloPrefixoInterno || '')}{(config.protocoloProximoNumero || 1)}/{new Date().getFullYear()}{(config.protocoloSufixoInterno || '')}</strong>
+                </div>
+              </div>
+
+              {/* 2. Portal do Inscrito */}
+              <div className="p-3.5 bg-blue-50/50 border border-blue-200 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-blue-900 uppercase text-[11px]">2. Portal do Inscrito (PF / PJ)</span>
+                  <span className="text-[9px] bg-blue-100 text-blue-800 font-mono px-1.5 py-0.5 rounded font-bold">LOGADO</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-blue-700 font-bold uppercase mb-0.5">Prefixo</label>
+                    <input
+                      type="text"
+                      value={config.protocoloPrefixoInscrito || ''}
+                      onChange={(e) => handleChange('protocoloPrefixoInscrito', e.target.value.toUpperCase())}
+                      placeholder="Vazio"
+                      className="w-full px-2.5 py-1.5 bg-white border border-blue-300 rounded-lg text-slate-900 font-mono text-xs uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-blue-700 font-bold uppercase mb-0.5">Sufixo</label>
+                    <input
+                      type="text"
+                      value={config.protocoloSufixoInscrito !== undefined ? config.protocoloSufixoInscrito : '-INS'}
+                      onChange={(e) => handleChange('protocoloSufixoInscrito', e.target.value.toUpperCase())}
+                      placeholder="Ex: -INS"
+                      className="w-full px-2.5 py-1.5 bg-white border border-blue-300 rounded-lg text-slate-900 font-mono text-xs uppercase"
+                    />
+                  </div>
+                </div>
+                <div className="text-[10px] text-slate-600 bg-white p-2 rounded-lg border border-blue-200 font-mono">
+                  Exemplo: <strong className="text-blue-700">{(config.protocoloPrefixoInscrito || '')}{(config.protocoloProximoNumero || 1)}/{new Date().getFullYear()}{(config.protocoloSufixoInscrito !== undefined ? config.protocoloSufixoInscrito : '-INS')}</strong>
+                </div>
+              </div>
+
+              {/* 3. Site Público */}
+              <div className="p-3.5 bg-emerald-50/50 border border-emerald-200 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-emerald-900 uppercase text-[11px]">3. Site Público (Externo)</span>
+                  <span className="text-[9px] bg-emerald-100 text-emerald-800 font-mono px-1.5 py-0.5 rounded font-bold">SEM LOGIN</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-emerald-700 font-bold uppercase mb-0.5">Prefixo</label>
+                    <input
+                      type="text"
+                      value={config.protocoloPrefixoSite || ''}
+                      onChange={(e) => handleChange('protocoloPrefixoSite', e.target.value.toUpperCase())}
+                      placeholder="Vazio"
+                      className="w-full px-2.5 py-1.5 bg-white border border-emerald-300 rounded-lg text-slate-900 font-mono text-xs uppercase"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-emerald-700 font-bold uppercase mb-0.5">Sufixo</label>
+                    <input
+                      type="text"
+                      value={config.protocoloSufixoSite !== undefined ? config.protocoloSufixoSite : '-SITE'}
+                      onChange={(e) => handleChange('protocoloSufixoSite', e.target.value.toUpperCase())}
+                      placeholder="Ex: -SITE"
+                      className="w-full px-2.5 py-1.5 bg-white border border-emerald-300 rounded-lg text-slate-900 font-mono text-xs uppercase"
+                    />
+                  </div>
+                </div>
+                <div className="text-[10px] text-slate-600 bg-white p-2 rounded-lg border border-emerald-200 font-mono">
+                  Exemplo: <strong className="text-emerald-700">{(config.protocoloPrefixoSite || '')}{(config.protocoloProximoNumero || 1)}/{new Date().getFullYear()}{(config.protocoloSufixoSite !== undefined ? config.protocoloSufixoSite : '-SITE')}</strong>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1167,10 +1316,14 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
                   className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all font-medium uppercase"
                 />
                 <div>
-                  <label className="block text-slate-600 font-semibold mb-1">Assinatura Digital (PNG/JPG):</label>
-                  <div className="flex items-center space-x-3">
+                  <label className="block text-slate-600 font-semibold mb-1">Assinatura Digital (PNG/JPG ou Desenho):</label>
+                  <div className="flex flex-wrap items-center gap-2.5">
                     {config.assinaturaPresidenteUrl ? (
-                      <div className="h-12 w-28 bg-white border border-slate-300 rounded-lg p-1 flex items-center justify-center">
+                      <div 
+                        onClick={() => handleOpenCaptureModal('assinaturaPresidenteUrl', 'PRESIDENTE', config.presidente || 'PRESIDENTE DO CONSELHO', config.assinaturaPresidenteUrl)}
+                        title="Clique para redesenhar ou editar"
+                        className="h-12 w-28 bg-white border border-slate-300 rounded-lg p-1 flex items-center justify-center cursor-pointer hover:border-blue-500 hover:ring-2 hover:ring-blue-200 transition-all shadow-2xs"
+                      >
                         <img src={config.assinaturaPresidenteUrl} alt="Assinatura Presidente" className="max-h-full max-w-full object-contain" />
                       </div>
                     ) : (
@@ -1178,11 +1331,29 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
                         Sem Assinatura
                       </div>
                     )}
-                    <label className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold border border-slate-300 rounded-xl text-[11px] cursor-pointer inline-flex items-center space-x-1.5 shadow-2xs">
-                      <Upload className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Anexar Assinatura</span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCaptureModal('assinaturaPresidenteUrl', 'PRESIDENTE', config.presidente || 'PRESIDENTE DO CONSELHO', config.assinaturaPresidenteUrl)}
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold border border-blue-200 rounded-xl text-[11px] inline-flex items-center space-x-1.5 shadow-2xs transition-colors"
+                    >
+                      <PenTool className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Desenhar / Capturar</span>
+                    </button>
+                    <label className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold border border-slate-300 rounded-xl text-[11px] cursor-pointer inline-flex items-center space-x-1.5 shadow-2xs transition-colors">
+                      <Upload className="w-3.5 h-3.5 text-slate-600" />
+                      <span>Anexar Arquivo</span>
                       <input type="file" accept="image/*" className="hidden" onChange={(e) => handleSignatureFileChange('assinaturaPresidenteUrl', e.target.files?.[0] || null)} />
                     </label>
+                    {config.assinaturaPresidenteUrl && (
+                      <button
+                        type="button"
+                        onClick={() => handleChange('assinaturaPresidenteUrl', '')}
+                        title="Remover assinatura"
+                        className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg border border-transparent hover:border-rose-200 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1198,10 +1369,14 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
                   className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all font-medium uppercase"
                 />
                 <div>
-                  <label className="block text-slate-600 font-semibold mb-1">Assinatura Digital (PNG/JPG):</label>
-                  <div className="flex items-center space-x-3">
+                  <label className="block text-slate-600 font-semibold mb-1">Assinatura Digital (PNG/JPG ou Desenho):</label>
+                  <div className="flex flex-wrap items-center gap-2.5">
                     {config.assinaturaVicePresidenteUrl ? (
-                      <div className="h-12 w-28 bg-white border border-slate-300 rounded-lg p-1 flex items-center justify-center">
+                      <div 
+                        onClick={() => handleOpenCaptureModal('assinaturaVicePresidenteUrl', 'VICE-PRESIDENTE', config.vicePresidente || 'VICE-PRESIDENTE DO CONSELHO', config.assinaturaVicePresidenteUrl)}
+                        title="Clique para redesenhar ou editar"
+                        className="h-12 w-28 bg-white border border-slate-300 rounded-lg p-1 flex items-center justify-center cursor-pointer hover:border-blue-500 hover:ring-2 hover:ring-blue-200 transition-all shadow-2xs"
+                      >
                         <img src={config.assinaturaVicePresidenteUrl} alt="Assinatura Vice-Presidente" className="max-h-full max-w-full object-contain" />
                       </div>
                     ) : (
@@ -1209,11 +1384,29 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
                         Sem Assinatura
                       </div>
                     )}
-                    <label className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold border border-slate-300 rounded-xl text-[11px] cursor-pointer inline-flex items-center space-x-1.5 shadow-2xs">
-                      <Upload className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Anexar Assinatura</span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCaptureModal('assinaturaVicePresidenteUrl', 'VICE-PRESIDENTE', config.vicePresidente || 'VICE-PRESIDENTE DO CONSELHO', config.assinaturaVicePresidenteUrl)}
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold border border-blue-200 rounded-xl text-[11px] inline-flex items-center space-x-1.5 shadow-2xs transition-colors"
+                    >
+                      <PenTool className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Desenhar / Capturar</span>
+                    </button>
+                    <label className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold border border-slate-300 rounded-xl text-[11px] cursor-pointer inline-flex items-center space-x-1.5 shadow-2xs transition-colors">
+                      <Upload className="w-3.5 h-3.5 text-slate-600" />
+                      <span>Anexar Arquivo</span>
                       <input type="file" accept="image/*" className="hidden" onChange={(e) => handleSignatureFileChange('assinaturaVicePresidenteUrl', e.target.files?.[0] || null)} />
                     </label>
+                    {config.assinaturaVicePresidenteUrl && (
+                      <button
+                        type="button"
+                        onClick={() => handleChange('assinaturaVicePresidenteUrl', '')}
+                        title="Remover assinatura"
+                        className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg border border-transparent hover:border-rose-200 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1229,10 +1422,14 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
                   className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all font-medium uppercase"
                 />
                 <div>
-                  <label className="block text-slate-600 font-semibold mb-1">Assinatura Digital (PNG/JPG):</label>
-                  <div className="flex items-center space-x-3">
+                  <label className="block text-slate-600 font-semibold mb-1">Assinatura Digital (PNG/JPG ou Desenho):</label>
+                  <div className="flex flex-wrap items-center gap-2.5">
                     {config.assinaturaTesoureiroUrl ? (
-                      <div className="h-12 w-28 bg-white border border-slate-300 rounded-lg p-1 flex items-center justify-center">
+                      <div 
+                        onClick={() => handleOpenCaptureModal('assinaturaTesoureiroUrl', 'DIRETOR(A) TESOUREIRO(A)', config.tesoureiro || 'DIRETOR(A) TESOUREIRO(A)', config.assinaturaTesoureiroUrl)}
+                        title="Clique para redesenhar ou editar"
+                        className="h-12 w-28 bg-white border border-slate-300 rounded-lg p-1 flex items-center justify-center cursor-pointer hover:border-blue-500 hover:ring-2 hover:ring-blue-200 transition-all shadow-2xs"
+                      >
                         <img src={config.assinaturaTesoureiroUrl} alt="Assinatura Tesoureiro" className="max-h-full max-w-full object-contain" />
                       </div>
                     ) : (
@@ -1240,11 +1437,29 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
                         Sem Assinatura
                       </div>
                     )}
-                    <label className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold border border-slate-300 rounded-xl text-[11px] cursor-pointer inline-flex items-center space-x-1.5 shadow-2xs">
-                      <Upload className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Anexar Assinatura</span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCaptureModal('assinaturaTesoureiroUrl', 'DIRETOR(A) TESOUREIRO(A)', config.tesoureiro || 'DIRETOR(A) TESOUREIRO(A)', config.assinaturaTesoureiroUrl)}
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold border border-blue-200 rounded-xl text-[11px] inline-flex items-center space-x-1.5 shadow-2xs transition-colors"
+                    >
+                      <PenTool className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Desenhar / Capturar</span>
+                    </button>
+                    <label className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold border border-slate-300 rounded-xl text-[11px] cursor-pointer inline-flex items-center space-x-1.5 shadow-2xs transition-colors">
+                      <Upload className="w-3.5 h-3.5 text-slate-600" />
+                      <span>Anexar Arquivo</span>
                       <input type="file" accept="image/*" className="hidden" onChange={(e) => handleSignatureFileChange('assinaturaTesoureiroUrl', e.target.files?.[0] || null)} />
                     </label>
+                    {config.assinaturaTesoureiroUrl && (
+                      <button
+                        type="button"
+                        onClick={() => handleChange('assinaturaTesoureiroUrl', '')}
+                        title="Remover assinatura"
+                        className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg border border-transparent hover:border-rose-200 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1260,10 +1475,14 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
                   className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all font-medium uppercase"
                 />
                 <div>
-                  <label className="block text-slate-600 font-semibold mb-1">Assinatura Digital (PNG/JPG):</label>
-                  <div className="flex items-center space-x-3">
+                  <label className="block text-slate-600 font-semibold mb-1">Assinatura Digital (PNG/JPG ou Desenho):</label>
+                  <div className="flex flex-wrap items-center gap-2.5">
                     {config.assinaturaSecretarioGeralUrl ? (
-                      <div className="h-12 w-28 bg-white border border-slate-300 rounded-lg p-1 flex items-center justify-center">
+                      <div 
+                        onClick={() => handleOpenCaptureModal('assinaturaSecretarioGeralUrl', 'SECRETÁRIO(A)-GERAL', config.secretarioGeral || 'SECRETÁRIO(A)-GERAL', config.assinaturaSecretarioGeralUrl)}
+                        title="Clique para redesenhar ou editar"
+                        className="h-12 w-28 bg-white border border-slate-300 rounded-lg p-1 flex items-center justify-center cursor-pointer hover:border-blue-500 hover:ring-2 hover:ring-blue-200 transition-all shadow-2xs"
+                      >
                         <img src={config.assinaturaSecretarioGeralUrl} alt="Assinatura Secretário-Geral" className="max-h-full max-w-full object-contain" />
                       </div>
                     ) : (
@@ -1271,11 +1490,29 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
                         Sem Assinatura
                       </div>
                     )}
-                    <label className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold border border-slate-300 rounded-xl text-[11px] cursor-pointer inline-flex items-center space-x-1.5 shadow-2xs">
-                      <Upload className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Anexar Assinatura</span>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCaptureModal('assinaturaSecretarioGeralUrl', 'SECRETÁRIO(A)-GERAL', config.secretarioGeral || 'SECRETÁRIO(A)-GERAL', config.assinaturaSecretarioGeralUrl)}
+                      className="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold border border-blue-200 rounded-xl text-[11px] inline-flex items-center space-x-1.5 shadow-2xs transition-colors"
+                    >
+                      <PenTool className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Desenhar / Capturar</span>
+                    </button>
+                    <label className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 font-bold border border-slate-300 rounded-xl text-[11px] cursor-pointer inline-flex items-center space-x-1.5 shadow-2xs transition-colors">
+                      <Upload className="w-3.5 h-3.5 text-slate-600" />
+                      <span>Anexar Arquivo</span>
                       <input type="file" accept="image/*" className="hidden" onChange={(e) => handleSignatureFileChange('assinaturaSecretarioGeralUrl', e.target.files?.[0] || null)} />
                     </label>
+                    {config.assinaturaSecretarioGeralUrl && (
+                      <button
+                        type="button"
+                        onClick={() => handleChange('assinaturaSecretarioGeralUrl', '')}
+                        title="Remover assinatura"
+                        className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg border border-transparent hover:border-rose-200 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1403,6 +1640,23 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
         </div>
       </form>
       )}
+
+      {/* Modal de Captura / Desenho de Assinatura */}
+      {captureModalState.isOpen && (
+        <CapturaAssinaturaModal
+          isOpen={captureModalState.isOpen}
+          cargo={captureModalState.cargo}
+          nome={captureModalState.nome}
+          existingSignatureUrl={captureModalState.existingSignatureUrl}
+          onSave={(dataUrl) => {
+            handleChange(captureModalState.field, dataUrl);
+            setCaptureModalState(prev => ({ ...prev, isOpen: false }));
+            toastService.success('Assinatura Gravada', 'A assinatura foi capturada e salva com sucesso.');
+          }}
+          onClose={() => setCaptureModalState(prev => ({ ...prev, isOpen: false }))}
+        />
+      )}
     </div>
   );
 };
+

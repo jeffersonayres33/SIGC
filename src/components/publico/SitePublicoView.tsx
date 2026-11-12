@@ -18,7 +18,9 @@ import {
   X,
   ExternalLink,
   Clock,
-  Sparkles
+  Sparkles,
+  Lock,
+  LogIn
 } from 'lucide-react';
 import { FormularioDinamico, FormFieldConfig, RespostaFormulario } from '../../types';
 import { storageService, CouncilConfig } from '../../services/storageService';
@@ -29,6 +31,8 @@ import { DynamicFieldRenderer } from '../formularios/DynamicFieldRenderer';
 interface SitePublicoViewProps {
   councilConfig?: CouncilConfig;
   onNavigateToPortal?: (view: string) => void;
+  onOpenLogin?: () => void;
+  isStandalonePublic?: boolean;
 }
 
 interface NoticiaPublica {
@@ -75,7 +79,9 @@ const NOTICIAS_PADRAO: NoticiaPublica[] = [
 
 export const SitePublicoView: React.FC<SitePublicoViewProps> = ({ 
   councilConfig = storageService.getCouncilConfig(),
-  onNavigateToPortal
+  onNavigateToPortal,
+  onOpenLogin,
+  isStandalonePublic = false
 }) => {
   const [activeTab, setActiveTab] = useState<'noticias' | 'formularios'>('formularios');
   const [searchTerm, setSearchTerm] = useState('');
@@ -169,7 +175,7 @@ export const SitePublicoView: React.FC<SitePublicoViewProps> = ({
 
     setIsSubmitting(true);
 
-    const protNum = storageService.generateNextProtocoloNumero();
+    const protNum = storageService.generateNextProtocoloNumero('SITE');
 
     const novaResposta: RespostaFormulario = {
       id: `resp-pub-${Date.now()}`,
@@ -209,6 +215,40 @@ export const SitePublicoView: React.FC<SitePublicoViewProps> = ({
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      {/* Barra de Navegação Superior (Exibida em modo autônomo público ou quando login estiver disponível) */}
+      {(isStandalonePublic || onOpenLogin) && (
+        <div className="bg-white border border-slate-200/90 rounded-2xl px-4 sm:px-6 py-3.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center space-x-3 min-w-0">
+            <img 
+              src={SIGCON_LOGO} 
+              alt="Logo do Conselho" 
+              className="h-9 w-9 object-contain rounded-xl p-0.5 bg-white border border-slate-200 shadow-2xs shrink-0"
+            />
+            <div className="min-w-0">
+              <span className="font-extrabold text-sm tracking-tight text-slate-900 block truncate">
+                {councilConfig.sigla || 'CRF'} • {councilConfig.nomeCompleto || 'Conselho Regional'}
+              </span>
+              <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider block truncate">
+                Portal Oficial • Serviços Públicos, Transparência & Notícias
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2 shrink-0">
+            {onOpenLogin && (
+              <button
+                type="button"
+                onClick={onOpenLogin}
+                className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-linear-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:via-indigo-700 hover:to-purple-700 text-white font-extrabold text-xs shadow-md shadow-blue-500/20 hover:shadow-blue-500/35 transition-all uppercase tracking-wide cursor-pointer active:scale-95"
+              >
+                <Lock className="w-3.5 h-3.5 text-cyan-200" />
+                <span>Acesso Restrito / Entrar no Sistema</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Header Institucional do Site Oficial */}
       <div className="relative overflow-hidden rounded-3xl bg-linear-to-r from-slate-900 via-blue-950 to-indigo-950 text-white shadow-xl border border-blue-900/40">
         <div className="absolute inset-0 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:16px_16px] opacity-15"></div>
@@ -227,6 +267,17 @@ export const SitePublicoView: React.FC<SitePublicoViewProps> = ({
           </div>
 
           <div className="flex flex-col sm:flex-row md:flex-col gap-2.5 shrink-0">
+            {onOpenLogin && (
+              <button
+                type="button"
+                onClick={onOpenLogin}
+                className="flex items-center justify-center space-x-2 px-5 py-3 rounded-2xl bg-linear-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:via-indigo-500 hover:to-purple-500 text-white font-extrabold text-xs shadow-lg shadow-indigo-600/30 hover:shadow-indigo-600/50 transition-all uppercase tracking-wider cursor-pointer border border-white/20 active:scale-95"
+              >
+                <Lock className="w-4 h-4 text-cyan-300" />
+                <span>Área Restrita / Fazer Login</span>
+              </button>
+            )}
+
             <div className="p-4 rounded-2xl bg-white/10 backdrop-blur-md border border-white/15 text-center">
               <span className="block text-[11px] text-blue-200 uppercase font-bold">Autoatendimento Liberado</span>
               <span className="text-xl font-extrabold text-white">{formulariosPublicos.length} Formulários</span>

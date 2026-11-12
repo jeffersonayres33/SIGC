@@ -192,11 +192,11 @@ const SUBGROUPS_PROTOCOLOS: SubGroupConfig[] = [
   },
   {
     key: 'SETOR_PROTOCOLO',
-    label: 'Setores de Tramitação',
+    label: 'Setores Organizacionais (Lotação & Tramitação)',
     icon: Network,
-    singular: 'Setor',
-    description: 'Departamentos e comissões para onde os processos são despachados (ex: Secretaria, DEFIS, Jurídico, Diretoria).',
-    linkInfo: 'Utilizado no fluxo de movimentações, despachos e distribuição de processos.',
+    singular: 'Setor Integrado',
+    description: 'Tabela unificada e integrada de setores do Conselho: utilizada conjuntamente para lotação de funcionários/fiscais e para tramitação de processos administrativos.',
+    linkInfo: 'VÍNCULO INTEGRADO: Utilizado simultaneamente para alocação de colaboradores e para movimentações processuais.',
     badgeColor: 'bg-sky-50 text-sky-700 border-sky-200'
   },
   {
@@ -221,12 +221,12 @@ const SUBGROUPS_FUNCIONARIOS: SubGroupConfig[] = [
     badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200'
   },
   {
-    key: 'SETOR_LOTACAO',
-    label: 'Setores de Lotação',
+    key: 'SETOR_PROTOCOLO',
+    label: 'Setores Organizacionais (Integrado)',
     icon: Network,
-    singular: 'Setor de Lotação',
-    description: 'Departamentos e setores internos do conselho onde os funcionários são lotados (ex: DEFIS, Jurídico, Financeiro, Diretoria).',
-    linkInfo: 'Utilizado na lotação de colaboradores e tramitação de processos.',
+    singular: 'Setor Integrado',
+    description: 'Tabela unificada e integrada de setores do Conselho (compartilhada entre Lotação de Funcionários e Tramitação de Processos).',
+    linkInfo: 'CADASTRO ÚNICO: Todas as alterações realizadas aqui se aplicam automaticamente à lotação e à tramitação.',
     badgeColor: 'bg-blue-50 text-blue-700 border-blue-200'
   },
   {
@@ -612,74 +612,7 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 0. Barra Principal de Submenus dos Cadastros Básicos (Oculta em Formulários Dinâmicos pois a navegação é feita pelo Menu Lateral) */}
-      {activeMainGroup !== 'FORMULARIOS' && (
-        <div className="bg-white border border-slate-200 p-2 rounded-2xl shadow-xs overflow-x-auto">
-          <div className="flex items-center gap-2 min-w-max">
-            <button
-              onClick={() => handleSelectMainGroup('PROFISSIONAIS')}
-              className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer ${
-                activeMainGroup === 'PROFISSIONAIS'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <Users className="w-4 h-4" />
-              <span>Profissionais (PF)</span>
-            </button>
-
-            <button
-              onClick={() => handleSelectMainGroup('EMPRESAS')}
-              className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer ${
-                activeMainGroup === 'EMPRESAS'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <Building2 className="w-4 h-4" />
-              <span>Empresas (PJ)</span>
-            </button>
-
-            <button
-              onClick={() => handleSelectMainGroup('PROTOCOLOS')}
-              className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer ${
-                activeMainGroup === 'PROTOCOLOS'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <FileText className="w-4 h-4" />
-              <span>Protocolo e Processo</span>
-            </button>
-
-            <button
-              onClick={() => handleSelectMainGroup('FUNCIONARIOS')}
-              className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer ${
-                activeMainGroup === 'FUNCIONARIOS'
-                  ? 'bg-purple-600 text-white shadow-sm'
-                  : 'text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <Briefcase className="w-4 h-4" />
-              <span>Funcionários & Permissões</span>
-            </button>
-
-            <button
-              onClick={() => handleSelectMainGroup('ADMIN')}
-              className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer ${
-                activeMainGroup === 'ADMIN'
-                  ? 'bg-rose-600 text-white shadow-sm'
-                  : 'text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200'
-              }`}
-            >
-              <ShieldAlert className="w-4 h-4" />
-              <span>Governança & Segurança</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 1. Header Dedicado do Grupo Ativo (Acesso Exclusivo via Menu de Navegação) */}
+      {/* Header Dedicado do Grupo Ativo (Acesso Exclusivo via Menu Lateral de Navegação) */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white border border-slate-200 p-5 rounded-2xl shadow-xs">
         <div className="flex items-center space-x-3.5">
           <div className={`w-12 h-12 rounded-xl border flex items-center justify-center shadow-xs shrink-0 ${

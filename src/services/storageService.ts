@@ -98,6 +98,12 @@ export interface CouncilConfig {
   protocoloProximoNumero?: number;
   protocoloUltimoAno?: number;
   protocoloReiniciaAno?: boolean;
+  protocoloPrefixoInterno?: string;
+  protocoloSufixoInterno?: string;
+  protocoloPrefixoInscrito?: string;
+  protocoloSufixoInscrito?: string;
+  protocoloPrefixoSite?: string;
+  protocoloSufixoSite?: string;
 
   resolucaoAnuidade: string;
   valorAnuidadePF: number;
@@ -250,6 +256,12 @@ export const DEFAULT_COUNCIL_CONFIG: CouncilConfig = {
   protocoloProximoNumero: 1,
   protocoloUltimoAno: new Date().getFullYear(),
   protocoloReiniciaAno: true,
+  protocoloPrefixoInterno: '',
+  protocoloSufixoInterno: '',
+  protocoloPrefixoInscrito: '',
+  protocoloSufixoInscrito: '-INS',
+  protocoloPrefixoSite: '',
+  protocoloSufixoSite: '-SITE',
   resolucaoAnuidade: 'RESOLUÇÃO CFF Nº 750/2025',
   valorAnuidadePF: 620.00,
   valorAnuidadePJ: 1240.00,
@@ -1092,6 +1104,67 @@ class StorageService {
     return Array.from(seen.values());
   }
 
+  private unifySetores(): void {
+    // Coleta setores de SETOR_PROTOCOLO e SETOR_LOTACAO
+    const setoresProtocolo = this.cadastrosBasicos.filter(i => i.categoria === 'SETOR_PROTOCOLO');
+    const setoresLotacao = this.cadastrosBasicos.filter(i => i.categoria === 'SETOR_LOTACAO');
+
+    const mapSetores = new Map<string, ItemCadastroBasico>();
+    // Inicializa com os setores existentes de protocolo
+    setoresProtocolo.forEach(s => {
+      mapSetores.set(this.normalizeCadBasicoKey(s.nome), {
+        ...s,
+        categoria: 'SETOR_PROTOCOLO',
+        descricao: s.descricao || 'Setor Institucional Unificado (Lotação e Tramitação)'
+      });
+    });
+
+    // Se houver algum setor de lotação que ainda não esteja cadastrado, adiciona na lista unificada
+    setoresLotacao.forEach(s => {
+      const key = this.normalizeCadBasicoKey(s.nome);
+      if (!mapSetores.has(key)) {
+        mapSetores.set(key, {
+          ...s,
+          id: s.id.startsWith('set-') ? s.id : `set-${s.id.replace('setlot-', '')}`,
+          categoria: 'SETOR_PROTOCOLO',
+          descricao: s.descricao || 'Setor Institucional Unificado (Lotação e Tramitação)',
+          ativo: s.ativo !== false
+        });
+      }
+    });
+
+    const listaSetoresUnificados = Array.from(mapSetores.values());
+
+    // Remove do array de cadastros os antigos SETOR_LOTACAO e mantém os setores unificados em SETOR_PROTOCOLO
+    const outrosCadastros = this.cadastrosBasicos.filter(i => i.categoria !== 'SETOR_PROTOCOLO' && i.categoria !== 'SETOR_LOTACAO');
+    this.cadastrosBasicos = [...outrosCadastros, ...listaSetoresUnificados];
+
+    // Atualiza colaboradores para apontar para os setores unificados
+    let changedFuncs = false;
+    this.funcionarios.forEach(f => {
+      const matchSetor = listaSetoresUnificados.find(s => 
+        (f.setorId && s.id === f.setorId) ||
+        (f.setorNome && this.normalizeCadBasicoKey(s.nome) === this.normalizeCadBasicoKey(f.setorNome)) ||
+        (f.setorNome && (s.nome.toUpperCase().includes(f.setorNome.toUpperCase()) || f.setorNome.toUpperCase().includes(s.nome.toUpperCase())))
+      );
+
+      if (matchSetor) {
+        if (f.setorId !== matchSetor.id || f.setorNome !== matchSetor.nome) {
+          f.setorId = matchSetor.id;
+          f.setorNome = matchSetor.nome;
+          changedFuncs = true;
+        }
+      }
+    });
+
+    try {
+      localStorage.setItem(STORAGE_KEYS.CADASTROS_BASICOS, JSON.stringify(this.cadastrosBasicos));
+      if (changedFuncs) {
+        localStorage.setItem(STORAGE_KEYS.FUNCIONARIOS, JSON.stringify(this.funcionarios));
+      }
+    } catch (e) {}
+  }
+
   private init() {
     try {
       const savedEmpresas = localStorage.getItem(STORAGE_KEYS.EMPRESAS);
@@ -1326,6 +1399,9 @@ class StorageService {
       try {
         localStorage.setItem(STORAGE_KEYS.FUNCIONARIOS, JSON.stringify(this.funcionarios));
       } catch (e) {}
+
+      // Unificação transparente de Setores de Tramitação e Lotação
+      this.unifySetores();
 
       const savedAuth = localStorage.getItem(STORAGE_KEYS.AUTH_SESSION);
       if (savedAuth) {
@@ -2030,6 +2106,12 @@ class StorageService {
             protocoloProximoNumero: cfgData.protocolo_proximo_numero ?? this.councilConfig.protocoloProximoNumero ?? 1,
             protocoloUltimoAno: cfgData.protocolo_ultimo_ano ?? this.councilConfig.protocoloUltimoAno ?? new Date().getFullYear(),
             protocoloReiniciaAno: cfgData.protocolo_reinicia_ano ?? this.councilConfig.protocoloReiniciaAno ?? true,
+            protocoloPrefixoInterno: cfgData.protocolo_prefixo_interno ?? this.councilConfig.protocoloPrefixoInterno ?? '',
+            protocoloSufixoInterno: cfgData.protocolo_sufixo_interno ?? this.councilConfig.protocoloSufixoInterno ?? '',
+            protocoloPrefixoInscrito: cfgData.protocolo_prefixo_inscrito ?? this.councilConfig.protocoloPrefixoInscrito ?? '',
+            protocoloSufixoInscrito: cfgData.protocolo_sufixo_inscrito ?? this.councilConfig.protocoloSufixoInscrito ?? '-INS',
+            protocoloPrefixoSite: cfgData.protocolo_prefixo_site ?? this.councilConfig.protocoloPrefixoSite ?? '',
+            protocoloSufixoSite: cfgData.protocolo_sufixo_site ?? this.councilConfig.protocoloSufixoSite ?? '-SITE',
             resolucaoAnuidade: cfgData.resolucao_anuidade || this.councilConfig.resolucaoAnuidade,
             valorAnuidadePF: Number(cfgData.valor_anuidade_pf) || this.councilConfig.valorAnuidadePF,
             valorAnuidadePJ: Number(cfgData.valor_anuidade_pj) || this.councilConfig.valorAnuidadePJ,
@@ -2547,7 +2629,7 @@ class StorageService {
     return { ...this.councilConfig };
   }
 
-  public generateNextProtocoloNumero(): string {
+  public generateNextProtocoloNumero(origem: 'INTERNO' | 'INSCRITO' | 'SITE' = 'INTERNO'): string {
     const cfg = this.getCouncilConfig();
     const currentYear = new Date().getFullYear();
     let num = cfg.protocoloProximoNumero ?? 1;
@@ -2558,7 +2640,21 @@ class StorageService {
       lastYear = currentYear;
     }
 
-    const formatted = `${num}/${currentYear}`;
+    let prefix = '';
+    let suffix = '';
+
+    if (origem === 'INSCRITO') {
+      prefix = cfg.protocoloPrefixoInscrito || '';
+      suffix = cfg.protocoloSufixoInscrito !== undefined ? cfg.protocoloSufixoInscrito : '-INS';
+    } else if (origem === 'SITE') {
+      prefix = cfg.protocoloPrefixoSite || '';
+      suffix = cfg.protocoloSufixoSite !== undefined ? cfg.protocoloSufixoSite : '-SITE';
+    } else {
+      prefix = cfg.protocoloPrefixoInterno || '';
+      suffix = cfg.protocoloSufixoInterno || '';
+    }
+
+    const formatted = `${prefix}${num}/${currentYear}${suffix}`;
 
     this.updateCouncilConfig({
       protocoloProximoNumero: num + 1,
@@ -2600,6 +2696,12 @@ class StorageService {
             protocolo_proximo_numero: this.councilConfig.protocoloProximoNumero,
             protocolo_ultimo_ano: this.councilConfig.protocoloUltimoAno,
             protocolo_reinicia_ano: this.councilConfig.protocoloReiniciaAno,
+            protocolo_prefixo_interno: this.councilConfig.protocoloPrefixoInterno,
+            protocolo_sufixo_interno: this.councilConfig.protocoloSufixoInterno,
+            protocolo_prefixo_inscrito: this.councilConfig.protocoloPrefixoInscrito,
+            protocolo_sufixo_inscrito: this.councilConfig.protocoloSufixoInscrito,
+            protocolo_prefixo_site: this.councilConfig.protocoloPrefixoSite,
+            protocolo_sufixo_site: this.councilConfig.protocoloSufixoSite,
             resolucao_anuidade: this.councilConfig.resolucaoAnuidade,
             valor_anuidade_pf: this.councilConfig.valorAnuidadePF,
             valor_anuidade_pj: this.councilConfig.valorAnuidadePJ,
@@ -2957,6 +3059,9 @@ class StorageService {
       modulosPermitidos: item.modulosPermitidos ? item.modulosPermitidos.map(m => String(m).toLowerCase().trim()) : undefined
     }));
     if (categoria) {
+      if (categoria === 'SETOR_LOTACAO' || categoria === 'SETOR_PROTOCOLO') {
+        return list.filter(i => i.categoria === 'SETOR_PROTOCOLO' || i.categoria === 'SETOR_LOTACAO');
+      }
       return list.filter(i => i.categoria === categoria);
     }
     return list;
@@ -2964,8 +3069,9 @@ class StorageService {
 
   public checkCadastroBasicoDuplicity(categoria: CategoriaCadastroBasico, nome: string, excludeId?: string): boolean {
     const targetKey = this.normalizeCadBasicoKey(nome);
+    const targetCat = (categoria === 'SETOR_LOTACAO') ? 'SETOR_PROTOCOLO' : categoria;
     return this.cadastrosBasicos.some(item => 
-      item.categoria === categoria && 
+      (item.categoria === targetCat || (targetCat === 'SETOR_PROTOCOLO' && item.categoria === 'SETOR_LOTACAO')) && 
       this.normalizeCadBasicoKey(item.nome) === targetKey && 
       item.id !== excludeId
     );
@@ -2973,6 +3079,9 @@ class StorageService {
 
   public saveCadastroBasico(item: ItemCadastroBasico): { success: boolean; message?: string } {
     const sanitized = sanitizeToUpper(item, ['id', 'cargoId', 'setorId', 'modulosPermitidos']);
+    if (sanitized.categoria === 'SETOR_LOTACAO') {
+      sanitized.categoria = 'SETOR_PROTOCOLO';
+    }
     if (sanitized.modulosPermitidos) {
       sanitized.modulosPermitidos = sanitized.modulosPermitidos.map(m => String(m).toLowerCase().trim());
     }
@@ -3070,10 +3179,17 @@ class StorageService {
       if (count > 0) return { canDelete: false, count, reason: `Existem ${count} protocolos/processos cadastrados com este Tipo de Requerimento.` };
     }
 
-    if (item.categoria === 'SETOR_PROTOCOLO') {
+    if (item.categoria === 'SETOR_PROTOCOLO' || item.categoria === 'SETOR_LOTACAO') {
       const pCount = this.protocolos.filter(p => p.setorAtual?.toUpperCase() === itemName).length;
-      count += pCount;
-      if (count > 0) return { canDelete: false, count, reason: `Existem ${count} protocolos em tramitação neste Setor.` };
+      const fCount = this.funcionarios.filter(f => (f.setorNome || '').toUpperCase() === itemName || f.setorId === item.id).length;
+      count = pCount + fCount;
+      if (count > 0) {
+        return { 
+          canDelete: false, 
+          count, 
+          reason: `Existem ${pCount} protocolos em tramitação e ${fCount} funcionários vinculados a este Setor Unificado.` 
+        };
+      }
     }
 
     if (item.categoria === 'STATUS_PROTOCOLO') {
@@ -5466,6 +5582,11 @@ class StorageService {
     }
     if (!resposta.dataEnvio) {
       resposta.dataEnvio = new Date().toISOString();
+    }
+    if (!resposta.protocoloGerado) {
+      const canal = resposta.canalOrigem;
+      const origem = (canal === 'SITE' || canal === 'SITE_PUBLICO') ? 'SITE' : 'INSCRITO';
+      resposta.protocoloGerado = this.generateNextProtocoloNumero(origem);
     }
 
     this.respostasForms.unshift(resposta);

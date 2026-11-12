@@ -37,7 +37,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import jsPDF from 'jspdf';
-import { ProtocoloProcesso, ItemCadastroBasico, Profissional, Empresa } from '../../types';
+import { ProtocoloProcesso, ItemCadastroBasico, Profissional, Empresa, Funcionario } from '../../types';
 import { storageService } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
 import { maskCPF, maskCNPJ, sanitizeToUpper } from '../../utils/documentUtils';
@@ -107,6 +107,8 @@ export const ProtocolosView: React.FC = () => {
   const [allProcessos, setAllProcessos] = useState<ProtocoloProcesso[]>([]);
   const [allProfissionais, setAllProfissionais] = useState<Profissional[]>([]);
   const [allEmpresas, setAllEmpresas] = useState<Empresa[]>([]);
+  const [allFuncionarios, setAllFuncionarios] = useState<Funcionario[]>([]);
+  const [setorFuncionarioFiltro, setSetorFuncionarioFiltro] = useState<string>('TODOS');
 
   // Estados para Modal de Consulta de Profissionais (com todos os filtros do cadastro)
   const [isConsultaProfissionalOpen, setIsConsultaProfissionalOpen] = useState(false);
@@ -136,6 +138,7 @@ export const ProtocolosView: React.FC = () => {
     setAllProcessos(storageService.getProtocolos());
     setAllProfissionais(storageService.getProfissionais());
     setAllEmpresas(storageService.getEmpresas());
+    setAllFuncionarios(storageService.getFuncionarios().filter(f => f.ativo !== false));
   };
 
   useEffect(() => {
@@ -525,7 +528,7 @@ export const ProtocolosView: React.FC = () => {
       return;
     }
 
-    const numeroProtocolo = storageService.generateNextProtocoloNumero();
+    const numeroProtocolo = storageService.generateNextProtocoloNumero('INTERNO');
     const dataAtual = new Date().toLocaleDateString('pt-BR');
     const dataHoraAtual = `${dataAtual} ${new Date().toLocaleTimeString('pt-BR').slice(0, 5)}`;
     const prazoResp = new Date(Date.now() + (novoProt.prazoDias || 30) * 86400000).toLocaleDateString('pt-BR');
@@ -573,6 +576,7 @@ export const ProtocolosView: React.FC = () => {
 
   const handleOpenTramitacao = (proc: ProtocoloProcesso) => {
     setSelectedProcesso(proc);
+    setSetorFuncionarioFiltro('TODOS');
     setTramitacaoForm({
       novoSetor: proc.setorAtual || (cadastrosSetores[0]?.nome || 'Secretaria Geral'),
       novoStatus: proc.status || (cadastrosStatus[0]?.nome || 'Em Análise'),
@@ -640,7 +644,8 @@ export const ProtocolosView: React.FC = () => {
       p.interessado.toLowerCase().includes(q) ||
       p.documentoInteressado?.toLowerCase().includes(q) ||
       p.tipo.toLowerCase().includes(q) ||
-      p.setorAtual?.toLowerCase().includes(q);
+      p.setorAtual?.toLowerCase().includes(q) ||
+      p.conselheiroRelator?.toLowerCase().includes(q);
 
     const matchesStatus = statusFilter === 'Todos' || p.status?.toUpperCase() === statusFilter.toUpperCase();
     const matchesTipo = tipoFilter === 'Todos' || p.tipo?.toUpperCase() === tipoFilter.toUpperCase();
@@ -664,7 +669,7 @@ export const ProtocolosView: React.FC = () => {
       'TIPO DE REQUERIMENTO': p.tipo,
       'SETOR ATUAL': p.setorAtual || '-',
       'STATUS': p.status,
-      'CONSELHEIRO RELATOR': p.conselheiroRelator || 'NÃO DISTRIBUÍDO',
+      'RESPONSÁVEL': p.conselheiroRelator || 'NÃO ATRIBUÍDO',
       'DATA ABERTURA': p.dataAbertura,
       'PRAZO RESPOSTA': p.prazoResposta || '30 DIAS'
     }));
@@ -677,7 +682,7 @@ export const ProtocolosView: React.FC = () => {
       toastService.warning('Sem Dados', 'Nenhum processo encontrado com os filtros atuais.');
       return;
     }
-    const headers = ['Nº Protocolo', 'Interessado', 'Requerimento', 'Setor Atual', 'Relator', 'Abertura', 'Status'];
+    const headers = ['Nº Protocolo', 'Interessado', 'Requerimento', 'Setor Atual', 'Responsável', 'Abertura', 'Status'];
     const rows = filteredProcessos.map(p => [
       p.numeroProtocolo,
       `${p.interessado}${p.documentoInteressado ? ` (${p.documentoInteressado})` : ''}`,
@@ -760,7 +765,7 @@ export const ProtocolosView: React.FC = () => {
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="PESQUISAR POR Nº PROTOCOLO, INTERESSADO OU CPF/CNPJ..."
+              placeholder="PESQUISAR POR Nº PROTOCOLO, INTERESSADO, RESPONSÁVEL OU CPF/CNPJ..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 placeholder-slate-400 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-all uppercase text-xs font-medium"
@@ -876,7 +881,7 @@ export const ProtocolosView: React.FC = () => {
                 <th className="py-3.5 px-4">INTERESSADO / VÍNCULO</th>
                 <th className="py-3.5 px-4">TIPO DE REQUERIMENTO</th>
                 <th className="py-3.5 px-4">SETOR ATUAL</th>
-                <th className="py-3.5 px-4">CONSELHEIRO RELATOR</th>
+                <th className="py-3.5 px-4">RESPONSÁVEL</th>
                 <th className="py-3.5 px-4 text-center">STATUS</th>
                 <th className="py-3.5 px-4 text-right">AÇÕES</th>
               </tr>
@@ -1040,9 +1045,9 @@ export const ProtocolosView: React.FC = () => {
               </div>
 
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/70 space-y-1">
-                <div className="text-slate-400 font-bold uppercase text-[10px]">Setor Atual & Relator</div>
+                <div className="text-slate-400 font-bold uppercase text-[10px]">Setor Atual & Responsável</div>
                 <div>Setor: <strong className="text-blue-800 uppercase">{selectedProcesso.setorAtual}</strong></div>
-                <div className="text-slate-600 truncate">Relator: <span className="font-medium uppercase">{selectedProcesso.conselheiroRelator || 'Não distribuído'}</span></div>
+                <div className="text-slate-600 truncate">Responsável: <span className="font-medium uppercase">{selectedProcesso.conselheiroRelator || 'Não atribuído'}</span></div>
                 <div className="text-slate-500 text-[11px] pt-1">Requerimento: <span className="font-semibold text-slate-700">{selectedProcesso.tipo}</span></div>
               </div>
 
@@ -1191,7 +1196,7 @@ export const ProtocolosView: React.FC = () => {
                   onClick={() => setSelectedProcesso(null)}
                   className="px-4 py-2 bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200 uppercase cursor-pointer"
                 >
-                  Fechar Autos
+                  Fechar
                 </button>
                 <button
                   onClick={() => handleOpenTramitacao(selectedProcesso)}
@@ -1594,14 +1599,19 @@ export const ProtocolosView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Conselheiro Relator (Opcional)</label>
-                  <input
-                    type="text"
+                  <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Funcionário Responsável (Opcional)</label>
+                  <select
                     value={novoProt.conselheiroRelator}
-                    onChange={(e) => setNovoProt(prev => ({ ...prev, conselheiroRelator: e.target.value.toUpperCase() }))}
-                    placeholder="EX: DR. VALMIR BEZERRA"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 uppercase font-semibold focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20"
-                  />
+                    onChange={(e) => setNovoProt(prev => ({ ...prev, conselheiroRelator: e.target.value }))}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 uppercase font-semibold focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 text-xs"
+                  >
+                    <option value="">NÃO ATRIBUÍDO (DISTRIBUIR POSTERIORMENTE)</option>
+                    {allFuncionarios.map(f => (
+                      <option key={f.id} value={f.nome}>
+                        {f.nome} • {f.cargoNome || 'COLABORADOR'} ({f.setorNome || 'GERAL'})
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -2206,15 +2216,81 @@ export const ProtocolosView: React.FC = () => {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Conselheiro Relator / Responsável</label>
-                <input
-                  type="text"
-                  value={tramitacaoForm.novoRelator}
-                  onChange={(e) => setTramitacaoForm(prev => ({ ...prev, novoRelator: e.target.value.toUpperCase() }))}
-                  placeholder="EX: DR. JEFFERSON"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 uppercase font-semibold"
-                />
+              <div className="space-y-3 bg-slate-50/80 p-3 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <label className="block text-slate-700 font-bold uppercase text-[10px]">
+                    Funcionário Responsável
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-semibold uppercase">
+                    Tabela de Funcionários
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-slate-500 font-semibold mb-1 uppercase text-[9px]">
+                      Filtrar por Setor do Funcionário:
+                    </label>
+                    <select
+                      value={setorFuncionarioFiltro}
+                      onChange={(e) => setSetorFuncionarioFiltro(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                    >
+                      <option value="TODOS">TODOS OS SETORES ({allFuncionarios.length})</option>
+                      {cadastrosSetores.map(s => {
+                        const count = allFuncionarios.filter(f => (f.setorNome || '').toUpperCase() === s.nome.toUpperCase()).length;
+                        return (
+                          <option key={s.id} value={s.nome}>
+                            {s.nome} ({count})
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-500 font-semibold mb-1 uppercase text-[9px]">
+                      Selecionar Funcionário Responsável:
+                    </label>
+                    <select
+                      value={tramitacaoForm.novoRelator}
+                      onChange={(e) => setTramitacaoForm(prev => ({ ...prev, novoRelator: e.target.value }))}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                    >
+                      <option value="">NÃO ATRIBUÍDO / SELECIONE</option>
+                      {tramitacaoForm.novoRelator && !allFuncionarios.some(f => f.nome.toUpperCase() === tramitacaoForm.novoRelator.toUpperCase()) && (
+                        <option value={tramitacaoForm.novoRelator}>
+                          {tramitacaoForm.novoRelator} (ATRIBUÍDO ATUALMENTE)
+                        </option>
+                      )}
+                      {allFuncionarios
+                        .filter(f => {
+                          if (setorFuncionarioFiltro === 'TODOS') return true;
+                          const sFilter = setorFuncionarioFiltro.trim().toUpperCase();
+                          const fSetor = (f.setorNome || '').trim().toUpperCase();
+                          return fSetor === sFilter || fSetor.includes(sFilter) || sFilter.includes(fSetor);
+                        })
+                        .map(f => (
+                          <option key={f.id} value={f.nome}>
+                            {f.nome} • {f.cargoNome || 'COLABORADOR'} ({f.setorNome || 'GERAL'})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+
+                {tramitacaoForm.novoRelator && (
+                  <div className="text-[10px] text-blue-700 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200 font-semibold flex items-center justify-between">
+                    <span>Responsável definido: <strong>{tramitacaoForm.novoRelator}</strong></span>
+                    <button
+                      type="button"
+                      onClick={() => setTramitacaoForm(prev => ({ ...prev, novoRelator: '' }))}
+                      className="text-slate-500 hover:text-rose-600 font-bold uppercase underline cursor-pointer"
+                    >
+                      Remover Atribuição
+                    </button>
+                  </div>
+                )}
               </div>
 
               <div>
