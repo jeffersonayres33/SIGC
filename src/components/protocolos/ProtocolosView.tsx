@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   FileText, 
   Search, 
@@ -34,7 +34,10 @@ import {
   Paperclip,
   Download,
   Upload,
-  AlertTriangle
+  AlertTriangle,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { ProtocoloProcesso, ItemCadastroBasico, Profissional, Empresa, Funcionario } from '../../types';
@@ -42,6 +45,7 @@ import { storageService } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
 import { maskCPF, maskCNPJ, sanitizeToUpper } from '../../utils/documentUtils';
 import { exportToCSV, exportToPDF } from '../../services/exportService';
+import { isMasterDeveloper } from '../../utils/permissionUtils';
 
 export function formatEnderecoOuJson(texto: string | undefined): string {
   if (!texto) return '';
@@ -76,8 +80,15 @@ export const ProtocolosView: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('Todos');
   const [tipoFilter, setTipoFilter] = useState('Todos');
   const [setorFilter, setSetorFilter] = useState('Todos');
+  const [responsavelFilter, setResponsavelFilter] = useState('Todos');
   const [tipoInteressadoFilter, setTipoInteressadoFilter] = useState('Todos');
   const [showFilters, setShowFilters] = useState(false);
+  const [isModalResponsavelOpen, setIsModalResponsavelOpen] = useState(false);
+  const [modalResponsavelSearch, setModalResponsavelSearch] = useState('');
+  const [sortConfig, setSortConfig] = useState<{
+    field: 'numeroProtocolo' | 'interessado' | 'tipo' | 'setorAtual' | 'conselheiroRelator' | 'status';
+    direction: 'asc' | 'desc';
+  } | null>(null);
   
   // Modais de Controle
   const [isNewModal, setIsNewModal] = useState(false);
@@ -108,7 +119,6 @@ export const ProtocolosView: React.FC = () => {
   const [allProfissionais, setAllProfissionais] = useState<Profissional[]>([]);
   const [allEmpresas, setAllEmpresas] = useState<Empresa[]>([]);
   const [allFuncionarios, setAllFuncionarios] = useState<Funcionario[]>([]);
-  const [setorFuncionarioFiltro, setSetorFuncionarioFiltro] = useState<string>('TODOS');
 
   // Estados para Modal de Consulta de Profissionais (com todos os filtros do cadastro)
   const [isConsultaProfissionalOpen, setIsConsultaProfissionalOpen] = useState(false);
@@ -143,6 +153,19 @@ export const ProtocolosView: React.FC = () => {
 
   useEffect(() => {
     loadData();
+    const currentAuth = storageService.getCurrentAuthUser();
+    if (currentAuth && !isMasterDeveloper(currentAuth)) {
+      const funcFound = storageService.getFuncionarios().find(f => f.cpf.replace(/\D/g, '') === currentAuth.documentoLimpo);
+      if (funcFound) {
+        const regra = funcFound.setorPermissaoProtocolos || 'APENAS_MEU';
+        if (regra === 'APENAS_MEU' && funcFound.setorNome) {
+          setSetorFilter(funcFound.setorNome);
+        } else if (regra === 'CUSTOMIZADO' && funcFound.setorNome) {
+          setSetorFilter(funcFound.setorNome);
+        }
+      }
+    }
+
     const unsubscribe = storageService.subscribe(() => {
       loadData();
     });
@@ -192,7 +215,7 @@ export const ProtocolosView: React.FC = () => {
     novoStatus: '',
     novoRelator: '',
     despachoTexto: '',
-    responsavel: 'Secretaria Geral'
+    responsavel: ''
   });
 
   const handleNovoProtFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -454,11 +477,107 @@ export const ProtocolosView: React.FC = () => {
     toastService.info('Vínculo Removido', 'Os dados do interessado foram limpos para novo vínculo.');
   };
 
+  // Identificação e regras de visualização de setor do usuário autenticado
+  const currentAuth = storageService.getCurrentAuthUser();
+  const isDev = isMasterDeveloper(currentAuth);
+  const currentFunc = currentAuth 
+    ? allFuncionarios.find(f => f.cpf.replace(/\D/g, '') === currentAuth.documentoLimpo)
+    : null;
+
+  const regraSetorVisualizacao: 'APENAS_MEU' | 'TODOS' | 'CUSTOMIZADO' = (isDev || !currentFunc) 
+    ? 'TODOS' 
+    : (currentFunc.setorPermissaoProtocolos || 'APENAS_MEU');
+
+  const regraResponsavelVisualizacao: 'APENAS_EU' | 'MEU_SETOR' | 'TODOS' = (isDev || !currentFunc)
+    ? 'TODOS'
+    : (currentFunc.responsavelPermissaoProtocolos || 'TODOS');
+
+  const userSetorLotacao = currentFunc?.setorNome?.trim() || '';
+
+  // Lista dos setores estritamente permitidos para o usuário autenticado
+  const allowedSetoresNomes = useMemo(() => {
+    if (regraSetorVisualizacao === 'TODOS') {
+      return cadastrosSetores.map(s => s.nome);
+    }
+    if (regraSetorVisualizacao === 'CUSTOMIZADO') {
+      const set = new Set<string>();
+      if (userSetorLotacao) set.add(userSetorLotacao);
+      (currentFunc?.setoresPermitidosProtocolos || []).forEach(s => {
+        if (s && s.trim()) set.add(s.trim());
+      });
+      return Array.from(set);
+    }
+    // APENAS_MEU: somente o setor de lotação do próprio colaborador
+    return userSetorLotacao ? [userSetorLotacao] : [];
+  }, [regraSetorVisualizacao, currentFunc, userSetorLotacao, cadastrosSetores]);
+
+  // Funcionários elegíveis como responsáveis respeitando a permissão e o filtro de setor atual
+  const eligibleFuncionariosResponsaveis = useMemo(() => {
+    let list = allFuncionarios.filter(f => f.ativo !== false);
+
+    // 1. Aplica regra de permissão do usuário logado
+    if (!isDev && currentFunc) {
+      if (regraResponsavelVisualizacao === 'APENAS_EU') {
+        list = list.filter(f => f.id === currentFunc.id || f.cpf.replace(/\D/g, '') === currentFunc.cpf.replace(/\D/g, ''));
+      } else if (regraResponsavelVisualizacao === 'MEU_SETOR') {
+        list = list.filter(f => 
+          (userSetorLotacao && f.setorNome?.trim().toUpperCase() === userSetorLotacao.toUpperCase()) ||
+          (currentFunc.setorId && f.setorId === currentFunc.setorId)
+        );
+      }
+    }
+
+    // 2. Se o filtro Setor Atual estiver selecionado (diferente de 'Todos'), filtra pelos funcionários do setor atual
+    if (setorFilter && setorFilter !== 'Todos') {
+      list = list.filter(f => f.setorNome?.trim().toUpperCase() === setorFilter.trim().toUpperCase());
+    }
+
+    return list;
+  }, [allFuncionarios, isDev, currentFunc, regraResponsavelVisualizacao, userSetorLotacao, setorFilter]);
+
+  // Sincroniza o setorFilter com as permissões do usuário
+  useEffect(() => {
+    if (regraSetorVisualizacao === 'APENAS_MEU') {
+      if (userSetorLotacao && setorFilter !== userSetorLotacao) {
+        setSetorFilter(userSetorLotacao);
+      }
+    } else if (regraSetorVisualizacao === 'CUSTOMIZADO') {
+      if (setorFilter !== 'Todos' && !allowedSetoresNomes.includes(setorFilter)) {
+        setSetorFilter(userSetorLotacao || allowedSetoresNomes[0] || 'Todos');
+      }
+    }
+  }, [regraSetorVisualizacao, userSetorLotacao, allowedSetoresNomes, setorFilter]);
+
+  // Sincroniza o responsavelFilter com a regra APENAS_EU ou validação do setor atual
+  useEffect(() => {
+    if (regraResponsavelVisualizacao === 'APENAS_EU') {
+      if (currentFunc?.nome && responsavelFilter !== currentFunc.nome) {
+        setResponsavelFilter(currentFunc.nome);
+      }
+    } else if (responsavelFilter !== 'Todos') {
+      const existsInEligible = eligibleFuncionariosResponsaveis.some(
+        f => f.nome.trim().toUpperCase() === responsavelFilter.trim().toUpperCase()
+      );
+      if (!existsInEligible) {
+        setResponsavelFilter('Todos');
+      }
+    }
+  }, [regraResponsavelVisualizacao, currentFunc?.nome, responsavelFilter, eligibleFuncionariosResponsaveis]);
+
   const handleClearMainFilters = () => {
     setSearchTerm('');
     setStatusFilter('Todos');
     setTipoFilter('Todos');
-    setSetorFilter('Todos');
+    if (regraSetorVisualizacao === 'APENAS_MEU' && userSetorLotacao) {
+      setSetorFilter(userSetorLotacao);
+    } else {
+      setSetorFilter('Todos');
+    }
+    if (regraResponsavelVisualizacao === 'APENAS_EU' && currentFunc?.nome) {
+      setResponsavelFilter(currentFunc.nome);
+    } else {
+      setResponsavelFilter('Todos');
+    }
     setTipoInteressadoFilter('Todos');
   };
 
@@ -576,13 +695,13 @@ export const ProtocolosView: React.FC = () => {
 
   const handleOpenTramitacao = (proc: ProtocoloProcesso) => {
     setSelectedProcesso(proc);
-    setSetorFuncionarioFiltro('TODOS');
+    const origemCriacao = proc.historico?.[0]?.setor || proc.setorAtual || 'PROTOCOLO GERAL';
     setTramitacaoForm({
       novoSetor: proc.setorAtual || (cadastrosSetores[0]?.nome || 'Secretaria Geral'),
       novoStatus: proc.status || (cadastrosStatus[0]?.nome || 'Em Análise'),
       novoRelator: proc.conselheiroRelator || '',
       despachoTexto: '',
-      responsavel: 'Secretaria Geral'
+      responsavel: origemCriacao
     });
     setIsTramitacaoOpen(true);
   };
@@ -598,10 +717,15 @@ export const ProtocolosView: React.FC = () => {
 
     const dataAtual = new Date().toLocaleDateString('pt-BR');
     const dataHoraAtual = `${dataAtual} ${new Date().toLocaleTimeString('pt-BR').slice(0, 5)}`;
+    const setorDestino = (tramitacaoForm.novoSetor && tramitacaoForm.novoSetor !== 'TODOS OS SETORES') ? tramitacaoForm.novoSetor : selectedProcesso.setorAtual;
+    const origemCriacao = selectedProcesso.historico?.[0]?.setor || selectedProcesso.setorAtual || 'PROTOCOLO GERAL';
+    const respTexto = (tramitacaoForm.responsavel && tramitacaoForm.responsavel.trim().toUpperCase() !== 'SECRETARIA GERAL')
+      ? tramitacaoForm.responsavel
+      : origemCriacao;
 
     const updated: ProtocoloProcesso = {
       ...selectedProcesso,
-      setorAtual: tramitacaoForm.novoSetor || selectedProcesso.setorAtual,
+      setorAtual: setorDestino,
       status: (tramitacaoForm.novoStatus || selectedProcesso.status) as any,
       conselheiroRelator: tramitacaoForm.novoRelator ? tramitacaoForm.novoRelator.trim().toUpperCase() : selectedProcesso.conselheiroRelator,
       dataUltimaAtualizacao: dataAtual,
@@ -609,9 +733,9 @@ export const ProtocolosView: React.FC = () => {
         ...(selectedProcesso.historico || []),
         {
           data: dataHoraAtual,
-          setor: (tramitacaoForm.novoSetor || selectedProcesso.setorAtual).toUpperCase(),
+          setor: setorDestino.toUpperCase(),
           descricao: tramitacaoForm.despachoTexto.trim().toUpperCase(),
-          responsavel: tramitacaoForm.responsavel.trim().toUpperCase()
+          responsavel: respTexto.trim().toUpperCase()
         }
       ]
     };
@@ -636,7 +760,7 @@ export const ProtocolosView: React.FC = () => {
     setProtocoloToDelete(null);
   };
 
-  // Filtragem combinada da tela principal
+  // Filtragem combinada da tela principal com restrição de setor do funcionário logado
   const filteredProcessos = allProcessos.filter(p => {
     const q = searchTerm.toLowerCase();
     const matchesSearch = !searchTerm || 
@@ -649,18 +773,111 @@ export const ProtocolosView: React.FC = () => {
 
     const matchesStatus = statusFilter === 'Todos' || p.status?.toUpperCase() === statusFilter.toUpperCase();
     const matchesTipo = tipoFilter === 'Todos' || p.tipo?.toUpperCase() === tipoFilter.toUpperCase();
-    const matchesSetor = setorFilter === 'Todos' || p.setorAtual?.toUpperCase() === setorFilter.toUpperCase();
+    
+    // Regra de permissão de visualização de setor do usuário logado
+    if (!isDev && currentFunc) {
+      if (regraSetorVisualizacao === 'APENAS_MEU') {
+        if (userSetorLotacao && p.setorAtual?.trim().toUpperCase() !== userSetorLotacao.toUpperCase()) {
+          return false;
+        }
+      } else if (regraSetorVisualizacao === 'CUSTOMIZADO') {
+        const isPermitted = allowedSetoresNomes.some(
+          s => s.trim().toUpperCase() === p.setorAtual?.trim().toUpperCase()
+        );
+        if (!isPermitted) {
+          return false;
+        }
+      }
+      // Regra de permissão de responsável do usuário logado
+      if (regraResponsavelVisualizacao === 'APENAS_EU') {
+        if (currentFunc.nome && p.conselheiroRelator?.trim().toUpperCase() !== currentFunc.nome.trim().toUpperCase()) {
+          return false;
+        }
+      } else if (regraResponsavelVisualizacao === 'MEU_SETOR') {
+        if (p.conselheiroRelator && p.conselheiroRelator !== 'NÃO ATRIBUÍDO') {
+          const respFunc = allFuncionarios.find(f => f.nome.trim().toUpperCase() === p.conselheiroRelator?.trim().toUpperCase());
+          if (respFunc && respFunc.setorNome && userSetorLotacao && respFunc.setorNome.trim().toUpperCase() !== userSetorLotacao.toUpperCase()) {
+            return false;
+          }
+        }
+      }
+    }
+
+    // Filtro selecionado no dropdown da interface
+    const matchesSetor = setorFilter === 'Todos' || p.setorAtual?.trim().toUpperCase() === setorFilter.trim().toUpperCase();
+    if (!matchesSetor) return false;
+
+    // Filtro de Responsável selecionado na interface
+    const matchesResponsavel = responsavelFilter === 'Todos' || 
+      p.conselheiroRelator?.trim().toUpperCase() === responsavelFilter.trim().toUpperCase() ||
+      (p.conselheiroRelator && p.conselheiroRelator.toLowerCase().includes(responsavelFilter.toLowerCase()));
+    if (!matchesResponsavel) return false;
+
     const matchesTipoInteressado = tipoInteressadoFilter === 'Todos' || p.tipoInteressado === tipoInteressadoFilter;
 
-    return matchesSearch && matchesStatus && matchesTipo && matchesSetor && matchesTipoInteressado;
+    return matchesSearch && matchesStatus && matchesTipo && matchesSetor && matchesResponsavel && matchesTipoInteressado;
   });
 
+  type SortField = 'numeroProtocolo' | 'interessado' | 'tipo' | 'setorAtual' | 'conselheiroRelator' | 'status';
+
+  const handleSort = (field: SortField) => {
+    setSortConfig(prev => {
+      if (prev && prev.field === field) {
+        if (prev.direction === 'asc') return { field, direction: 'desc' };
+        return null;
+      }
+      return { field, direction: 'asc' };
+    });
+  };
+
+  const sortedProcessos = useMemo(() => {
+    if (!sortConfig) return filteredProcessos;
+    const { field, direction } = sortConfig;
+    return [...filteredProcessos].sort((a, b) => {
+      const valA = (a[field] || '').toString().trim().toUpperCase();
+      const valB = (b[field] || '').toString().trim().toUpperCase();
+      const cmp = valA.localeCompare(valB, 'pt-BR', { numeric: true });
+      return direction === 'asc' ? cmp : -cmp;
+    });
+  }, [filteredProcessos, sortConfig]);
+
+  const renderSortHeader = (field: SortField, label: string, alignCenter = false) => {
+    const isActive = sortConfig?.field === field;
+    return (
+      <button
+        type="button"
+        onClick={() => handleSort(field)}
+        className={`inline-flex items-center gap-1.5 group cursor-pointer hover:text-blue-700 transition-colors uppercase ${
+          alignCenter ? 'justify-center mx-auto' : ''
+        } ${isActive ? 'text-blue-700 font-extrabold' : 'text-slate-600 font-bold'}`}
+        title={`Ordenar por ${label}`}
+      >
+        <span>{label}</span>
+        <span
+          className={`p-0.5 rounded transition-colors ${
+            isActive
+              ? 'bg-blue-100 text-blue-700'
+              : 'bg-slate-200/70 text-slate-400 group-hover:bg-blue-50 group-hover:text-blue-600'
+          }`}
+        >
+          {isActive && sortConfig?.direction === 'asc' ? (
+            <ArrowUp className="w-3 h-3" />
+          ) : isActive && sortConfig?.direction === 'desc' ? (
+            <ArrowDown className="w-3 h-3" />
+          ) : (
+            <ArrowUpDown className="w-3 h-3" />
+          )}
+        </span>
+      </button>
+    );
+  };
+
   const handleExportCSV = () => {
-    if (!filteredProcessos.length) {
+    if (!sortedProcessos.length) {
       toastService.warning('Sem Dados', 'Nenhum processo encontrado com os filtros atuais.');
       return;
     }
-    const data = filteredProcessos.map(p => ({
+    const data = sortedProcessos.map(p => ({
       'NÚMERO PROTOCOLO': p.numeroProtocolo,
       'INTERESSADO': p.interessado,
       'DOCUMENTO': p.documentoInteressado || '-',
@@ -674,16 +891,16 @@ export const ProtocolosView: React.FC = () => {
       'PRAZO RESPOSTA': p.prazoResposta || '30 DIAS'
     }));
     exportToCSV(`processos_protocolo_${Date.now()}`, data);
-    toastService.info('Exportação Excel Concluída', `${filteredProcessos.length} processos exportados para planilha Excel/CSV.`);
+    toastService.info('Exportação Excel Concluída', `${sortedProcessos.length} processos exportados para planilha Excel/CSV.`);
   };
 
   const handleExportPDF = () => {
-    if (!filteredProcessos.length) {
+    if (!sortedProcessos.length) {
       toastService.warning('Sem Dados', 'Nenhum processo encontrado com os filtros atuais.');
       return;
     }
     const headers = ['Nº Protocolo', 'Interessado', 'Requerimento', 'Setor Atual', 'Responsável', 'Abertura', 'Status'];
-    const rows = filteredProcessos.map(p => [
+    const rows = sortedProcessos.map(p => [
       p.numeroProtocolo,
       `${p.interessado}${p.documentoInteressado ? ` (${p.documentoInteressado})` : ''}`,
       p.tipo,
@@ -706,7 +923,15 @@ export const ProtocolosView: React.FC = () => {
     toastService.info('Exportação PDF Concluída', `${filteredProcessos.length} processos exportados para documento PDF oficial.`);
   };
 
-  const isMainFiltersActive = searchTerm || statusFilter !== 'Todos' || tipoFilter !== 'Todos' || setorFilter !== 'Todos' || tipoInteressadoFilter !== 'Todos';
+  const isSetorFilterModified = regraSetorVisualizacao === 'APENAS_MEU'
+    ? (userSetorLotacao ? setorFilter !== userSetorLotacao : setorFilter !== 'Todos')
+    : setorFilter !== 'Todos';
+
+  const isResponsavelFilterModified = regraResponsavelVisualizacao === 'APENAS_EU'
+    ? (currentFunc?.nome ? responsavelFilter !== currentFunc.nome : responsavelFilter !== 'Todos')
+    : responsavelFilter !== 'Todos';
+
+  const isMainFiltersActive = searchTerm || statusFilter !== 'Todos' || tipoFilter !== 'Todos' || isSetorFilterModified || isResponsavelFilterModified || tipoInteressadoFilter !== 'Todos';
 
   return (
     <div className="space-y-5">
@@ -797,7 +1022,7 @@ export const ProtocolosView: React.FC = () => {
         {/* Painel Expansível de Filtros Avançados */}
         {showFilters && (
           <div className="pt-3 border-t border-slate-100 space-y-3 animate-in fade-in duration-150">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
               <div className="min-w-0">
                 <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Tipo de Requerimento</label>
                 <select
@@ -819,11 +1044,44 @@ export const ProtocolosView: React.FC = () => {
                   onChange={(e) => setSetorFilter(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 text-xs"
                 >
-                  <option value="Todos">TODOS OS SETORES</option>
-                  {cadastrosSetores.map(s => (
-                    <option key={s.id} value={s.nome}>{s.nome}</option>
+                  {regraSetorVisualizacao === 'TODOS' && (
+                    <option value="Todos">TODOS OS SETORES</option>
+                  )}
+                  {regraSetorVisualizacao === 'CUSTOMIZADO' && allowedSetoresNomes.length > 1 && (
+                    <option value="Todos">TODOS OS SETORES PERMITIDOS ({allowedSetoresNomes.length})</option>
+                  )}
+                  {allowedSetoresNomes.map(nome => (
+                    <option key={nome} value={nome}>{nome}</option>
                   ))}
+                  {allowedSetoresNomes.length === 0 && (
+                    <option value="Todos">NENHUM SETOR PERMITIDO</option>
+                  )}
                 </select>
+              </div>
+
+              <div className="min-w-0">
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Responsável</label>
+                <div className="flex gap-1">
+                  <select
+                    value={responsavelFilter}
+                    onChange={(e) => setResponsavelFilter(e.target.value)}
+                    disabled={regraResponsavelVisualizacao === 'APENAS_EU'}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 text-xs disabled:opacity-60"
+                  >
+                    <option value="Todos">TODOS OS RESPONSÁVEIS</option>
+                    {eligibleFuncionariosResponsaveis.map(f => (
+                      <option key={f.id} value={f.nome}>{f.nome}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setIsModalResponsavelOpen(true)}
+                    className="px-2.5 py-2 bg-blue-50 border border-blue-300 text-blue-700 rounded-xl hover:bg-blue-100 font-bold text-xs uppercase cursor-pointer shrink-0"
+                    title="Abrir busca avançada de responsável"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
               <div className="min-w-0">
@@ -877,17 +1135,17 @@ export const ProtocolosView: React.FC = () => {
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50 text-slate-600 border-b border-slate-200 font-bold uppercase tracking-wider text-[11px]">
-                <th className="py-3.5 px-4">PROTOCOLO Nº</th>
-                <th className="py-3.5 px-4">INTERESSADO / VÍNCULO</th>
-                <th className="py-3.5 px-4">TIPO DE REQUERIMENTO</th>
-                <th className="py-3.5 px-4">SETOR ATUAL</th>
-                <th className="py-3.5 px-4">RESPONSÁVEL</th>
-                <th className="py-3.5 px-4 text-center">STATUS</th>
+                <th className="py-3.5 px-4">{renderSortHeader('numeroProtocolo', 'PROTOCOLO Nº')}</th>
+                <th className="py-3.5 px-4">{renderSortHeader('interessado', 'INTERESSADO / VÍNCULO')}</th>
+                <th className="py-3.5 px-4">{renderSortHeader('tipo', 'TIPO DE REQUERIMENTO')}</th>
+                <th className="py-3.5 px-4">{renderSortHeader('setorAtual', 'SETOR ATUAL')}</th>
+                <th className="py-3.5 px-4">{renderSortHeader('conselheiroRelator', 'RESPONSÁVEL')}</th>
+                <th className="py-3.5 px-4 text-center">{renderSortHeader('status', 'STATUS', true)}</th>
                 <th className="py-3.5 px-4 text-right">AÇÕES</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
-              {filteredProcessos.length === 0 ? (
+              {sortedProcessos.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-400">
                     <FileText className="w-10 h-10 mx-auto mb-2 opacity-40" />
@@ -896,7 +1154,7 @@ export const ProtocolosView: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                filteredProcessos.map((proc) => (
+                sortedProcessos.map((proc) => (
                   <tr key={proc.id} className="hover:bg-blue-50/40 transition-colors">
                     <td className="py-3.5 px-4 font-mono font-bold text-blue-700 whitespace-nowrap">
                       {proc.numeroProtocolo}
@@ -1164,15 +1422,21 @@ export const ProtocolosView: React.FC = () => {
 
               <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
                 {selectedProcesso.historico && selectedProcesso.historico.length > 0 ? (
-                  selectedProcesso.historico.map((h, i) => (
-                    <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-                      <div className="flex justify-between items-center text-slate-500 font-mono text-[10px] pb-1 border-b border-slate-100">
-                        <span className="font-bold text-blue-700">{h.data}</span>
-                        <span className="uppercase font-semibold">{h.setor} • {h.responsavel}</span>
+                  selectedProcesso.historico.map((h, i) => {
+                    const origemCriacao = selectedProcesso.historico?.[0]?.setor;
+                    const displayResp = (h.responsavel?.trim().toUpperCase() === 'SECRETARIA GERAL' && origemCriacao)
+                      ? origemCriacao
+                      : h.responsavel;
+                    return (
+                      <div key={i} className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <div className="flex justify-between items-center text-slate-500 font-mono text-[10px] pb-1 border-b border-slate-100">
+                          <span className="font-bold text-blue-700">{h.data}</span>
+                          <span className="uppercase font-semibold">{h.setor} • {displayResp}</span>
+                        </div>
+                        <div className="text-slate-800 mt-2 whitespace-pre-wrap uppercase font-medium">{h.descricao}</div>
                       </div>
-                      <div className="text-slate-800 mt-2 whitespace-pre-wrap uppercase font-medium">{h.descricao}</div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="p-4 text-center text-slate-400 bg-slate-50 rounded-xl">
                     Nenhum despacho registrado nos autos.
@@ -2197,6 +2461,7 @@ export const ProtocolosView: React.FC = () => {
                   onChange={(e) => setTramitacaoForm(prev => ({ ...prev, novoSetor: e.target.value }))}
                   className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase"
                 >
+                  <option value="TODOS OS SETORES">TODOS OS SETORES</option>
                   {cadastrosSetores.map(s => (
                     <option key={s.id} value={s.nome}>{s.nome}</option>
                   ))}
@@ -2222,61 +2487,38 @@ export const ProtocolosView: React.FC = () => {
                     Funcionário Responsável
                   </label>
                   <span className="text-[10px] text-slate-500 font-semibold uppercase">
-                    Tabela de Funcionários
+                    Tabela de Funcionários ({tramitacaoForm.novoSetor && tramitacaoForm.novoSetor !== 'TODOS OS SETORES' ? `Setor: ${tramitacaoForm.novoSetor}` : 'Todos os Setores'})
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="block text-slate-500 font-semibold mb-1 uppercase text-[9px]">
-                      Filtrar por Setor do Funcionário:
-                    </label>
-                    <select
-                      value={setorFuncionarioFiltro}
-                      onChange={(e) => setSetorFuncionarioFiltro(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
-                    >
-                      <option value="TODOS">TODOS OS SETORES ({allFuncionarios.length})</option>
-                      {cadastrosSetores.map(s => {
-                        const count = allFuncionarios.filter(f => (f.setorNome || '').toUpperCase() === s.nome.toUpperCase()).length;
-                        return (
-                          <option key={s.id} value={s.nome}>
-                            {s.nome} ({count})
-                          </option>
-                        );
-                      })}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-slate-500 font-semibold mb-1 uppercase text-[9px]">
-                      Selecionar Funcionário Responsável:
-                    </label>
-                    <select
-                      value={tramitacaoForm.novoRelator}
-                      onChange={(e) => setTramitacaoForm(prev => ({ ...prev, novoRelator: e.target.value }))}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
-                    >
-                      <option value="">NÃO ATRIBUÍDO / SELECIONE</option>
-                      {tramitacaoForm.novoRelator && !allFuncionarios.some(f => f.nome.toUpperCase() === tramitacaoForm.novoRelator.toUpperCase()) && (
-                        <option value={tramitacaoForm.novoRelator}>
-                          {tramitacaoForm.novoRelator} (ATRIBUÍDO ATUALMENTE)
+                <div>
+                  <label className="block text-slate-500 font-semibold mb-1 uppercase text-[9px]">
+                    Selecionar Funcionário Responsável:
+                  </label>
+                  <select
+                    value={tramitacaoForm.novoRelator}
+                    onChange={(e) => setTramitacaoForm(prev => ({ ...prev, novoRelator: e.target.value }))}
+                    className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 font-semibold uppercase text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                  >
+                    <option value="">NÃO ATRIBUÍDO / SELECIONE</option>
+                    {tramitacaoForm.novoRelator && !allFuncionarios.some(f => f.nome.toUpperCase() === tramitacaoForm.novoRelator.toUpperCase()) && (
+                      <option value={tramitacaoForm.novoRelator}>
+                        {tramitacaoForm.novoRelator} (ATRIBUÍDO ATUALMENTE)
+                      </option>
+                    )}
+                    {allFuncionarios
+                      .filter(f => {
+                        if (!tramitacaoForm.novoSetor || tramitacaoForm.novoSetor === 'TODOS OS SETORES') return true;
+                        const sFilter = tramitacaoForm.novoSetor.trim().toUpperCase();
+                        const fSetor = (f.setorNome || '').trim().toUpperCase();
+                        return fSetor === sFilter || fSetor.includes(sFilter) || sFilter.includes(fSetor);
+                      })
+                      .map(f => (
+                        <option key={f.id} value={f.nome}>
+                          {f.nome} • {f.cargoNome || 'COLABORADOR'} ({f.setorNome || 'GERAL'})
                         </option>
-                      )}
-                      {allFuncionarios
-                        .filter(f => {
-                          if (setorFuncionarioFiltro === 'TODOS') return true;
-                          const sFilter = setorFuncionarioFiltro.trim().toUpperCase();
-                          const fSetor = (f.setorNome || '').trim().toUpperCase();
-                          return fSetor === sFilter || fSetor.includes(sFilter) || sFilter.includes(fSetor);
-                        })
-                        .map(f => (
-                          <option key={f.id} value={f.nome}>
-                            {f.nome} • {f.cargoNome || 'COLABORADOR'} ({f.setorNome || 'GERAL'})
-                          </option>
-                        ))}
-                    </select>
-                  </div>
+                      ))}
+                  </select>
                 </div>
 
                 {tramitacaoForm.novoRelator && (
@@ -2429,6 +2671,86 @@ export const ProtocolosView: React.FC = () => {
                 className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-md shadow-rose-600/20 cursor-pointer"
               >
                 Excluir Definitivamente
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal de Busca de Responsável */}
+      {isModalResponsavelOpen && (
+        <div className="fixed inset-0 z-80 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-5">
+          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50">
+              <div className="flex items-center space-x-2.5">
+                <Users className="w-5 h-5 text-blue-600" />
+                <div>
+                  <h3 className="font-bold text-sm text-slate-900">Selecionar Funcionário Responsável</h3>
+                  <p className="text-[10px] text-slate-500">Filtrando servidores do setor atual ou autorizados</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsModalResponsavelOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 border-b border-slate-100 space-y-3">
+              <input
+                type="text"
+                placeholder="DIGITE O NOME, CPF OU CARGO DO FUNCIONÁRIO..."
+                value={modalResponsavelSearch}
+                onChange={(e) => setModalResponsavelSearch(e.target.value.toUpperCase())}
+                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs uppercase font-medium focus:bg-white focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+            <div className="p-4 overflow-y-auto flex-1 space-y-2">
+              <div
+                onClick={() => {
+                  setResponsavelFilter('Todos');
+                  setIsModalResponsavelOpen(false);
+                }}
+                className={`p-3 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-between ${
+                  responsavelFilter === 'Todos' ? 'bg-blue-600 text-white border-blue-600' : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+                }`}
+              >
+                <span>TODOS OS RESPONSÁVEIS</span>
+                <span className="text-[10px] font-mono opacity-80">Geral</span>
+              </div>
+              {eligibleFuncionariosResponsaveis
+                .filter(f => !modalResponsavelSearch || f.nome.toUpperCase().includes(modalResponsavelSearch) || f.cargoNome?.toUpperCase().includes(modalResponsavelSearch) || f.cpf.includes(modalResponsavelSearch))
+                .map(f => {
+                  const isSelected = responsavelFilter.trim().toUpperCase() === f.nome.trim().toUpperCase();
+                  return (
+                    <div
+                      key={f.id}
+                      onClick={() => {
+                        setResponsavelFilter(f.nome);
+                        setIsModalResponsavelOpen(false);
+                      }}
+                      className={`p-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center justify-between ${
+                        isSelected ? 'bg-blue-600 text-white border-blue-600' : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-bold uppercase">{f.nome}</div>
+                        <div className={`text-[10px] ${isSelected ? 'text-blue-100' : 'text-slate-500'}`}>{f.cargoNome} • {f.setorNome}</div>
+                      </div>
+                      <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'}`}>
+                        Mat: {f.matricula}
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsModalResponsavelOpen(false)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold rounded-xl text-xs uppercase cursor-pointer"
+              >
+                Fechar
               </button>
             </div>
           </div>

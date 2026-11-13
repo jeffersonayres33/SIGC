@@ -147,64 +147,19 @@ export const FiscalizacaoEletronicaConfig: React.FC = () => {
         </div>
       </div>
 
-      {/* Seção 1: Controle de Geolocalização */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
-          <div className="flex items-center space-x-3">
-            <div className={`p-2.5 rounded-xl ${isGeoAtiva ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-              {isGeoAtiva ? <MapPin className="w-6 h-6" /> : <MapPinOff className="w-6 h-6" />}
-            </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <h2 className="text-sm font-bold text-slate-900">
-                  Geolocalização GPS dos Fiscais
-                </h2>
-                <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded-full border ${
-                  isGeoAtiva 
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300' 
-                    : 'bg-slate-100 text-slate-600 border-slate-300'
-                }`}>
-                  {isGeoAtiva ? 'ATIVADA' : 'DESATIVADA'}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {isGeoAtiva 
-                  ? 'As coordenadas de latitude e longitude são capturadas pelo tablet e registradas no banco de dados.'
-                  : 'A geolocalização está oculta em toda a aplicação e receberá null no banco de dados.'
-                }
-              </p>
-            </div>
+      {/* Nota de Geolocalização Movida para DEV */}
+      <div className="bg-purple-50/60 border border-purple-200 rounded-2xl p-4 shadow-xs flex items-center justify-between text-xs text-purple-900">
+        <div className="flex items-center space-x-3">
+          <div className="p-2 rounded-xl bg-purple-100 text-purple-700">
+            <MapPin className="w-5 h-5" />
           </div>
-
-          <button
-            type="button"
-            onClick={handleToggleGeolocalizacao}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer shadow-xs ${
-              isGeoAtiva 
-                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200' 
-                : 'bg-slate-700 hover:bg-slate-800 text-white shadow-slate-300'
-            }`}
-          >
-            {isGeoAtiva ? (
-              <>
-                <MapPin className="w-4 h-4" />
-                <span>Geolocalização Ativa (Clique para Desativar)</span>
-              </>
-            ) : (
-              <>
-                <MapPinOff className="w-4 h-4" />
-                <span>Geolocalização Desativada (Clique para Ativar)</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        <div className="mt-4 p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-start space-x-2.5 text-xs text-slate-600">
-          <AlertCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <strong className="text-slate-900">Regra de Negócio:</strong> Quando a geolocalização estiver <strong>Desativada</strong>, ela ficará totalmente invisível em toda a aplicação (barra de status do tablet, telas de fiscalização, detalhes do termo e PDF oficial) e o campo no banco de dados receberá explicitamente o valor <code>null</code>.
+          <div>
+            <span className="font-bold">Geolocalização GPS dos Fiscais:</span> Parâmetro gerenciado no painel exclusivo <code className="bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-mono font-bold">Dev &gt; Configuração</code>.
           </div>
         </div>
+        <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold ${isGeoAtiva ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
+          {isGeoAtiva ? 'GPS ATIVO' : 'GPS DESATIVADO'}
+        </span>
       </div>
 
       <div className="grid grid-cols-1 gap-6">

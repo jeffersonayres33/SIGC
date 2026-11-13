@@ -668,7 +668,45 @@ CREATE TABLE IF NOT EXISTS public.respostas_formularios (
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- 9. HABILITAR ROW LEVEL SECURITY (RLS) E POLÍTICAS PÚBLICAS IDEMPOTENTES
+-- 9. FUNCIONÁRIOS
+CREATE TABLE IF NOT EXISTS public.funcionarios (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    nome VARCHAR(255) NOT NULL,
+    cpf VARCHAR(20) NOT NULL UNIQUE,
+    rg VARCHAR(50),
+    matricula VARCHAR(50) NOT NULL,
+    email VARCHAR(150),
+    telefone VARCHAR(50),
+    celular VARCHAR(50),
+    foto_url TEXT,
+    cargo_id VARCHAR(50),
+    cargo_nome VARCHAR(100),
+    setor_id VARCHAR(50),
+    setor_nome VARCHAR(100),
+    role VARCHAR(50) DEFAULT 'FUNCIONARIO',
+    permissoes_modulos TEXT[] DEFAULT '{}',
+    ativo BOOLEAN DEFAULT TRUE,
+    data_admissao VARCHAR(20),
+    senha_hash TEXT,
+    primeiro_acesso_pendente BOOLEAN DEFAULT FALSE,
+    zerar_senha_pendente BOOLEAN DEFAULT FALSE,
+    ultimo_acesso VARCHAR(50),
+    observacoes TEXT,
+    possui_inscricao_profissional BOOLEAN DEFAULT FALSE,
+    numero_inscricao_profissional VARCHAR(50),
+    setor_permissao_protocolos VARCHAR(50) DEFAULT 'APENAS_MEU',
+    setores_permitidos_protocolos TEXT[] DEFAULT '{}',
+    responsavel_permissao_protocolos VARCHAR(50) DEFAULT 'TODOS',
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Atualização incremental de colunas caso a tabela funcionarios já exista
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS setor_permissao_protocolos VARCHAR(50) DEFAULT 'APENAS_MEU';
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS setores_permitidos_protocolos TEXT[] DEFAULT '{}';
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS responsavel_permissao_protocolos VARCHAR(50) DEFAULT 'TODOS';
+
+-- 10. HABILITAR ROW LEVEL SECURITY (RLS) E POLÍTICAS PÚBLICAS IDEMPOTENTES
 ALTER TABLE public.council_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cadastros_basicos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.regras_assistencia ENABLE ROW LEVEL SECURITY;
@@ -680,6 +718,7 @@ ALTER TABLE public.termos_fiscalizacao ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.protocolos_processos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.formularios_dinamicos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.respostas_formularios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.funcionarios ENABLE ROW LEVEL SECURITY;
 
 DO $$
 DECLARE
@@ -690,7 +729,7 @@ BEGIN
             'council_config', 'cadastros_basicos', 'regras_assistencia', 
             'profissionais', 'empresas', 'lancamentos_financeiros', 
             'processos_cobranca', 'termos_fiscalizacao', 'protocolos_processos', 
-            'formularios_dinamicos', 'respostas_formularios'
+            'formularios_dinamicos', 'respostas_formularios', 'funcionarios'
         ])
     LOOP
         EXECUTE format('DROP POLICY IF EXISTS "Public access %I" ON public.%I;', tbl, tbl);

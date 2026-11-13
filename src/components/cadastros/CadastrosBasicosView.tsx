@@ -33,6 +33,7 @@ import { storageService } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
 import { sanitizeToUpper } from '../../utils/documentUtils';
 import { exportToCSV, exportToPDF } from '../../services/exportService';
+import { isMasterDeveloper } from '../../utils/permissionUtils';
 
 export type MainGroup = 'PROFISSIONAIS' | 'EMPRESAS' | 'PROTOCOLOS' | 'FUNCIONARIOS' | 'FORMULARIOS' | 'ADMIN';
 
@@ -54,6 +55,7 @@ const LISTA_MODULOS_SISTEMA: { id: string; nome: string }[] = [
   { id: 'site_publico', nome: 'Site Oficial & Portal Público' },
   { id: 'configuracoes', nome: 'Painel Admin / Configurações' },
   { id: 'microsservicos', nome: 'Microsserviços & Cloud' },
+  { id: 'dev', nome: '👑 DEV (Desenvolvedor Master & Cloud)' },
 ];
 
 interface SubGroupConfig {
@@ -440,6 +442,7 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
 
   const countFuncionarios = allItems.filter(i => 
     i.categoria === 'CARGO_FUNCIONARIO' || 
+    i.categoria === 'SETOR_PROTOCOLO' ||
     i.categoria === 'SETOR_LOTACAO' || 
     i.categoria === 'GRUPO_ACESSO_FUNCIONARIO'
   ).length;
@@ -451,7 +454,7 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
       : subList[0].key;
 
     const defaultCargo = allItems.find(i => i.categoria === 'CARGO_FUNCIONARIO' && i.ativo);
-    const defaultSetor = allItems.find(i => i.categoria === 'SETOR_LOTACAO' && i.ativo);
+    const defaultSetor = allItems.find(i => (i.categoria === 'SETOR_PROTOCOLO' || i.categoria === 'SETOR_LOTACAO') && i.ativo);
 
     setEditingItem({
       id: '',
@@ -1123,7 +1126,7 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
                           className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 text-xs font-semibold uppercase focus:ring-2 focus:ring-purple-500/20 focus:border-purple-600 cursor-pointer"
                         >
                           <option value="">Qualquer Setor / Todos os Setores</option>
-                          {allItems.filter(i => i.categoria === 'SETOR_LOTACAO' && i.ativo).map(s => (
+                          {allItems.filter(i => (i.categoria === 'SETOR_PROTOCOLO' || i.categoria === 'SETOR_LOTACAO') && i.ativo).map(s => (
                             <option key={s.id} value={s.id}>{s.nome}</option>
                           ))}
                         </select>
@@ -1158,30 +1161,36 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
                         </div>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2.5 bg-white border border-purple-200 rounded-xl">
-                        {LISTA_MODULOS_SISTEMA.map((mod) => {
-                          const currentMods = (editingItem.modulosPermitidos || []).map(m => String(m).toLowerCase().trim());
-                          const isChecked = currentMods.includes(mod.id.toLowerCase());
+                        {(() => {
+                          const loggedUser = storageService.getCurrentAuthUser();
+                          const isLoggedDev = isMasterDeveloper(loggedUser);
+                          const visibleList = LISTA_MODULOS_SISTEMA.filter(m => m.id !== 'dev' || isLoggedDev);
 
-                          return (
-                            <label key={mod.id} className={`flex items-center space-x-2 text-xs p-1.5 rounded-lg border cursor-pointer transition-colors ${
-                              isChecked ? 'bg-purple-50/70 border-purple-200 text-purple-900 font-medium' : 'border-transparent text-slate-700 hover:bg-slate-50'
-                            }`}>
-                              <input
-                                type="checkbox"
-                                checked={isChecked}
-                                onChange={(e) => {
-                                  const modNorm = mod.id.toLowerCase().trim();
-                                  const newMods = e.target.checked
-                                    ? [...currentMods.filter(m => m !== modNorm), modNorm]
-                                    : currentMods.filter(m => m !== modNorm);
-                                  setEditingItem({ ...editingItem, modulosPermitidos: newMods });
-                                }}
-                                className="w-3.5 h-3.5 rounded text-purple-600 focus:ring-purple-500 border-slate-300 cursor-pointer"
-                              />
-                              <span className="text-[11px] select-none truncate">{mod.nome}</span>
-                            </label>
-                          );
-                        })}
+                          return visibleList.map((mod) => {
+                            const currentMods = (editingItem.modulosPermitidos || []).map(m => String(m).toLowerCase().trim());
+                            const isChecked = currentMods.includes(mod.id.toLowerCase());
+
+                            return (
+                              <label key={mod.id} className={`flex items-center space-x-2 text-xs p-1.5 rounded-lg border cursor-pointer transition-colors ${
+                                isChecked ? 'bg-purple-50/70 border-purple-200 text-purple-900 font-medium' : 'border-transparent text-slate-700 hover:bg-slate-50'
+                              }`}>
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    const modNorm = mod.id.toLowerCase().trim();
+                                    const newMods = e.target.checked
+                                      ? [...currentMods.filter(m => m !== modNorm), modNorm]
+                                      : currentMods.filter(m => m !== modNorm);
+                                    setEditingItem({ ...editingItem, modulosPermitidos: newMods });
+                                  }}
+                                  className="w-3.5 h-3.5 rounded text-purple-600 focus:ring-purple-500 border-slate-300 cursor-pointer"
+                                />
+                                <span className="text-[11px] select-none truncate">{mod.nome}</span>
+                              </label>
+                            );
+                          });
+                        })()}
                       </div>
                     </div>
                   </div>

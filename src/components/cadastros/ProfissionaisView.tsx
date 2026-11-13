@@ -149,7 +149,7 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
   const [newActionForm, setNewActionForm] = useState({
     setor: '',
     descricao: '',
-    responsavel: 'Secretaria Geral'
+    responsavel: ''
   });
 
   // Cadastro / Edição Modal State
@@ -1120,10 +1120,11 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
   // Handler para adicionar ação / tramitação a um protocolo
   const handleOpenAddActionModal = (prot: ProtocoloProcesso) => {
     setProtocolToAddAction(prot);
+    const origemCriacao = prot.historico?.[0]?.setor || prot.setorAtual || 'PROTOCOLO GERAL';
     setNewActionForm({
       setor: prot.setorAtual || (cadastrosSetoresProtocolo[0]?.nome || 'Secretaria Geral'),
       descricao: '',
-      responsavel: 'Secretaria Geral'
+      responsavel: origemCriacao
     });
   };
 
@@ -1135,6 +1136,10 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
     }
 
     const dataHoraAtual = `${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR').slice(0, 5)}`;
+    const origemCriacao = protocolToAddAction.historico?.[0]?.setor || protocolToAddAction.setorAtual || 'PROTOCOLO GERAL';
+    const respTexto = (newActionForm.responsavel && newActionForm.responsavel.trim().toUpperCase() !== 'SECRETARIA GERAL')
+      ? newActionForm.responsavel
+      : origemCriacao;
     const updatedProt: ProtocoloProcesso = {
       ...protocolToAddAction,
       setorAtual: newActionForm.setor || protocolToAddAction.setorAtual,
@@ -1145,7 +1150,7 @@ export const ProfissionaisView: React.FC<ProfissionaisViewProps> = ({ onOpenBole
           data: dataHoraAtual,
           setor: newActionForm.setor.toUpperCase(),
           descricao: newActionForm.descricao.trim().toUpperCase(),
-          responsavel: newActionForm.responsavel.trim().toUpperCase()
+          responsavel: respTexto.trim().toUpperCase()
         }
       ]
     };

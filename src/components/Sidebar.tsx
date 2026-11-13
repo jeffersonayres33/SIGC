@@ -25,10 +25,9 @@ import {
   Briefcase,
   Tablet,
   Sliders,
-  SlidersHorizontal,
-  ArrowRightLeft,
   Send,
-  Globe
+  Globe,
+  Code2
 } from 'lucide-react';
 import { UserRole, AuthUser } from '../types';
 import { CouncilConfig, storageService } from '../services/storageService';
@@ -55,16 +54,19 @@ export type MainSection =
   | 'portal_profissional_anuidade'
   | 'portal_profissional_protocolo'
   | 'portal_profissional_requerimento'
+  | 'portal_profissional_formularios'
   | 'portal_empresa_perfil'
   | 'portal_empresa_anuidade'
   | 'portal_empresa_protocolo'
   | 'portal_empresa_requerimento'
+  | 'portal_empresa_formularios'
   | 'configuracoes'
   | 'painel_admin'
   | 'backup_restore'
   | 'funcionarios'
   | 'admin'
-  | 'microsservicos';
+  | 'microsservicos'
+  | 'dev_configuracao';
 
 const SIDEBAR_ROLES: { role: UserRole; label: string; icon: any; color: string }[] = [
   { role: 'DEVELOPER', label: '👑 Desenvolvedor Master', icon: ShieldCheck, color: 'text-purple-700 bg-purple-50 border-purple-200' },
@@ -112,7 +114,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
     relatorios: true,
     configuracoes: true,
     configuracaoMenu: true,
-    inscritoMenu: true
+    inscritoMenu: true,
+    portalInscrito: true,
+    portalProfissional: true,
+    portalEmpresa: true,
+    devTopic: true
   });
 
   const isProfissionalAccess = currentRole === 'PORTAL_PROFISSIONAL' || authUser?.tipo === 'PROFISSIONAL';
@@ -179,61 +185,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         </div>
 
-        {/* Simulador de Perfil no Menu Lateral (Mobile & Desktop) */}
-        <div className="p-3 border-b border-slate-100 bg-linear-to-b from-purple-50/70 to-slate-50/50 space-y-2">
-          {/* Alternar Perfil sem deslogar */}
-          {authUser && authUser.perfisDisponiveis && authUser.perfisDisponiveis.length > 1 && onSwitchProfile && (
-            <button
-              type="button"
-              onClick={() => {
-                onSwitchProfile(authUser.tipo === 'PROFISSIONAL' ? 'FUNCIONARIO' : 'PROFISSIONAL');
-                onClose();
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-white text-xs font-bold shadow-xs transition-all cursor-pointer active:scale-95 ${
-                authUser.tipo === 'PROFISSIONAL'
-                  ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
-                  : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
-              }`}
-            >
-              <div className="flex items-center space-x-2">
-                <ArrowRightLeft className="w-3.5 h-3.5" />
-                <span>{authUser.tipo === 'PROFISSIONAL' ? 'Mudar p/ Colaborador' : 'Mudar p/ Profissional PF'}</span>
-              </div>
-              <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-sm uppercase font-mono">Alternar</span>
-            </button>
-          )}
 
-          {/* Seletor do Simulador de Perfis */}
-          {onRoleChange && (
-            <div className="bg-white border border-purple-200/90 rounded-xl p-2.5 shadow-2xs space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-purple-900 flex items-center space-x-1.5">
-                  <SlidersHorizontal className="w-3 h-3 text-purple-600" />
-                  <span>Simulador de Perfil</span>
-                </span>
-                <span className="text-[9px] font-mono px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-800 font-bold">
-                  8 Perfis
-                </span>
-              </div>
-              <select
-                value={currentRole}
-                onChange={(e) => {
-                  const newRole = e.target.value as UserRole;
-                  onRoleChange(newRole);
-                  const found = SIDEBAR_ROLES.find(r => r.role === newRole);
-                  toastService.info('Perfil Simulado', `Ambiente alterado para: ${found?.label || newRole}.`);
-                }}
-                className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-purple-500/20 cursor-pointer"
-              >
-                {SIDEBAR_ROLES.map(r => (
-                  <option key={r.role} value={r.role}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
 
         {/* Executive Dashboard Shortcut */}
         {checkPerm( 'dashboard') && (
@@ -557,170 +509,241 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </span>
           </button>
 
-          {/* Profissional */}
-          {(isProfissionalAccess || isInternalAdmin) && (checkPerm('portal_inscrito') || checkPerm('portal_inscrito_pf') || checkPerm('profissionais')) && (
+          {/* Portal do Inscrito (Grupo Pai com SubMenus Profissional e Empresa) */}
+          {(checkPerm('portal_inscrito') || checkPerm('portal_inscrito_pf') || checkPerm('portal_inscrito_pj') || checkPerm('profissionais') || checkPerm('empresas')) && (
             <div>
               <button
-                onClick={() => toggleGroup('portalProfissional')}
+                onClick={() => toggleGroup('portalInscrito')}
                 className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  activeSection === 'portal_inscrito' || 
-                  activeSection === 'portal_inscrito_pf' || 
-                  activeSection === 'portal_profissional_perfil' || 
-                  activeSection === 'portal_profissional_anuidade' || 
-                  activeSection === 'portal_profissional_protocolo' || 
-                  activeSection === 'portal_profissional_requerimento'
-                    ? 'bg-cyan-50 text-cyan-900 border-l-2 border-cyan-500 font-bold'
-                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                  activeSection.startsWith('portal_')
+                    ? 'bg-gradient-to-r from-cyan-600 to-teal-600 text-white shadow-md'
+                    : 'text-slate-800 hover:bg-slate-100'
                 }`}
               >
                 <div className="flex items-center space-x-2">
-                  <User className="w-4 h-4 text-cyan-600" />
-                  <span>Profissional</span>
+                  <UserCheck className="w-4 h-4 text-cyan-500" />
+                  <span>Portal do Inscrito</span>
                 </div>
-                {openGroups.portalProfissional ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
+                {openGroups.portalInscrito ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
               </button>
 
-              {openGroups.portalProfissional && (
-                <div className="ml-3 pl-2.5 border-l-2 border-slate-100 space-y-1 mt-1">
-                  {checkPerm('portal_profissional_perfil') && (
-                    <button
-                      onClick={() => handleSelect('portal_profissional_perfil')}
-                      className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                        activeSection === 'portal_profissional_perfil' || activeSection === 'portal_inscrito_pf' || activeSection === 'portal_inscrito'
-                          ? 'bg-cyan-50 text-cyan-800 font-bold border-l-2 border-cyan-500'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                      }`}
-                    >
-                      <User className="w-3.5 h-3.5 text-cyan-600" />
-                      <span>Dados Cadastrais</span>
-                    </button>
+              {openGroups.portalInscrito && (
+                <div className="ml-2 pl-2 border-l-2 border-cyan-200/80 space-y-2 mt-1">
+                  {/* SubMenu 1: Profissional (PF) */}
+                  {(isProfissionalAccess || isInternalAdmin) && (
+                    <div>
+                      <button
+                        onClick={() => toggleGroup('portalProfissional')}
+                        className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          activeSection.startsWith('portal_profissional_') || activeSection === 'portal_inscrito_pf'
+                            ? 'bg-cyan-50 text-cyan-900 font-bold border-l-2 border-cyan-500'
+                            : 'text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <User className="w-3.5 h-3.5 text-cyan-600" />
+                          <span>Profissional</span>
+                        </div>
+                        {openGroups.portalProfissional ? <ChevronDown className="w-3 h-3 text-slate-400" /> : <ChevronRight className="w-3 h-3 text-slate-400" />}
+                      </button>
+
+                      {openGroups.portalProfissional && (
+                        <div className="ml-3 pl-2 border-l border-cyan-200/80 space-y-1 mt-1">
+                          <button
+                            onClick={() => handleSelect('portal_profissional_perfil')}
+                            className={`w-full flex items-center space-x-2 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                              activeSection === 'portal_profissional_perfil' || activeSection === 'portal_inscrito_pf'
+                                ? 'bg-cyan-600 text-white font-bold shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            }`}
+                          >
+                            <User className="w-3 h-3" />
+                            <span>Dados Cadastrais</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleSelect('portal_profissional_anuidade')}
+                            className={`w-full flex items-center space-x-2 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                              activeSection === 'portal_profissional_anuidade'
+                                ? 'bg-cyan-600 text-white font-bold shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            }`}
+                          >
+                            <Coins className="w-3 h-3" />
+                            <span>Anuidade</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleSelect('portal_profissional_protocolo')}
+                            className={`w-full flex items-center space-x-2 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                              activeSection === 'portal_profissional_protocolo'
+                                ? 'bg-cyan-600 text-white font-bold shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            }`}
+                          >
+                            <FileText className="w-3 h-3" />
+                            <span>Protocolo</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleSelect('portal_profissional_requerimento')}
+                            className={`w-full flex items-center space-x-2 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                              activeSection === 'portal_profissional_requerimento'
+                                ? 'bg-cyan-600 text-white font-bold shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            }`}
+                          >
+                            <Send className="w-3 h-3" />
+                            <span>Requerimento</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleSelect('portal_profissional_formularios')}
+                            className={`w-full flex items-center space-x-2 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                              activeSection === 'portal_profissional_formularios'
+                                ? 'bg-cyan-600 text-white font-bold shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            }`}
+                          >
+                            <FormInput className="w-3 h-3" />
+                            <span>Formulários</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
 
-                  {checkPerm('portal_profissional_anuidade') && (
-                    <button
-                      onClick={() => handleSelect('portal_profissional_anuidade')}
-                      className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                        activeSection === 'portal_profissional_anuidade'
-                          ? 'bg-amber-50 text-amber-800 font-bold border-l-2 border-amber-500'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                      }`}
-                    >
-                      <Coins className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Anuidade</span>
-                    </button>
-                  )}
+                  {/* SubMenu 2: Empresa (PJ) */}
+                  {(isEmpresaAccess || isInternalAdmin) && (
+                    <div>
+                      <button
+                        onClick={() => toggleGroup('portalEmpresa')}
+                        className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          activeSection.startsWith('portal_empresa_') || activeSection === 'portal_inscrito_pj'
+                            ? 'bg-teal-50 text-teal-900 font-bold border-l-2 border-teal-500'
+                            : 'text-slate-700 hover:bg-slate-100'
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <Building2 className="w-3.5 h-3.5 text-teal-600" />
+                          <span>Empresa</span>
+                        </div>
+                        {openGroups.portalEmpresa ? <ChevronDown className="w-3 h-3 text-slate-400" /> : <ChevronRight className="w-3 h-3 text-slate-400" />}
+                      </button>
 
-                  {checkPerm('portal_profissional_protocolo') && (
-                    <button
-                      onClick={() => handleSelect('portal_profissional_protocolo')}
-                      className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                        activeSection === 'portal_profissional_protocolo'
-                          ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-500'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                      }`}
-                    >
-                      <FileText className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Protocolo</span>
-                    </button>
-                  )}
+                      {openGroups.portalEmpresa && (
+                        <div className="ml-3 pl-2 border-l border-teal-200/80 space-y-1 mt-1">
+                          <button
+                            onClick={() => handleSelect('portal_empresa_perfil')}
+                            className={`w-full flex items-center space-x-2 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                              activeSection === 'portal_empresa_perfil' || activeSection === 'portal_inscrito_pj'
+                                ? 'bg-teal-600 text-white font-bold shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            }`}
+                          >
+                            <Building2 className="w-3 h-3" />
+                            <span>Dados Cadastrais</span>
+                          </button>
 
-                  {checkPerm('portal_profissional_requerimento') && (
-                    <button
-                      onClick={() => handleSelect('portal_profissional_requerimento')}
-                      className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                        activeSection === 'portal_profissional_requerimento'
-                          ? 'bg-purple-50 text-purple-800 font-bold border-l-2 border-purple-500'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                      }`}
-                    >
-                      <Send className="w-3.5 h-3.5 text-purple-600" />
-                      <span>Requerimento</span>
-                    </button>
+                          <button
+                            onClick={() => handleSelect('portal_empresa_anuidade')}
+                            className={`w-full flex items-center space-x-2 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                              activeSection === 'portal_empresa_anuidade'
+                                ? 'bg-teal-600 text-white font-bold shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            }`}
+                          >
+                            <Coins className="w-3 h-3" />
+                            <span>Anuidade</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleSelect('portal_empresa_protocolo')}
+                            className={`w-full flex items-center space-x-2 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                              activeSection === 'portal_empresa_protocolo'
+                                ? 'bg-teal-600 text-white font-bold shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            }`}
+                          >
+                            <FileText className="w-3 h-3" />
+                            <span>Protocolo</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleSelect('portal_empresa_requerimento')}
+                            className={`w-full flex items-center space-x-2 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                              activeSection === 'portal_empresa_requerimento'
+                                ? 'bg-teal-600 text-white font-bold shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            }`}
+                          >
+                            <Send className="w-3 h-3" />
+                            <span>Requerimento</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleSelect('portal_empresa_formularios')}
+                            className={`w-full flex items-center space-x-2 px-2 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
+                              activeSection === 'portal_empresa_formularios'
+                                ? 'bg-teal-600 text-white font-bold shadow-xs'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                            }`}
+                          >
+                            <FormInput className="w-3 h-3" />
+                            <span>Formulários</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
             </div>
           )}
 
-          {/* Empresa */}
-          {(isEmpresaAccess || isInternalAdmin) && (checkPerm('portal_inscrito') || checkPerm('portal_inscrito_pj') || checkPerm('empresas')) && (
+          {/* Tópico DEV com submenus Configuração e Microsserviços (EXCLUSIVO PARA DESENVOLVEDOR MASTER) */}
+          {isMasterDeveloper(authUser) && (
             <div>
               <button
-                onClick={() => toggleGroup('portalEmpresa')}
+                onClick={() => toggleGroup('devTopic')}
                 className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  activeSection === 'portal_inscrito_pj' || 
-                  activeSection === 'portal_empresa_perfil' || 
-                  activeSection === 'portal_empresa_anuidade' || 
-                  activeSection === 'portal_empresa_protocolo' || 
-                  activeSection === 'portal_empresa_requerimento'
-                    ? 'bg-teal-50 text-teal-900 border-l-2 border-teal-500 font-bold'
-                    : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                  activeSection === 'dev_configuracao' || activeSection === 'microsservicos'
+                    ? 'bg-purple-900 text-white shadow-md'
+                    : 'text-slate-800 hover:bg-purple-50 hover:text-purple-900'
                 }`}
               >
                 <div className="flex items-center space-x-2">
-                  <Building2 className="w-4 h-4 text-teal-600" />
-                  <span>Empresa</span>
+                  <Code2 className="w-4 h-4 text-purple-400" />
+                  <span className="font-mono font-bold tracking-wider">DEV</span>
                 </div>
-                {openGroups.portalEmpresa ? <ChevronDown className="w-3.5 h-3.5 text-slate-400" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-400" />}
+                {openGroups.devTopic ? <ChevronDown className="w-3.5 h-3.5 text-purple-200" /> : <ChevronRight className="w-3.5 h-3.5 text-purple-200" />}
               </button>
 
-              {openGroups.portalEmpresa && (
-                <div className="ml-3 pl-2.5 border-l-2 border-slate-100 space-y-1 mt-1">
-                  {checkPerm('portal_empresa_perfil') && (
-                    <button
-                      onClick={() => handleSelect('portal_empresa_perfil')}
-                      className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                        activeSection === 'portal_empresa_perfil' || activeSection === 'portal_inscrito_pj'
-                          ? 'bg-teal-50 text-teal-800 font-bold border-l-2 border-teal-500'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                      }`}
-                    >
-                      <Building2 className="w-3.5 h-3.5 text-teal-600" />
-                      <span>Dados Cadastrais</span>
-                    </button>
-                  )}
+              {openGroups.devTopic && (
+                <div className="ml-3 pl-2.5 border-l-2 border-purple-200 space-y-1 mt-1">
+                  <button
+                    onClick={() => handleSelect('dev_configuracao')}
+                    className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                      activeSection === 'dev_configuracao'
+                        ? 'bg-purple-600 text-white font-bold shadow-xs'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    <Sliders className="w-3.5 h-3.5 text-purple-300" />
+                    <span>Configuração</span>
+                  </button>
 
-                  {checkPerm('portal_empresa_anuidade') && (
-                    <button
-                      onClick={() => handleSelect('portal_empresa_anuidade')}
-                      className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                        activeSection === 'portal_empresa_anuidade'
-                          ? 'bg-amber-50 text-amber-800 font-bold border-l-2 border-amber-500'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                      }`}
-                    >
-                      <Coins className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Anuidade</span>
-                    </button>
-                  )}
-
-                  {checkPerm('portal_empresa_protocolo') && (
-                    <button
-                      onClick={() => handleSelect('portal_empresa_protocolo')}
-                      className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                        activeSection === 'portal_empresa_protocolo'
-                          ? 'bg-blue-50 text-blue-800 font-bold border-l-2 border-blue-500'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                      }`}
-                    >
-                      <FileText className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Protocolo</span>
-                    </button>
-                  )}
-
-                  {checkPerm('portal_empresa_requerimento') && (
-                    <button
-                      onClick={() => handleSelect('portal_empresa_requerimento')}
-                      className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
-                        activeSection === 'portal_empresa_requerimento'
-                          ? 'bg-purple-50 text-purple-800 font-bold border-l-2 border-purple-500'
-                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                      }`}
-                    >
-                      <Send className="w-3.5 h-3.5 text-purple-600" />
-                      <span>Requerimento</span>
-                    </button>
-                  )}
+                  <button
+                    onClick={() => handleSelect('microsservicos')}
+                    className={`w-full flex items-center space-x-2 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+                      activeSection === 'microsservicos'
+                        ? 'bg-purple-600 text-white font-bold shadow-xs'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    <Network className="w-3.5 h-3.5 text-purple-300" />
+                    <span>Microsserviços & Cloud</span>
+                  </button>
                 </div>
               )}
             </div>
@@ -966,20 +989,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </>
           )}
 
-          {/* Microsserviços & Cloud */}
-          {isInternalAdmin && checkPerm('microsservicos') && (
-            <button
-              onClick={() => handleSelect('microsservicos')}
-              className={`w-full flex items-center space-x-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
-                activeSection === 'microsservicos'
-                  ? 'bg-violet-50 text-violet-800 font-bold border-l-2 border-violet-500'
-                  : 'text-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              <Network className="w-4 h-4 text-violet-600" />
-              <span>Microsserviços & Cloud</span>
-            </button>
-          )}
+
         </nav>
 
         {/* Footer info */}

@@ -744,6 +744,9 @@ export interface Funcionario {
   observacoes?: string;
   possuiInscricaoProfissional?: boolean;
   numeroInscricaoProfissional?: string;
+  setorPermissaoProtocolos?: 'APENAS_MEU' | 'TODOS' | 'CUSTOMIZADO';
+  setoresPermitidosProtocolos?: string[];
+  responsavelPermissaoProtocolos?: 'APENAS_EU' | 'MEU_SETOR' | 'TODOS';
 }
 
 export interface AuthProfile {

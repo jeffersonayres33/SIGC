@@ -29,12 +29,14 @@ import {
   UserX,
   ArrowRight,
   Eye,
-  Download
+  Download,
+  FolderOpen
 } from 'lucide-react';
 import { Funcionario, UserRole, PermissoesAcoesModulo } from '../../types';
 import { storageService } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
 import { maskCPF, maskPhone, sanitizeToUpper } from '../../utils/documentUtils';
+import { isMasterDeveloper } from '../../utils/permissionUtils';
 
 interface FuncionariosViewProps {
   onNavigateToCadastrosBasicos?: () => void;
@@ -57,7 +59,8 @@ const MODULOS_DISPONIVEIS: { id: string; nome: string; descricao: string }[] = [
   { id: 'portal_inscrito_pj', nome: 'Portal do Inscrito — Empresas (PJ)', descricao: 'Autoatendimento exclusivo PJ, CRT Digital e requerimentos' },
   { id: 'site_publico', nome: 'Site Oficial & Portal Público', descricao: 'Acesso público liberado a notícias e formulários' },
   { id: 'configuracoes', nome: 'Painel Admin / Configurações', descricao: 'Parâmetros do conselho e numerações' },
-  { id: 'microsservicos', nome: 'Microsserviços & Cloud', descricao: 'Status dos serviços e gateway' }
+  { id: 'microsservicos', nome: 'Microsserviços & Cloud', descricao: 'Status dos serviços e gateway' },
+  { id: 'dev', nome: '👑 DEV (Desenvolvedor Master & Cloud)', descricao: 'Acesso exclusivo de Desenvolvedor Master' }
 ];
 
 export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateToCadastrosBasicos }) => {
@@ -79,7 +82,9 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
   // Cadastros Básicos dinâmicos para vínculos com reatividade a mudanças no storage
   const [allCadastrosBasicos, setAllCadastrosBasicos] = useState(storageService.getCadastrosBasicos());
   const cargosCadastrados = allCadastrosBasicos.filter(c => c.categoria === 'CARGO_FUNCIONARIO' && c.ativo);
-  const setoresCadastrados = allCadastrosBasicos.filter(c => c.categoria === 'SETOR_LOTACAO' && c.ativo);
+  const setoresCadastrados = allCadastrosBasicos
+    .filter(c => (c.categoria === 'SETOR_PROTOCOLO' || c.categoria === 'SETOR_LOTACAO') && c.ativo)
+    .filter((v, i, a) => a.findIndex(t => t.nome.trim().toUpperCase() === v.nome.trim().toUpperCase()) === i);
   const gruposAcessoCadastrados = allCadastrosBasicos.filter(c => c.categoria === 'GRUPO_ACESSO_FUNCIONARIO' && c.ativo);
 
   useEffect(() => {
@@ -566,7 +571,10 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
       ultimoAcesso: editingFunc.ultimoAcesso || 'Nunca acessou',
       observacoes: editingFunc.observacoes || '',
       possuiInscricaoProfissional: Boolean(editingFunc.possuiInscricaoProfissional),
-      numeroInscricaoProfissional: editingFunc.numeroInscricaoProfissional || editingFunc.numeroInscricao || ''
+      numeroInscricaoProfissional: editingFunc.numeroInscricaoProfissional || editingFunc.numeroInscricao || '',
+      setorPermissaoProtocolos: editingFunc.setorPermissaoProtocolos || 'APENAS_MEU',
+      setoresPermitidosProtocolos: Array.isArray(editingFunc.setoresPermitidosProtocolos) ? editingFunc.setoresPermitidosProtocolos : [],
+      responsavelPermissaoProtocolos: editingFunc.responsavelPermissaoProtocolos || 'TODOS'
     };
 
     const res = storageService.saveFuncionario(payload);
@@ -1563,12 +1571,17 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {MODULOS_DISPONIVEIS.map((mod) => {
-                        const isChecked = (editingFunc.permissoesModulos || [])
-                          .map(m => String(m).toLowerCase().trim())
-                          .includes(mod.id.toLowerCase().trim());
+                      {(() => {
+                        const loggedUser = storageService.getCurrentAuthUser();
+                        const isLoggedDev = isMasterDeveloper(loggedUser);
+                        const visibleModulos = MODULOS_DISPONIVEIS.filter(m => m.id !== 'dev' || isLoggedDev);
 
-                        const modNorm = mod.id.toLowerCase().trim();
+                        return visibleModulos.map((mod) => {
+                          const isChecked = (editingFunc.permissoesModulos || [])
+                            .map(m => String(m).toLowerCase().trim())
+                            .includes(mod.id.toLowerCase().trim());
+
+                          const modNorm = mod.id.toLowerCase().trim();
                         const acoes = (editingFunc.permissoesAcoes && editingFunc.permissoesAcoes[modNorm]) || {
                           visualizar: isChecked,
                           editar: isChecked,
@@ -1660,9 +1673,155 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
                             </div>
                           </div>
                         );
-                      })}
+                      });
+                    })()}
                     </div>
                   </div>
+
+                  {/* Configuração de Permissão de Setores para Protocolos */}
+                  {((editingFunc.permissoesModulos || []).map(m => m.toLowerCase().trim()).includes('protocolos')) && (
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                      <div className="flex items-center space-x-2">
+                        <FolderOpen className="w-4 h-4 text-blue-600" />
+                        <h3 className="text-xs font-bold text-slate-900 uppercase">
+                          Permissão de Visualização de Setores em Protocolos & Requerimentos
+                        </h3>
+                      </div>
+                      <p className="text-[11px] text-slate-500">
+                        Defina se este funcionário pode visualizar apenas os protocolos do seu próprio setor de lotação, todos os setores ou selecionar setores específicos.
+                      </p>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingFunc({ ...editingFunc, setorPermissaoProtocolos: 'APENAS_MEU' })}
+                          className={`p-3 rounded-xl border text-left text-xs font-bold transition-all cursor-pointer ${
+                            (editingFunc.setorPermissaoProtocolos || 'APENAS_MEU') === 'APENAS_MEU'
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <div>Apenas o Meu Setor</div>
+                          <div className={`text-[10px] font-normal mt-0.5 ${((editingFunc.setorPermissaoProtocolos || 'APENAS_MEU') === 'APENAS_MEU') ? 'text-blue-100' : 'text-slate-400'}`}>
+                            Filtra automaticamente pelo setor de lotação do colaborador
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setEditingFunc({ ...editingFunc, setorPermissaoProtocolos: 'TODOS' })}
+                          className={`p-3 rounded-xl border text-left text-xs font-bold transition-all cursor-pointer ${
+                            editingFunc.setorPermissaoProtocolos === 'TODOS'
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <div>Todos os Setores</div>
+                          <div className={`text-[10px] font-normal mt-0.5 ${editingFunc.setorPermissaoProtocolos === 'TODOS' ? 'text-blue-100' : 'text-slate-400'}`}>
+                            Visualiza e gerencia processos de qualquer setor
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setEditingFunc({ ...editingFunc, setorPermissaoProtocolos: 'CUSTOMIZADO' })}
+                          className={`p-3 rounded-xl border text-left text-xs font-bold transition-all cursor-pointer ${
+                            editingFunc.setorPermissaoProtocolos === 'CUSTOMIZADO'
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <div>Setores Específicos</div>
+                          <div className={`text-[10px] font-normal mt-0.5 ${editingFunc.setorPermissaoProtocolos === 'CUSTOMIZADO' ? 'text-blue-100' : 'text-slate-400'}`}>
+                            Selecionar quais setores adicionais são permitidos
+                          </div>
+                        </button>
+                      </div>
+
+                      {editingFunc.setorPermissaoProtocolos === 'CUSTOMIZADO' && (
+                        <div className="space-y-2 pt-2 border-t border-slate-200">
+                          <label className="block text-[11px] font-bold text-slate-700 uppercase">
+                            Selecione os Setores Permitidos:
+                          </label>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto p-2 bg-white border border-slate-200 rounded-xl">
+                            {setoresCadastrados.map(setor => {
+                              const permitidos = editingFunc.setoresPermitidosProtocolos || [];
+                              const isChecked = permitidos.includes(setor.nome);
+                              return (
+                                <label key={setor.id} className="flex items-center space-x-2 text-xs p-1.5 rounded hover:bg-slate-50 cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      const next = e.target.checked
+                                        ? [...permitidos, setor.nome]
+                                        : permitidos.filter(s => s !== setor.nome);
+                                      setEditingFunc({ ...editingFunc, setoresPermitidosProtocolos: next });
+                                    }}
+                                    className="w-3.5 h-3.5 text-blue-600 rounded border-slate-300"
+                                  />
+                                  <span className="text-slate-800 font-medium">{setor.nome}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Permissão de Seleção de Responsável em Protocolos & Requerimentos */}
+                      <div className="mt-4 pt-3 border-t border-slate-200">
+                        <label className="block text-[11px] font-bold text-slate-700 uppercase mb-2">
+                          Permissão de Seleção de Responsável em Protocolos:
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setEditingFunc({ ...editingFunc, responsavelPermissaoProtocolos: 'APENAS_EU' })}
+                            className={`p-3 rounded-xl border text-left text-xs font-bold transition-all cursor-pointer ${
+                              editingFunc.responsavelPermissaoProtocolos === 'APENAS_EU'
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            <div>Apenas Eu</div>
+                            <div className={`text-[10px] font-normal mt-0.5 ${editingFunc.responsavelPermissaoProtocolos === 'APENAS_EU' ? 'text-blue-100' : 'text-slate-400'}`}>
+                              O usuário só pode selecionar a si mesmo como responsável
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setEditingFunc({ ...editingFunc, responsavelPermissaoProtocolos: 'MEU_SETOR' })}
+                            className={`p-3 rounded-xl border text-left text-xs font-bold transition-all cursor-pointer ${
+                              editingFunc.responsavelPermissaoProtocolos === 'MEU_SETOR'
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            <div>Responsáveis do Meu Setor</div>
+                            <div className={`text-[10px] font-normal mt-0.5 ${editingFunc.responsavelPermissaoProtocolos === 'MEU_SETOR' ? 'text-blue-100' : 'text-slate-400'}`}>
+                              Pode selecionar apenas os responsáveis do seu próprio setor
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setEditingFunc({ ...editingFunc, responsavelPermissaoProtocolos: 'TODOS' })}
+                            className={`p-3 rounded-xl border text-left text-xs font-bold transition-all cursor-pointer ${
+                              ((editingFunc.responsavelPermissaoProtocolos || 'TODOS') === 'TODOS')
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            <div>Todos os Funcionários</div>
+                            <div className={`text-[10px] font-normal mt-0.5 ${((editingFunc.responsavelPermissaoProtocolos || 'TODOS') === 'TODOS') ? 'text-blue-100' : 'text-slate-400'}`}>
+                              Pode selecionar qualquer colaborador da instituição
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

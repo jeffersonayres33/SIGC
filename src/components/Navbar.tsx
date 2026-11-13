@@ -16,7 +16,6 @@ import {
   ChevronDown,
   Menu,
   LogOut,
-  ArrowRightLeft,
   Briefcase
 } from 'lucide-react';
 import { UserRole, AuthUser } from '../types';
@@ -38,6 +37,7 @@ interface NavbarProps {
   authUser?: AuthUser | null;
   onLogout?: () => void;
   onSwitchProfile?: (targetTipo: 'FUNCIONARIO' | 'PROFISSIONAL') => void;
+  onOpenUserProfile?: () => void;
 }
 
 const ROLES_LIST: { role: UserRole; label: string; icon: any; color: string; badgeColor: string }[] = [
@@ -61,7 +61,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleSidebar,
   authUser,
   onLogout,
-  onSwitchProfile
+  onSwitchProfile,
+  onOpenUserProfile
 }) => {
   const [showRoleMenu, setShowRoleMenu] = useState(false);
 
@@ -175,11 +176,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               <p className="text-[10px] sm:text-[11px] text-slate-500 font-medium hidden sm:block truncate">
                 {councilConfig.sigla} — {councilConfig.nomeCompleto}
               </p>
-              <div className="text-[10px] sm:text-[11px] text-blue-700 font-bold mt-0.5 hidden sm:flex items-center gap-1.5 truncate">
+              <button
+                type="button"
+                onClick={onOpenUserProfile}
+                className="text-[10px] sm:text-[11px] text-blue-700 font-bold mt-0.5 hidden sm:flex items-center gap-1.5 truncate text-left cursor-pointer hover:text-blue-900 group"
+                title="Clique para ver e alterar seus dados de perfil e senha"
+              >
+                <User className="w-3 h-3 text-blue-600 group-hover:scale-110 transition-transform" />
                 <span className="truncate">
-                  Olá, <strong className="text-blue-900 underline decoration-blue-300">{authUser?.nome || 'Usuário'}</strong>!
+                  Olá, <strong className="text-blue-900 underline decoration-blue-300 group-hover:decoration-blue-600">{authUser?.nome || 'Usuário'}</strong>!
                 </span>
-              </div>
+              </button>
             </div>
           </div>
         </div>
@@ -187,31 +194,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Right: Profile Switcher, Role & Sair */}
         <div className="flex items-center space-x-1.5 sm:space-x-2 shrink-0">
 
-          {/* Botão de Alternância Imediata Sem Deslogar */}
-          {authUser && authUser.perfisDisponiveis && authUser.perfisDisponiveis.length > 1 && onSwitchProfile && (
-            <button
-              type="button"
-              onClick={() => onSwitchProfile(authUser.tipo === 'PROFISSIONAL' ? 'FUNCIONARIO' : 'PROFISSIONAL')}
-              className={`flex items-center space-x-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-white text-xs font-bold shadow-xs transition-all cursor-pointer group shrink-0 active:scale-95 ${
-                authUser.tipo === 'PROFISSIONAL'
-                  ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20'
-                  : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/20'
-              }`}
-              title={
-                authUser.tipo === 'PROFISSIONAL'
-                  ? 'Clique para alternar imediatamente para sua atuação como Colaborador do Conselho'
-                  : 'Clique para alternar imediatamente para sua atuação como Profissional Inscrito (PF)'
-              }
-            >
-              <ArrowRightLeft className="w-3.5 h-3.5 group-hover:rotate-180 transition-transform duration-300" />
-              <span className="hidden sm:inline">
-                {authUser.tipo === 'PROFISSIONAL' ? 'Alternar para Colaborador' : 'Alternar para Profissional'}
-              </span>
-              <span className="inline sm:hidden text-[11px]">
-                {authUser.tipo === 'PROFISSIONAL' ? 'Colaborador' : 'Profissional'}
-              </span>
-            </button>
-          )}
+
 
           {/* Perfil de Acesso Ativo (Informativo - Simulação no Menu Lateral) */}
           <div className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold ${activeRoleConfig.color}`}>

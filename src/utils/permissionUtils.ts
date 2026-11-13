@@ -24,7 +24,8 @@ export const MODULOS_SISTEMA: ModuloInfo[] = [
   { id: 'portal_inscrito', nome: '10. Portal do Inscrito (PF/PJ)', descricao: 'Autoatendimento de profissionais e empresas' },
   { id: 'configuracoes', nome: 'Painel do Administrador', descricao: 'Configurações gerais, parâmetros e sistema' },
   { id: 'funcionarios', nome: 'Cadastro de Funcionários', descricao: 'Gestão de colaboradores, acessos e cargos' },
-  { id: 'microsservicos', nome: 'Microsservicos & Cloud', descricao: 'Status dos serviços distribuídos e gateway' }
+  { id: 'microsservicos', nome: 'Microsservicos & Cloud', descricao: 'Status dos serviços distribuídos e gateway' },
+  { id: 'dev', nome: '👑 DEV (Desenvolvedor Master & Cloud)', descricao: 'Acesso exclusivo de Desenvolvedor Master' }
 ];
 
 export const MASTER_DEVELOPER_CPF = '93413530259';
@@ -139,18 +140,29 @@ export function hasModulePermission(
     return true;
   }
 
-  // Papéis simulados ou atribuídos para usuários internos
-  if (activeRole === 'FISCAL') {
-    return ['dashboard', 'fiscalizacao', 'empresas', 'profissionais', 'formularios'].includes(targetModule);
+  const userPerms = (user.permissoes || []).map(p => String(p).toLowerCase().trim());
+
+  // Se o usuário possui permissões individuais explícitas salvas, o acesso individual é soberano
+  if (userPerms.length > 0) {
+    if (userPerms.includes(targetModule) || userPerms.includes(rawSection)) {
+      return true;
+    }
   }
-  if (activeRole === 'FINANCEIRO') {
-    return ['dashboard', 'financeiro', 'profissionais', 'empresas', 'protocolos', 'relatorios'].includes(targetModule);
-  }
-  if (activeRole === 'JURIDICO') {
-    return ['dashboard', 'cobranca_juridico', 'protocolos', 'profissionais', 'empresas', 'relatorios'].includes(targetModule);
-  }
-  if (activeRole === 'DIRETORIA') {
-    return ['dashboard', 'relatorios', 'protocolos', 'profissionais', 'empresas', 'financeiro', 'fiscalizacao', 'cobranca_juridico'].includes(targetModule);
+
+  // Se não estiver explicitamente liberado na lista individual e não for Master Developer, aplica restrição de papel caso simulado
+  if (simulatedRole) {
+    if (activeRole === 'FISCAL') {
+      return ['dashboard', 'fiscalizacao', 'empresas', 'profissionais', 'formularios'].includes(targetModule);
+    }
+    if (activeRole === 'FINANCEIRO') {
+      return ['dashboard', 'financeiro', 'profissionais', 'empresas', 'protocolos', 'relatorios'].includes(targetModule);
+    }
+    if (activeRole === 'JURIDICO') {
+      return ['dashboard', 'cobranca_juridico', 'protocolos', 'profissionais', 'empresas', 'relatorios'].includes(targetModule);
+    }
+    if (activeRole === 'DIRETORIA') {
+      return ['dashboard', 'relatorios', 'protocolos', 'profissionais', 'empresas', 'financeiro', 'fiscalizacao', 'cobranca_juridico'].includes(targetModule);
+    }
   }
 
   // ============================================================================
@@ -188,6 +200,11 @@ export function hasModulePermission(
     // Subitem: Requerimento
     if (rawSection === 'portal_profissional_requerimento' || targetModule === 'requerimento') {
       return isRecursoPFLiberado('requerimentoEletronico');
+    }
+
+    // Subitem: Formulários
+    if (rawSection === 'portal_profissional_formularios' || targetModule === 'formularios') {
+      return true;
     }
 
     // Bloqueia qualquer outro módulo interno (dashboard, fiscalizacao, empresas, funcionarios, etc.)
@@ -231,8 +248,18 @@ export function hasModulePermission(
       return isRecursoPJLiberado('requerimentoEletronico');
     }
 
+    // Subitem: Formulários
+    if (rawSection === 'portal_empresa_formularios' || targetModule === 'formularios') {
+      return true;
+    }
+
     // Bloqueia qualquer outro módulo interno
     return false;
+  }
+
+  // REGRA ESTRITA DEV: Seção DEV, Dev Configuração ou Microsserviços só podem ser acessados por quem for Master Developer ou perfil DEVELOPER
+  if (rawSection === 'dev' || rawSection === 'dev_configuracao' || targetModule === 'dev' || targetModule === 'microsservicos') {
+    return isMasterDeveloper(user) || user.role === 'DEVELOPER';
   }
 
   // ============================================================================
@@ -242,13 +269,8 @@ export function hasModulePermission(
     return true;
   }
 
-  const userPerms = (user.permissoes || []).map(p => String(p).toLowerCase().trim());
   if (userPerms.length === 0) {
     return targetModule === 'dashboard';
-  }
-
-  if (userPerms.includes(targetModule) || userPerms.includes(rawSection)) {
-    return true;
   }
 
   // Permissões do Portal do Inscrito para Funcionários e Colaboradores
@@ -368,10 +390,13 @@ export function getModuleName(sectionOrModule: string): string {
     case 'portal_profissional_anuidade': return 'Profissional • Anuidade & Posição Financeira';
     case 'portal_profissional_protocolo': return 'Profissional • Protocolos & Processos';
     case 'portal_profissional_requerimento': return 'Profissional • Requerimento Eletrônico';
+    case 'portal_profissional_formularios': return 'Profissional • Formulários Dinâmicos';
     case 'portal_empresa_perfil': return 'Empresa • Dados do Estabelecimento & CRT';
     case 'portal_empresa_anuidade': return 'Empresa • Anuidade & Financeiro';
     case 'portal_empresa_protocolo': return 'Empresa • Protocolos & Processos';
     case 'portal_empresa_requerimento': return 'Empresa • Requerimento Eletrônico';
+    case 'portal_empresa_formularios': return 'Empresa • Formulários Dinâmicos';
+    case 'dev_configuracao': return 'DEV • Configuração de Microsserviços & Cloud';
     case 'backup_restore': return 'Backup & Restauração de Dados';
     case 'admin': return 'Parâmetros Administrativos';
     default: return sectionOrModule.replace(/_/g, ' ').toUpperCase();

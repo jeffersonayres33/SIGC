@@ -1076,9 +1076,10 @@ class StorageService {
     const seen = new Map<string, ItemCadastroBasico>();
     for (const item of items) {
       if (!item || !item.nome) continue;
-      const key = `${item.categoria}::${this.normalizeCadBasicoKey(item.nome)}`;
+      const cat = (item.categoria === 'SETOR_LOTACAO') ? 'SETOR_PROTOCOLO' : item.categoria;
+      const key = `${cat}::${this.normalizeCadBasicoKey(item.nome)}`;
       if (!seen.has(key)) {
-        seen.set(key, item);
+        seen.set(key, { ...item, categoria: cat });
       } else {
         const existing = seen.get(key)!;
         // Merge optional fields if the existing item lacked them
@@ -1716,6 +1717,55 @@ class StorageService {
         }
       } catch (e) {
         console.warn('Erro ao carregar empresas:', e);
+      }
+
+      // 4.5. Fetch Funcionários
+      try {
+        const { data: funcData } = await supabase.from('funcionarios').select('*');
+        if (funcData && funcData.length > 0) {
+          const remoteFuncs: Funcionario[] = funcData.map(f => ({
+            id: f.id,
+            nome: f.nome,
+            cpf: f.cpf,
+            rg: f.rg || '',
+            matricula: f.matricula || ('FUNC-' + (f.id || '').slice(-4)),
+            email: f.email || '',
+            telefone: f.telefone || '',
+            celular: f.celular || '',
+            fotoUrl: f.foto_url || undefined,
+            cargoId: f.cargo_id || '',
+            cargoNome: f.cargo_nome || f.cargo || '',
+            setorId: f.setor_id || '',
+            setorNome: f.setor_nome || f.setor || '',
+            permissoesModulos: f.permissoes_modulos || [],
+            ativo: f.ativo ?? true,
+            dataAdmissao: f.data_admissao || '',
+            senhaHash: f.senha_hash || undefined,
+            primeiroAcessoPendente: Boolean(f.primeiro_acesso_pendente),
+            zerarSenhaPendente: Boolean(f.zerar_senha_pendente),
+            ultimoAcesso: f.ultimo_acesso || 'Nunca acessou',
+            observacoes: f.observacoes || '',
+            possuiInscricaoProfissional: Boolean(f.possui_inscricao_profissional),
+            numeroInscricaoProfissional: f.numero_inscricao_profissional || '',
+            setorPermissaoProtocolos: f.setor_permissao_protocolos || 'APENAS_MEU',
+            setoresPermitidosProtocolos: f.setores_permitidos_protocolos || [],
+            responsavelPermissaoProtocolos: f.responsavel_permissao_protocolos || 'TODOS'
+          }));
+
+          const remoteIds = new Set(remoteFuncs.map(rf => rf.id));
+          const localOnly = this.funcionarios.filter(lf => !remoteIds.has(lf.id));
+
+          this.funcionarios = [...localOnly, ...remoteFuncs];
+          localStorage.setItem(STORAGE_KEYS.FUNCIONARIOS, JSON.stringify(this.funcionarios));
+
+          if (localOnly.length > 0 && this.isOnline) {
+            localOnly.forEach(lf => this.saveFuncionario(lf));
+          }
+        } else if (this.funcionarios && this.funcionarios.length > 0 && this.isOnline) {
+          this.funcionarios.forEach(lf => this.saveFuncionario(lf));
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar funcionarios:', e);
       }
 
       // 5. Fetch Lancamentos Financeiros
@@ -2589,6 +2639,40 @@ class StorageService {
         if (fErr) throw new Error(`Falha ao migrar Formulários: ${fErr.message}`);
       }
 
+      // 11. Funcionários
+      const funcRows = this.funcionarios.map(f => ({
+        id: f.id,
+        nome: f.nome,
+        cpf: f.cpf,
+        rg: f.rg || '',
+        matricula: f.matricula || ('FUNC-' + (f.id || '').slice(-4)),
+        email: f.email || '',
+        telefone: f.telefone || '',
+        celular: f.celular || '',
+        foto_url: f.fotoUrl || null,
+        cargo_id: f.cargoId || '',
+        cargo_nome: f.cargoNome || '',
+        setor_id: f.setorId || '',
+        setor_nome: f.setorNome || '',
+        permissoes_modulos: f.permissoesModulos || [],
+        ativo: f.ativo ?? true,
+        data_admissao: f.dataAdmissao || '',
+        senha_hash: f.senhaHash || null,
+        primeiro_acesso_pendente: f.primeiroAcessoPendente ?? false,
+        zerar_senha_pendente: f.zerarSenhaPendente ?? false,
+        ultimo_acesso: f.ultimoAcesso || 'Nunca acessou',
+        observacoes: f.observacoes || null,
+        possui_inscricao_profissional: f.possuiInscricaoProfissional ?? false,
+        numero_inscricao_profissional: f.numeroInscricaoProfissional || null,
+        setor_permissao_protocolos: f.setorPermissaoProtocolos || 'APENAS_MEU',
+        setores_permitidos_protocolos: f.setoresPermitidosProtocolos || [],
+        responsavel_permissao_protocolos: f.responsavelPermissaoProtocolos || 'TODOS'
+      }));
+      if (funcRows.length > 0) {
+        const { error: funcErr } = await supabase.from('funcionarios').upsert(funcRows, { onConflict: 'id' });
+        if (funcErr) throw new Error(`Falha ao migrar Funcionários: ${funcErr.message}`);
+      }
+
       this.isSupabaseConnected = true;
       this.lastSupabaseStatus = { connected: true };
       return {
@@ -3060,11 +3144,39 @@ class StorageService {
     }));
     if (categoria) {
       if (categoria === 'SETOR_LOTACAO' || categoria === 'SETOR_PROTOCOLO') {
-        return list.filter(i => i.categoria === 'SETOR_PROTOCOLO' || i.categoria === 'SETOR_LOTACAO');
+        const filtered = list.filter(i => i.categoria === 'SETOR_PROTOCOLO' || i.categoria === 'SETOR_LOTACAO');
+        const seenIds = new Set<string>();
+        const seenNames = new Set<string>();
+        return filtered.filter(item => {
+          const normName = this.normalizeCadBasicoKey(item.nome);
+          if (seenIds.has(item.id) || seenNames.has(normName)) {
+            return false;
+          }
+          seenIds.add(item.id);
+          seenNames.add(normName);
+          return true;
+        });
       }
       return list.filter(i => i.categoria === categoria);
     }
-    return list;
+    // Para a lista completa, garante que não há duplicidade de setores com mesmo ID ou nome normalizado (sem acentos)
+    const seenIds = new Set<string>();
+    const seenSectorKeys = new Set<string>();
+    return list.filter(item => {
+      const isSector = item.categoria === 'SETOR_PROTOCOLO' || item.categoria === 'SETOR_LOTACAO';
+      if (isSector) {
+        const normKey = this.normalizeCadBasicoKey(item.nome);
+        if (seenIds.has(item.id) || seenSectorKeys.has(normKey)) {
+          return false;
+        }
+        seenIds.add(item.id);
+        seenSectorKeys.add(normKey);
+        return true;
+      }
+      if (seenIds.has(item.id)) return false;
+      seenIds.add(item.id);
+      return true;
+    });
   }
 
   public checkCadastroBasicoDuplicity(categoria: CategoriaCadastroBasico, nome: string, excludeId?: string): boolean {
@@ -6553,9 +6665,8 @@ class StorageService {
       });
     };
     const id = func.id || generateUUID();
-    const matricula = (func.matricula && /^\d+$/.test(String(func.matricula).trim()))
-      ? String(func.matricula).trim()
-      : this.peekNextMatriculaFuncionario();
+    const rawMat = func.matricula ? String(func.matricula).trim() : '';
+    const matricula = rawMat || ('FUNC-' + Math.floor(1000 + Math.random() * 9000));
 
     const sanitized: Funcionario = {
       ...func,
@@ -6583,7 +6694,10 @@ class StorageService {
       observacoes: func.observacoes || '',
       possuiInscricaoProfissional: !!func.possuiInscricaoProfissional,
       numeroInscricaoProfissional: func.numeroInscricaoProfissional || func.numeroInscricao || '',
-      numeroInscricao: func.numeroInscricaoProfissional || func.numeroInscricao || ''
+      numeroInscricao: func.numeroInscricaoProfissional || func.numeroInscricao || '',
+      setorPermissaoProtocolos: func.setorPermissaoProtocolos || 'APENAS_MEU',
+      setoresPermitidosProtocolos: Array.isArray(func.setoresPermitidosProtocolos) ? func.setoresPermitidosProtocolos : [],
+      responsavelPermissaoProtocolos: func.responsavelPermissaoProtocolos || 'TODOS'
     };
 
     const idx = this.funcionarios.findIndex(f => f.id === id);
@@ -6631,7 +6745,10 @@ class StorageService {
               ultimo_acesso: sanitized.ultimoAcesso,
               observacoes: sanitized.observacoes || null,
               possui_inscricao_profissional: sanitized.possuiInscricaoProfissional ?? false,
-              numero_inscricao_profissional: sanitized.numeroInscricaoProfissional || null
+              numero_inscricao_profissional: sanitized.numeroInscricaoProfissional || null,
+              setor_permissao_protocolos: sanitized.setorPermissaoProtocolos || 'APENAS_MEU',
+              setores_permitidos_protocolos: sanitized.setoresPermitidosProtocolos || [],
+              responsavel_permissao_protocolos: sanitized.responsavelPermissaoProtocolos || 'TODOS'
             }, { onConflict: 'id' });
           } catch (err) {
             console.warn('Erro ao sincronizar funcionario no Supabase:', err);

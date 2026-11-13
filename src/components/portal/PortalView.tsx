@@ -40,7 +40,7 @@ import { maskCEP, fetchAddressByCEP, maskPhone } from '../../utils/documentUtils
 import { isRecursoPFLiberado, isRecursoPJLiberado } from '../../utils/permissionUtils';
 
 interface PortalViewProps {
-  viewMode?: 'PROFISSIONAL' | 'EMPRESA' | 'ANUIDADE_PF' | 'PROTOCOLO_PF' | 'REQUERIMENTO_PF' | 'ANUIDADE_PJ' | 'PROTOCOLO_PJ' | 'REQUERIMENTO_PJ';
+  viewMode?: 'PROFISSIONAL' | 'EMPRESA' | 'ANUIDADE_PF' | 'PROTOCOLO_PF' | 'REQUERIMENTO_PF' | 'FORMULARIOS_PF' | 'ANUIDADE_PJ' | 'PROTOCOLO_PJ' | 'REQUERIMENTO_PJ' | 'FORMULARIOS_PJ';
   onOpenBoletoPix?: (lanc: LancamentoFinanceiro) => void;
   onOpenCrtModal?: (empresa: Empresa) => void;
 }
@@ -58,6 +58,8 @@ export const PortalView: React.FC<PortalViewProps> = ({ viewMode = 'PROFISSIONAL
   const [formDinamicoAtivo, setFormDinamicoAtivo] = useState<FormularioDinamico | null>(null);
   const [respostasForm, setRespostasForm] = useState<Record<string, any>>({});
   const [anexosForm, setAnexosForm] = useState<{ nome: string; tamanhoMb: number; tipo: string; url: string }[]>([]);
+  const [buscaForm, setBuscaForm] = useState('');
+  const [isAnonimoSubmit, setIsAnonimoSubmit] = useState(false);
 
   // Permission flags based on Council Configuration
   const regraPF = storageService.getAcessosInscritoPF();
@@ -1127,6 +1129,335 @@ export const PortalView: React.FC<PortalViewProps> = ({ viewMode = 'PROFISSIONAL
               </div>
             )}
           </form>
+        </div>
+      )}
+
+      {(viewMode === 'FORMULARIOS_PF' || viewMode === 'FORMULARIOS_PJ') && (
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center space-x-2">
+                  <FileText className="w-4 h-4 text-cyan-600" />
+                  <span>Formulários & Requerimentos Dinâmicos ({viewMode === 'FORMULARIOS_PF' ? 'Pessoa Física' : 'Pessoa Jurídica'})</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Selecione um dos formulários oficiais homologados pelo Conselho para preenchimento online.
+                </p>
+              </div>
+              <div className="relative w-full sm:w-64">
+                <input
+                  type="text"
+                  value={buscaForm}
+                  onChange={(e) => setBuscaForm(e.target.value)}
+                  placeholder="Buscar formulário..."
+                  className="w-full px-3 py-1.5 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-cyan-500"
+                />
+              </div>
+            </div>
+
+            {(() => {
+              const todosFormularios = storageService.getFormularios();
+              const disponiveis = todosFormularios.filter(f => {
+                if (!f.ativo) return false;
+                if (viewMode === 'FORMULARIOS_PF') {
+                  return f.publicarProfissional !== false || f.publicoAlvo === 'PROFISSIONAL' || f.publicoAlvo === 'TODOS' || !f.publicoAlvo;
+                } else {
+                  return f.publicarEmpresa !== false || f.publicoAlvo === 'EMPRESA' || f.publicoAlvo === 'TODOS' || !f.publicoAlvo;
+                }
+              }).filter(f => 
+                !buscaForm || 
+                f.titulo.toLowerCase().includes(buscaForm.toLowerCase()) || 
+                f.descricao.toLowerCase().includes(buscaForm.toLowerCase()) ||
+                f.categoria.toLowerCase().includes(buscaForm.toLowerCase())
+              );
+
+              if (disponiveis.length === 0) {
+                return (
+                  <div className="p-8 text-center text-slate-500 space-y-2 bg-slate-50 rounded-xl border border-slate-200">
+                    <FileText className="w-8 h-8 text-slate-400 mx-auto" />
+                    <div className="font-bold text-slate-700 text-sm">Nenhum formulário dinâmico disponível</div>
+                    <p className="text-xs text-slate-400">
+                      Não foram encontrados formulários ativos para preenchimento no momento.
+                    </p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {disponiveis.map((form) => (
+                    <div key={form.id} className="p-4 bg-slate-50 hover:bg-white border border-slate-200 hover:border-cyan-300 rounded-2xl transition-all shadow-xs flex flex-col justify-between space-y-3">
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-cyan-100 text-cyan-800">
+                            {form.categoria || 'Geral'}
+                          </span>
+                          {form.prazoDiasConclusao && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-600" />
+                              <span>{form.prazoDiasConclusao} dias</span>
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="font-bold text-slate-900 text-sm leading-snug">{form.titulo}</h4>
+                        <p className="text-xs text-slate-600 line-clamp-2">{form.descricao}</p>
+                        <div className="flex flex-wrap gap-2 text-[10px] text-slate-500 pt-1">
+                          {form.permiteAnonimo && (
+                            <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded font-semibold">
+                              Permite Anônimo
+                            </span>
+                          )}
+                          {form.permiteAnexos && (
+                            <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-semibold">
+                              Permite Anexos ({form.tamanhoMaximoMb || 10}MB)
+                            </span>
+                          )}
+                          <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded font-semibold">
+                            {form.campos?.length || 0} campos
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFormDinamicoAtivo(form);
+                          setRespostasForm({});
+                          setAnexosForm([]);
+                          setIsAnonimoSubmit(false);
+                        }}
+                        className="w-full py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Preencher Formulário</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* Modal para Preenchimento de Formulário Dinâmico */}
+      {formDinamicoAtivo && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-2xl my-8">
+            <div className="flex items-start justify-between border-b border-slate-100 pb-4">
+              <div>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-cyan-100 text-cyan-800">
+                  {formDinamicoAtivo.categoria || 'Formulário Oficial'}
+                </span>
+                <h3 className="text-base font-bold text-slate-900 mt-1">{formDinamicoAtivo.titulo}</h3>
+                <p className="text-xs text-slate-500 mt-0.5">{formDinamicoAtivo.descricao}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFormDinamicoAtivo(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                const autorNome = isAnonimoSubmit ? 'Anônimo / Manifestante' : (viewMode.includes('PF') ? profData.nome : empresaLogada?.razaoSocial || 'Inscrito');
+                const autorDoc = isAnonimoSubmit ? 'ANÔNIMO' : (viewMode.includes('PF') ? profData.cpf : empresaLogada?.cnpj || '000.000.000-00');
+                
+                const protNum = `PROT-2026/${Math.floor(100000 + Math.random() * 900000)}`;
+
+                const novaResp: RespostaFormulario = {
+                  id: `resp-${Date.now()}`,
+                  formularioId: formDinamicoAtivo.id,
+                  formularioTitulo: formDinamicoAtivo.titulo,
+                  autorNome,
+                  autorDocumento: autorDoc,
+                  autorEmail: isAnonimoSubmit ? undefined : (viewMode.includes('PF') ? profData.emailPessoal : empresaLogada?.email),
+                  canalOrigem: viewMode.includes('PF') ? 'PROFISSIONAL' : 'EMPRESA',
+                  protocoloGerado: protNum,
+                  dataEnvio: new Date().toLocaleString('pt-BR'),
+                  respostas: respostasForm,
+                  anexos: anexosForm.map(a => ({ nome: a.nome, tamanho: Math.round(a.tamanhoMb * 1024), tipo: a.tipo, url: a.url })),
+                  status: 'Em Análise'
+                };
+
+                storageService.submitFormResponse(novaResp);
+
+                // Gerar protocolo automático
+                const novoProt = {
+                  id: `prot-${Date.now()}`,
+                  numeroProtocolo: protNum,
+                  tipo: formDinamicoAtivo.titulo,
+                  assunto: formDinamicoAtivo.titulo,
+                  interessado: autorNome,
+                  documentoInteressado: autorDoc,
+                  tipoInteressado: (viewMode.includes('PF') ? 'PROFISSIONAL' : 'EMPRESA') as any,
+                  vinculoInscricao: isAnonimoSubmit ? undefined : (viewMode.includes('PF') ? profData.inscricao : empresaLogada?.inscricao),
+                  contatoEmail: novaResp.autorEmail,
+                  dataInscricao: new Date().toLocaleDateString('pt-BR'),
+                  dataAbertura: new Date().toLocaleDateString('pt-BR'),
+                  dataUltimaAtualizacao: new Date().toLocaleDateString('pt-BR'),
+                  prazoResposta: `${formDinamicoAtivo.prazoDiasConclusao || 5} dias úteis`,
+                  status: 'Em Análise',
+                  setorAtual: formDinamicoAtivo.setorTramitacaoNome || 'Atendimento Geral',
+                  anexos: anexosForm.map(a => a.nome),
+                  historico: [
+                    {
+                      data: new Date().toLocaleDateString('pt-BR'),
+                      setor: 'Portal do Inscrito',
+                      descricao: `Formulário "${formDinamicoAtivo.titulo}" preenchido e protocolado online.`,
+                      responsavel: autorNome
+                    }
+                  ]
+                };
+                storageService.saveProtocolo(novoProt);
+
+                toastService.success(
+                  'Formulário Protocolado',
+                  `Suas respostas foram salvas com sucesso. Protocolo gerado: ${protNum}.`
+                );
+                setFormDinamicoAtivo(null);
+              }}
+              className="space-y-4 text-xs"
+            >
+              {/* Opção de Envio Anônimo se permitido */}
+              {formDinamicoAtivo.permiteAnonimo && (
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-xl flex items-center justify-between">
+                  <div>
+                    <span className="font-bold text-purple-900 block">Deseja enviar de forma anônima?</span>
+                    <span className="text-[11px] text-purple-700">Usado para denúncias ou manifestações sem identificação.</span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={isAnonimoSubmit}
+                    onChange={(e) => setIsAnonimoSubmit(e.target.checked)}
+                    className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500 border-purple-300 cursor-pointer"
+                  />
+                </div>
+              )}
+
+              {/* Renderização dinâmica dos campos */}
+              <div className="space-y-3.5 max-h-[60vh] overflow-y-auto pr-2">
+                {formDinamicoAtivo.campos?.map((campo) => (
+                  <div key={campo.id} className="space-y-1">
+                    <label className="block text-slate-700 font-bold">
+                      {campo.label} {campo.obrigatorio && <span className="text-rose-600">*</span>}
+                    </label>
+                    {campo.ajuda && <p className="text-[11px] text-slate-500">{campo.ajuda}</p>}
+
+                    {campo.tipo === 'select' ? (
+                      <select
+                        required={campo.obrigatorio}
+                        value={respostasForm[campo.id] || ''}
+                        onChange={(e) => setRespostasForm({ ...respostasForm, [campo.id]: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900"
+                      >
+                        <option value="">Selecione uma opção...</option>
+                        {campo.opcoes?.map(op => <option key={op} value={op}>{op}</option>)}
+                      </select>
+                    ) : campo.tipo === 'textarea' ? (
+                      <textarea
+                        rows={3}
+                        required={campo.obrigatorio}
+                        placeholder={campo.placeholder}
+                        value={respostasForm[campo.id] || ''}
+                        onChange={(e) => setRespostasForm({ ...respostasForm, [campo.id]: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900"
+                      />
+                    ) : (
+                      <input
+                        type={campo.tipo === 'number' ? 'number' : campo.tipo === 'date' ? 'date' : 'text'}
+                        required={campo.obrigatorio}
+                        placeholder={campo.placeholder}
+                        value={respostasForm[campo.id] || ''}
+                        onChange={(e) => setRespostasForm({ ...respostasForm, [campo.id]: e.target.value })}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900"
+                      />
+                    )}
+                  </div>
+                ))}
+
+                {/* Anexos de Arquivos se o formulário permitir */}
+                {formDinamicoAtivo.permiteAnexos && (
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-800 flex items-center space-x-1.5">
+                        <Paperclip className="w-4 h-4 text-cyan-600" />
+                        <span>Anexo de Documentos ({formDinamicoAtivo.tiposAnexosPermitidos?.join(', ') || 'PDF, DOCX, JPG, PNG'})</span>
+                      </span>
+                      <span className="text-[10px] text-slate-500">Máx: {formDinamicoAtivo.tamanhoMaximoMb || 10} MB</span>
+                    </div>
+
+                    <input
+                      type="file"
+                      multiple
+                      accept={formDinamicoAtivo.tiposAnexosPermitidos?.join(',') || '.pdf,.docx,.jpg,.png'}
+                      onChange={(e) => {
+                        const files = e.target.files;
+                        if (!files || files.length === 0) return;
+                        Array.from(files).forEach(file => {
+                          const reader = new FileReader();
+                          reader.onload = () => {
+                            setAnexosForm(prev => [
+                              ...prev,
+                              {
+                                nome: file.name,
+                                tamanhoMb: Number((file.size / (1024 * 1024)).toFixed(2)),
+                                tipo: file.type || 'documento',
+                                url: reader.result as string
+                              }
+                            ]);
+                          };
+                          reader.readAsDataURL(file);
+                        });
+                        toastService.info('Anexo Adicionado', `${files.length} arquivo(s) carregado(s).`);
+                        e.target.value = '';
+                      }}
+                      className="w-full text-xs text-slate-600 cursor-pointer"
+                    />
+
+                    {anexosForm.length > 0 && (
+                      <div className="space-y-1 pt-1">
+                        {anexosForm.map((anx, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-200 text-xs">
+                            <span className="truncate max-w-xs text-slate-800 font-medium">{anx.nome} ({anx.tamanhoMb} MB)</span>
+                            <button
+                              type="button"
+                              onClick={() => setAnexosForm(prev => prev.filter((_, i) => i !== idx))}
+                              className="text-rose-600 hover:text-rose-800 font-bold px-1 cursor-pointer"
+                            >
+                              Remover
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setFormDinamicoAtivo(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-xl text-xs shadow-md cursor-pointer flex items-center space-x-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Enviar & Gerar Protocolo</span>
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

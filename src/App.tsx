@@ -13,6 +13,7 @@ import { FormulariosView } from './components/formularios/FormulariosView';
 import { ProtocolosView } from './components/protocolos/ProtocolosView';
 import { PortalView } from './components/portal/PortalView';
 import { MicrosservicosView } from './components/arquitetura/MicrosservicosView';
+import { DevConfiguracaoView } from './components/configuracoes/DevConfiguracaoView';
 import { ConfiguracoesView, ConfigTab } from './components/configuracoes/ConfiguracoesView';
 import { BackupRestoreConfig } from './components/configuracoes/BackupRestoreConfig';
 import { FuncionariosView } from './components/cadastros/FuncionariosView';
@@ -23,6 +24,7 @@ import { ToastContainer } from './components/common/ToastContainer';
 import { CrtModal } from './components/modals/CrtModal';
 import { BoletoPixModal } from './components/modals/BoletoPixModal';
 import { CdaModal } from './components/modals/CdaModal';
+import { UserProfileModal } from './components/modals/UserProfileModal';
 import { SupabaseManagerModal } from './components/common/SupabaseManagerModal';
 import { SyncErrorModal } from './components/common/SyncErrorModal';
 
@@ -47,6 +49,7 @@ export default function App() {
   const [councilConfig, setCouncilConfig] = useState(storageService.getCouncilConfig());
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSupabaseModalOpen, setIsSupabaseModalOpen] = useState(false);
+  const [isUserProfileOpen, setIsUserProfileOpen] = useState(false);
   const [syncErrors, setSyncErrors] = useState(storageService.getSyncErrors());
   const [isSyncErrorModalOpen, setIsSyncErrorModalOpen] = useState(false);
 
@@ -173,6 +176,7 @@ export default function App() {
             setConfigTab('geral');
           }}
           onOpenSupabaseModal={() => setIsSupabaseModalOpen(true)}
+          onOpenUserProfile={() => setIsUserProfileOpen(true)}
           authUser={authUser}
           onLogout={() => {
             storageService.logout();
@@ -352,6 +356,14 @@ export default function App() {
                   />
                 )}
 
+                {activeSection === 'portal_profissional_formularios' && (
+                  <PortalView
+                    viewMode="FORMULARIOS_PF"
+                    onOpenBoletoPix={setBoletoLancamento}
+                    onOpenCrtModal={setCrtEmpresa}
+                  />
+                )}
+
                 {(activeSection === 'portal_inscrito_pj' || activeSection === 'portal_empresa_perfil') && (
                   <PortalView
                     viewMode="EMPRESA"
@@ -384,6 +396,14 @@ export default function App() {
                   />
                 )}
 
+                {activeSection === 'portal_empresa_formularios' && (
+                  <PortalView
+                    viewMode="FORMULARIOS_PJ"
+                    onOpenBoletoPix={setBoletoLancamento}
+                    onOpenCrtModal={setCrtEmpresa}
+                  />
+                )}
+
                 {activeSection === 'configuracoes' && (
                   <ConfiguracoesView key={configTab} initialTab={configTab} />
                 )}
@@ -406,6 +426,10 @@ export default function App() {
                     key="admin-view" 
                     initialGroup="ADMIN"
                   />
+                )}
+
+                {activeSection === 'dev_configuracao' && (
+                  <DevConfiguracaoView />
                 )}
 
                 {activeSection === 'microsservicos' && (
@@ -431,6 +455,13 @@ export default function App() {
       <CdaModal
         cobranca={cdaProcesso}
         onClose={() => setCdaProcesso(null)}
+      />
+
+      <UserProfileModal
+        isOpen={isUserProfileOpen}
+        onClose={() => setIsUserProfileOpen(false)}
+        authUser={authUser}
+        onUserUpdated={(updated) => setAuthUser(updated)}
       />
 
       <SupabaseManagerModal
