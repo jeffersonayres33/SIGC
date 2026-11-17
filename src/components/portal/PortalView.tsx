@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   UserCheck, 
   FileCheck2, 
@@ -38,6 +38,7 @@ import { LancamentoFinanceiro, Empresa, Profissional, HistoricoVinculoProfission
 import { toastService } from '../../services/toastService';
 import { maskCEP, fetchAddressByCEP, maskPhone } from '../../utils/documentUtils';
 import { isRecursoPFLiberado, isRecursoPJLiberado } from '../../utils/permissionUtils';
+import { DynamicFieldRenderer } from '../formularios/DynamicFieldRenderer';
 
 interface PortalViewProps {
   viewMode?: 'PROFISSIONAL' | 'EMPRESA' | 'ANUIDADE_PF' | 'PROTOCOLO_PF' | 'REQUERIMENTO_PF' | 'FORMULARIOS_PF' | 'ANUIDADE_PJ' | 'PROTOCOLO_PJ' | 'REQUERIMENTO_PJ' | 'FORMULARIOS_PJ';
@@ -46,6 +47,12 @@ interface PortalViewProps {
 }
 
 export const PortalView: React.FC<PortalViewProps> = ({ viewMode = 'PROFISSIONAL', onOpenBoletoPix, onOpenCrtModal }) => {
+  const [, setSyncVersion] = useState(0);
+  useEffect(() => {
+    const unsub = storageService.subscribe(() => setSyncVersion(v => v + 1));
+    return () => unsub();
+  }, []);
+
   // Professional state initialized with real database data
   const authUser = storageService.getCurrentAuthUser();
   const allProfs = storageService.getProfissionais();
@@ -60,6 +67,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ viewMode = 'PROFISSIONAL
   const [anexosForm, setAnexosForm] = useState<{ nome: string; tamanhoMb: number; tipo: string; url: string }[]>([]);
   const [buscaForm, setBuscaForm] = useState('');
   const [isAnonimoSubmit, setIsAnonimoSubmit] = useState(false);
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
 
   // Permission flags based on Council Configuration
   const regraPF = storageService.getAcessosInscritoPF();
@@ -118,7 +126,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ viewMode = 'PROFISSIONAL
     );
   };
 
-  const handleCreateProtocoloPF = (e: React.FormEvent) => {
+  const handleCreateProtocoloPF = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const assuntoAtual = assuntosPF.find(a => a.nome === protocoloAssuntoPF);
@@ -140,9 +148,10 @@ export const PortalView: React.FC<PortalViewProps> = ({ viewMode = 'PROFISSIONAL
       ? `EMPRESA(S) VINCULADA(S): ${empresasVinculadasInfo.join('; ')} | DETALHES: ${protocoloDetalhesPF}`
       : protocoloDetalhesPF;
 
-    const protNum = `PROT-PF-2026/${Math.floor(1000 + Math.random() * 9000)}`;
+    const protNum = await storageService.generateUniqueProtocoloNumeroAsync('INSCRITO');
+    const setorCanonical = storageService.resolveCanonicalSetorProtocolo('ATENDIMENTO');
     const novoProt = {
-      id: `prot-${Date.now()}`,
+      id: `prot-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       numeroProtocolo: protNum,
       tipo: protocoloAssuntoPF,
       assunto: protocoloAssuntoPF,
@@ -159,7 +168,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ viewMode = 'PROFISSIONAL
       dataUltimaAtualizacao: new Date().toLocaleDateString('pt-BR'),
       prazoResposta: '5 dias úteis',
       status: 'Em Análise',
-      setorAtual: 'Atendimento PF',
+      setorAtual: setorCanonical,
       anexos: [],
       historico: [
         {
@@ -170,20 +179,28 @@ export const PortalView: React.FC<PortalViewProps> = ({ viewMode = 'PROFISSIONAL
         }
       ]
     };
-    storageService.saveProtocolo(novoProt);
-    toastService.success(
-      'Requerimento Digital Protocolado',
-      `Assunto: "${protocoloAssuntoPF}". Protocolo gerado: ${protNum}.`
-    );
+    const synced = await storageService.saveProtocoloAsync(novoProt);
+    if (synced) {
+      toastService.success(
+        'Requerimento Digital Protocolado',
+        `Assunto: "${protocoloAssuntoPF}". Protocolo gerado: ${novoProt.numeroProtocolo}.`
+      );
+    } else {
+      toastService.warning(
+        'Requerimento Registrado Localmente',
+        `Protocolo ${novoProt.numeroProtocolo} criado, porém houve falha ao sincronizar com o banco online.`
+      );
+    }
     setProtocoloDetalhesPF('');
     setEmpresasSelecionadasPF([]);
   };
 
-  const handleCreateProtocoloPJ = (e: React.FormEvent) => {
+  const handleCreateProtocoloPJ = async (e: React.FormEvent) => {
     e.preventDefault();
-    const protNum = `PROT-PJ-2026/${Math.floor(1000 + Math.random() * 9000)}`;
+    const protNum = await storageService.generateUniqueProtocoloNumeroAsync('INSCRITO');
+    const setorCanonical = storageService.resolveCanonicalSetorProtocolo('ATENDIMENTO');
     const novoProt = {
-      id: `prot-${Date.now()}`,
+      id: `prot-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       numeroProtocolo: protNum,
       tipo: protocoloAssuntoPJ,
       assunto: protocoloAssuntoPJ,
@@ -200,7 +217,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ viewMode = 'PROFISSIONAL
       dataUltimaAtualizacao: new Date().toLocaleDateString('pt-BR'),
       prazoResposta: '5 dias úteis',
       status: 'Em Análise',
-      setorAtual: 'Atendimento PJ',
+      setorAtual: setorCanonical,
       anexos: [],
       historico: [
         {
@@ -211,11 +228,18 @@ export const PortalView: React.FC<PortalViewProps> = ({ viewMode = 'PROFISSIONAL
         }
       ]
     };
-    storageService.saveProtocolo(novoProt);
-    toastService.success(
-      'Requerimento da Empresa Protocolado',
-      `Assunto: "${protocoloAssuntoPJ}". Protocolo gerado: ${protNum}.`
-    );
+    const synced = await storageService.saveProtocoloAsync(novoProt);
+    if (synced) {
+      toastService.success(
+        'Requerimento da Empresa Protocolado',
+        `Assunto: "${protocoloAssuntoPJ}". Protocolo gerado: ${novoProt.numeroProtocolo}.`
+      );
+    } else {
+      toastService.warning(
+        'Requerimento Registrado Localmente',
+        `Protocolo ${novoProt.numeroProtocolo} criado, porém houve falha ao sincronizar com o banco online.`
+      );
+    }
     setProtocoloDetalhesPJ('');
   };
 
@@ -1263,64 +1287,60 @@ export const PortalView: React.FC<PortalViewProps> = ({ viewMode = 'PROFISSIONAL
             </div>
 
             <form 
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
-                const autorNome = isAnonimoSubmit ? 'Anônimo / Manifestante' : (viewMode.includes('PF') ? profData.nome : empresaLogada?.razaoSocial || 'Inscrito');
-                const autorDoc = isAnonimoSubmit ? 'ANÔNIMO' : (viewMode.includes('PF') ? profData.cpf : empresaLogada?.cnpj || '000.000.000-00');
-                
-                const protNum = `PROT-2026/${Math.floor(100000 + Math.random() * 900000)}`;
+                if (!formDinamicoAtivo || isSubmittingForm) return;
 
-                const novaResp: RespostaFormulario = {
-                  id: `resp-${Date.now()}`,
-                  formularioId: formDinamicoAtivo.id,
-                  formularioTitulo: formDinamicoAtivo.titulo,
-                  autorNome,
-                  autorDocumento: autorDoc,
-                  autorEmail: isAnonimoSubmit ? undefined : (viewMode.includes('PF') ? profData.emailPessoal : empresaLogada?.email),
-                  canalOrigem: viewMode.includes('PF') ? 'PROFISSIONAL' : 'EMPRESA',
-                  protocoloGerado: protNum,
-                  dataEnvio: new Date().toLocaleString('pt-BR'),
-                  respostas: respostasForm,
-                  anexos: anexosForm.map(a => ({ nome: a.nome, tamanho: Math.round(a.tamanhoMb * 1024), tipo: a.tipo, url: a.url })),
-                  status: 'Em Análise'
-                };
+                for (const campo of formDinamicoAtivo.campos || []) {
+                  const v = respostasForm[campo.id];
+                  if (campo.obrigatorio && (v === undefined || v === null || v === '' || v === false)) {
+                    toastService.warning('Campo Obrigatório', `Por favor preencha o campo: "${campo.label}"`);
+                    return;
+                  }
+                }
 
-                storageService.submitFormResponse(novaResp);
+                const isPF = viewMode.includes('PF');
+                const autorNome = isAnonimoSubmit ? 'Anônimo / Manifestante' : (isPF ? profData.nome : empresaLogada?.razaoSocial || 'Inscrito');
+                const autorDoc = isAnonimoSubmit ? 'ANÔNIMO' : (isPF ? profData.cpf : empresaLogada?.cnpj || '000.000.000-00');
 
-                // Gerar protocolo automático
-                const novoProt = {
-                  id: `prot-${Date.now()}`,
-                  numeroProtocolo: protNum,
-                  tipo: formDinamicoAtivo.titulo,
-                  assunto: formDinamicoAtivo.titulo,
-                  interessado: autorNome,
-                  documentoInteressado: autorDoc,
-                  tipoInteressado: (viewMode.includes('PF') ? 'PROFISSIONAL' : 'EMPRESA') as any,
-                  vinculoInscricao: isAnonimoSubmit ? undefined : (viewMode.includes('PF') ? profData.inscricao : empresaLogada?.inscricao),
-                  contatoEmail: novaResp.autorEmail,
-                  dataInscricao: new Date().toLocaleDateString('pt-BR'),
-                  dataAbertura: new Date().toLocaleDateString('pt-BR'),
-                  dataUltimaAtualizacao: new Date().toLocaleDateString('pt-BR'),
-                  prazoResposta: `${formDinamicoAtivo.prazoDiasConclusao || 5} dias úteis`,
-                  status: 'Em Análise',
-                  setorAtual: formDinamicoAtivo.setorTramitacaoNome || 'Atendimento Geral',
-                  anexos: anexosForm.map(a => a.nome),
-                  historico: [
-                    {
-                      data: new Date().toLocaleDateString('pt-BR'),
-                      setor: 'Portal do Inscrito',
-                      descricao: `Formulário "${formDinamicoAtivo.titulo}" preenchido e protocolado online.`,
-                      responsavel: autorNome
-                    }
-                  ]
-                };
-                storageService.saveProtocolo(novoProt);
+                setIsSubmittingForm(true);
+                try {
+                  const novaResp: RespostaFormulario = {
+                    id: `resp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    formularioId: formDinamicoAtivo.id,
+                    formularioTitulo: formDinamicoAtivo.titulo,
+                    autorNome,
+                    autorDocumento: String(autorDoc).slice(0, 100),
+                    autorEmail: isAnonimoSubmit ? undefined : (isPF ? profData.emailPessoal : empresaLogada?.email),
+                    autorTelefone: isAnonimoSubmit ? undefined : (isPF ? profData.celular : empresaLogada?.telefone),
+                    canalOrigem: isPF ? 'PROFISSIONAL' : 'EMPRESA',
+                    protocoloGerado: '',
+                    vinculoId: isAnonimoSubmit ? undefined : (isPF ? profData?.id : empresaLogada?.id),
+                    vinculoInscricao: isAnonimoSubmit ? undefined : (isPF ? profData?.inscricao : empresaLogada?.inscricao),
+                    dataEnvio: new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+                    respostas: respostasForm,
+                    dadosCampos: respostasForm,
+                    anexos: anexosForm.map(a => ({ nome: a.nome, tamanho: Math.round(a.tamanhoMb * 1024), tipo: a.tipo, url: a.url })),
+                    status: formDinamicoAtivo.statusProtocoloInicial || 'Em Análise'
+                  };
 
-                toastService.success(
-                  'Formulário Protocolado',
-                  `Suas respostas foram salvas com sucesso. Protocolo gerado: ${protNum}.`
-                );
-                setFormDinamicoAtivo(null);
+                  const result = await storageService.submitFormResponseAsync(novaResp);
+
+                  if (result.synced) {
+                    toastService.success(
+                      'Formulário Protocolado',
+                      `Suas respostas foram salvas e sincronizadas com sucesso. Protocolo gerado: ${result.protocolo}.`
+                    );
+                  } else {
+                    toastService.warning(
+                      'Protocolo Registrado Localmente',
+                      `Protocolo ${result.protocolo} criado, mas houve falha ao sincronizar na nuvem (${result.error || 'verifique a conexão'}).`
+                    );
+                  }
+                  setFormDinamicoAtivo(null);
+                } finally {
+                  setIsSubmittingForm(false);
+                }
               }}
               className="space-y-4 text-xs"
             >
@@ -1341,49 +1361,27 @@ export const PortalView: React.FC<PortalViewProps> = ({ viewMode = 'PROFISSIONAL
               )}
 
               {/* Renderização dinâmica dos campos */}
-              <div className="space-y-3.5 max-h-[60vh] overflow-y-auto pr-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 max-h-[60vh] overflow-y-auto pr-2">
                 {formDinamicoAtivo.campos?.map((campo) => (
-                  <div key={campo.id} className="space-y-1">
-                    <label className="block text-slate-700 font-bold">
-                      {campo.label} {campo.obrigatorio && <span className="text-rose-600">*</span>}
-                    </label>
-                    {campo.ajuda && <p className="text-[11px] text-slate-500">{campo.ajuda}</p>}
-
-                    {campo.tipo === 'select' ? (
-                      <select
-                        required={campo.obrigatorio}
-                        value={respostasForm[campo.id] || ''}
-                        onChange={(e) => setRespostasForm({ ...respostasForm, [campo.id]: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900"
-                      >
-                        <option value="">Selecione uma opção...</option>
-                        {campo.opcoes?.map(op => <option key={op} value={op}>{op}</option>)}
-                      </select>
-                    ) : campo.tipo === 'textarea' ? (
-                      <textarea
-                        rows={3}
-                        required={campo.obrigatorio}
-                        placeholder={campo.placeholder}
-                        value={respostasForm[campo.id] || ''}
-                        onChange={(e) => setRespostasForm({ ...respostasForm, [campo.id]: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900"
-                      />
-                    ) : (
-                      <input
-                        type={campo.tipo === 'number' ? 'number' : campo.tipo === 'date' ? 'date' : 'text'}
-                        required={campo.obrigatorio}
-                        placeholder={campo.placeholder}
-                        value={respostasForm[campo.id] || ''}
-                        onChange={(e) => setRespostasForm({ ...respostasForm, [campo.id]: e.target.value })}
-                        className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900"
-                      />
-                    )}
+                  <div
+                    key={campo.id}
+                    className={
+                      campo.tipo === 'textarea' || campo.tipo === 'endereco_cep' || campo.tipo === 'empresa_vinculada' || campo.tipo === 'profissional_vinculado' || campo.larguraCol === '12' || campo.larguraCol === 12
+                        ? 'sm:col-span-2'
+                        : 'sm:col-span-1'
+                    }
+                  >
+                    <DynamicFieldRenderer
+                      campo={campo}
+                      value={respostasForm[campo.id]}
+                      onChange={(val) => setRespostasForm(prev => ({ ...prev, [campo.id]: val }))}
+                    />
                   </div>
                 ))}
 
                 {/* Anexos de Arquivos se o formulário permitir */}
                 {formDinamicoAtivo.permiteAnexos && (
-                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                  <div className="sm:col-span-2 p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-slate-800 flex items-center space-x-1.5">
                         <Paperclip className="w-4 h-4 text-cyan-600" />
@@ -1450,10 +1448,11 @@ export const PortalView: React.FC<PortalViewProps> = ({ viewMode = 'PROFISSIONAL
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-xl text-xs shadow-md cursor-pointer flex items-center space-x-1.5"
+                  disabled={isSubmittingForm}
+                  className="px-5 py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-300 text-white font-bold rounded-xl text-xs shadow-md cursor-pointer flex items-center space-x-1.5"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>Enviar & Gerar Protocolo</span>
+                  <span>{isSubmittingForm ? 'Enviando...' : 'Enviar & Gerar Protocolo'}</span>
                 </button>
               </div>
             </form>

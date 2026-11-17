@@ -627,6 +627,9 @@ export interface RespostaFormulario {
   autorTelefone?: string;
   canalOrigem?: 'PROFISSIONAL' | 'EMPRESA' | 'SITE' | string;
   protocoloGerado: string;
+  vinculoId?: string;
+  vinculoInscricao?: string;
+  vinculoDetalhes?: string;
   dataEnvio: string; // ISO ou DD/MM/AAAA HH:mm
   respostas?: Record<string, any>;
   dadosCampos?: Record<string, any>;

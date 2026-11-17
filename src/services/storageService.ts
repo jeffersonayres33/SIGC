@@ -63,10 +63,56 @@ const STORAGE_KEYS = {
   SNAPSHOTS: 'siscon_local_snapshots_v1'
 };
 
-function runBackgroundSupabase(queryPromise: any) {
-  Promise.resolve(queryPromise).catch((e: any) => {
-    console.warn('Supabase sync background notice:', e);
-  });
+function runBackgroundSupabase(queryPromise: any, contextLabel?: string) {
+  Promise.resolve(queryPromise)
+    .then((res: any) => {
+      if (res && res.error) {
+        console.warn(`[Supabase${contextLabel ? ` - ${contextLabel}` : ''}] erro:`, res.error.message || res.error);
+      }
+    })
+    .catch((e: any) => {
+      console.warn(`[Supabase${contextLabel ? ` - ${contextLabel}` : ''}] notice:`, e);
+    });
+}
+
+function safeSetLocalStorage(key: string, data: any): boolean {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+    return true;
+  } catch (err) {
+    // Fallback para QuotaExceededError: remove data URLs extensas apenas da cópia do cache local (sem afetar memória/Supabase)
+    try {
+      if (Array.isArray(data)) {
+        const slimmed = data.map((item: any) => {
+          if (!item || typeof item !== 'object') return item;
+          const clone = { ...item };
+          if (Array.isArray(clone.anexosDetalhados)) {
+            clone.anexosDetalhados = clone.anexosDetalhados.map((a: any) => ({ ...a, url: a?.url && String(a.url).length > 4096 ? '' : a?.url }));
+          }
+          if (Array.isArray(clone.anexos)) {
+            clone.anexos = clone.anexos.map((a: any) =>
+              typeof a === 'object' && a !== null
+                ? { ...a, url: a?.url && String(a.url).length > 4096 ? '' : a?.url }
+                : a
+            );
+          }
+          if (Array.isArray(clone.fotosComprovantes) && clone.fotosComprovantes.length > 0) {
+            clone.fotosComprovantes = [];
+          }
+          if (Array.isArray(clone.fotoEvidencias) && clone.fotoEvidencias.length > 0) {
+            clone.fotoEvidencias = [];
+          }
+          return clone;
+        });
+        localStorage.setItem(key, JSON.stringify(slimmed));
+        return true;
+      }
+    } catch {
+      // Ignora silenciosamente se o navegador estiver em modo privado ou sem cota
+    }
+    console.warn(`Aviso ao persistir ${key} no localStorage:`, err);
+    return false;
+  }
 }
 
 export interface CouncilConfig {
@@ -1517,19 +1563,31 @@ class StorageService {
 
       // 1. Fetch Cadastros Basicos
       try {
-        const { data: cbData } = await supabase.from('cadastros_basicos').select('*').order('ordem', { ascending: true });
-        if (cbData && cbData.length > 0) {
-          this.cadastrosBasicos = cbData.map(c => ({
-            id: c.id,
-            categoria: c.categoria as CategoriaCadastroBasico,
-            nome: c.nome,
-            codigo: c.codigo || undefined,
-            descricao: c.descricao || undefined,
-            ativo: c.ativo,
-            ordem: c.ordem,
-            selecionarEmpresaVinculada: Boolean(c.selecionar_empresa_vinculada ?? c.selecionarempresavinculada ?? c.selecionarEmpresaVinculada ?? false)
-          }));
-          localStorage.setItem(STORAGE_KEYS.CADASTROS_BASICOS, JSON.stringify(this.cadastrosBasicos));
+        const { data: cbData, error: cbErr } = await supabase.from('cadastros_basicos').select('*').order('ordem', { ascending: true });
+        if (cbErr) {
+          console.warn('Erro ao carregar cadastros_basicos:', cbErr.message);
+        } else if (cbData && cbData.length > 0) {
+          const remoteCbs: ItemCadastroBasico[] = cbData.map(c => {
+            const localMatch = this.cadastrosBasicos.find(lc => lc.id === c.id);
+            const rawMods = c.modulos_permitidos || localMatch?.modulosPermitidos;
+            return {
+              id: c.id,
+              categoria: c.categoria as CategoriaCadastroBasico,
+              nome: c.nome,
+              codigo: c.codigo || undefined,
+              descricao: c.descricao || undefined,
+              ativo: c.ativo,
+              ordem: c.ordem,
+              selecionarEmpresaVinculada: Boolean(c.selecionar_empresa_vinculada ?? c.selecionarempresavinculada ?? c.selecionarEmpresaVinculada ?? false),
+              cargoId: c.cargo_id || localMatch?.cargoId,
+              cargoNome: c.cargo_nome || localMatch?.cargoNome,
+              setorId: c.setor_id || localMatch?.setorId,
+              setorNome: c.setor_nome || localMatch?.setorNome,
+              modulosPermitidos: Array.isArray(rawMods) ? rawMods.map((m: any) => String(m).toLowerCase().trim()) : undefined
+            };
+          });
+          this.cadastrosBasicos = this.deduplicateCadastrosBasicos(remoteCbs);
+          safeSetLocalStorage(STORAGE_KEYS.CADASTROS_BASICOS, this.cadastrosBasicos);
         }
       } catch (e) {
         console.warn('Erro ao carregar cadastros_basicos:', e);
@@ -1960,8 +2018,10 @@ class StorageService {
 
       // 8. Fetch Protocolos
       try {
-        const { data: protData } = await supabase.from('protocolos_processos').select('*');
-        if (protData && protData.length > 0) {
+        const { data: protData, error: protErr } = await supabase.from('protocolos_processos').select('*');
+        if (protErr) {
+          console.warn('Erro ao carregar protocolos_processos do Supabase:', protErr.message);
+        } else if (protData && Array.isArray(protData)) {
           const remoteProtocolos: ProtocoloProcesso[] = protData.map(p => ({
             id: p.id,
             numeroProtocolo: p.numero_protocolo,
@@ -1994,7 +2054,7 @@ class StorageService {
           const remoteIds = new Set(remoteProtocolos.map(rp => rp.id));
           const localOnly = this.protocolos.filter(lp => !remoteIds.has(lp.id));
           this.protocolos = [...localOnly, ...remoteProtocolos];
-          localStorage.setItem(STORAGE_KEYS.PROTOCOLOS, JSON.stringify(this.protocolos));
+          safeSetLocalStorage(STORAGE_KEYS.PROTOCOLOS, this.protocolos);
 
           // Tentar sincronizar protocolos locais pendentes com o Supabase
           if (localOnly.length > 0 && this.isOnline) {
@@ -2007,15 +2067,17 @@ class StorageService {
 
       // 9. Fetch Formulários Dinâmicos
       try {
-        const { data: formData } = await supabase.from('formularios_dinamicos').select('*');
-        if (formData && formData.length > 0) {
+        const { data: formData, error: formErr } = await supabase.from('formularios_dinamicos').select('*');
+        if (formErr) {
+          console.warn('Erro ao carregar formularios_dinamicos do Supabase:', formErr.message);
+        } else if (formData && Array.isArray(formData)) {
           const remoteForms: FormularioDinamico[] = formData.map(f => ({
             id: f.id,
             titulo: f.titulo,
             categoria: f.categoria,
             descricao: f.descricao || '',
             publicoAlvo: f.publico_alvo || 'Ambos',
-            versao: f.versao || '1.0',
+            versao: f.versao ?? '1.0',
             ativo: f.ativo ?? true,
             campos: f.campos || [],
             respostasRecebidas: f.respostas_recebidas || 0,
@@ -2040,7 +2102,11 @@ class StorageService {
           const remoteIds = new Set(remoteForms.map(rf => rf.id));
           const localOnly = this.formularios.filter(lf => !remoteIds.has(lf.id));
           this.formularios = [...localOnly, ...remoteForms];
-          localStorage.setItem(STORAGE_KEYS.FORMULARIOS, JSON.stringify(this.formularios));
+          safeSetLocalStorage(STORAGE_KEYS.FORMULARIOS, this.formularios);
+
+          if (localOnly.length > 0 && this.isOnline) {
+            localOnly.forEach(lf => this.syncSingleFormularioToSupabase(lf));
+          }
         }
       } catch (e) {
         console.warn('Erro ao carregar formularios_dinamicos:', e);
@@ -2048,8 +2114,10 @@ class StorageService {
 
       // 10. Fetch Respostas de Formulários
       try {
-        const { data: respData } = await supabase.from('respostas_formularios').select('*');
-        if (respData && respData.length > 0) {
+        const { data: respData, error: respErr } = await supabase.from('respostas_formularios').select('*');
+        if (respErr) {
+          console.warn('Erro ao carregar respostas_formularios do Supabase:', respErr.message);
+        } else if (respData && Array.isArray(respData)) {
           const remoteRespostas: RespostaFormulario[] = respData.map(r => ({
             id: r.id,
             formularioId: r.formulario_id,
@@ -2067,11 +2135,15 @@ class StorageService {
             status: r.status || 'Em Análise'
           }));
 
-          // MERGE CRÍTICO: Não descartar respostas salvas localmente
+          // MERGE CRÍTICO: Não descartar respostas salvas localmente e re-sincronizar pendentes
           const remoteIds = new Set(remoteRespostas.map(rr => rr.id));
           const localOnly = this.respostasForms.filter(lr => !remoteIds.has(lr.id));
           this.respostasForms = [...localOnly, ...remoteRespostas];
-          localStorage.setItem(STORAGE_KEYS.RESPOSTAS_FORMS, JSON.stringify(this.respostasForms));
+          safeSetLocalStorage(STORAGE_KEYS.RESPOSTAS_FORMS, this.respostasForms);
+
+          if (localOnly.length > 0 && this.isOnline) {
+            localOnly.forEach(lr => this.syncSingleRespostaFormularioToSupabase(lr));
+          }
         }
       } catch (e) {
         console.warn('Erro ao carregar respostas_formularios:', e);
@@ -2079,9 +2151,11 @@ class StorageService {
 
       // 10.1 Fetch Histórico de Vínculos Profissionais
       try {
-        const { data: vinculosData } = await supabase.from('historico_vinculos_profissionais').select('*');
-        if (vinculosData && vinculosData.length > 0) {
-          this.historicoVinculos = vinculosData.map(v => ({
+        const { data: vinculosData, error: vincErr } = await supabase.from('historico_vinculos_profissionais').select('*');
+        if (vincErr) {
+          console.warn('Erro ao carregar historico_vinculos_profissionais:', vincErr.message);
+        } else if (vinculosData && vinculosData.length > 0) {
+          const remoteVinculos: HistoricoVinculoProfissional[] = vinculosData.map(v => ({
             id: v.id,
             profissionalId: v.profissional_id,
             profissionalInscricao: v.profissional_inscricao,
@@ -2100,7 +2174,10 @@ class StorageService {
             protocoloBaixa: v.protocolo_baixa || undefined,
             status: (v.status as any) || 'Ativo'
           }));
-          localStorage.setItem(STORAGE_KEYS.HISTORICO_VINCULOS, JSON.stringify(this.historicoVinculos));
+          const remoteIds = new Set(remoteVinculos.map(rv => rv.id));
+          const localOnly = this.historicoVinculos.filter(lv => !remoteIds.has(lv.id));
+          this.historicoVinculos = [...localOnly, ...remoteVinculos];
+          safeSetLocalStorage(STORAGE_KEYS.HISTORICO_VINCULOS, this.historicoVinculos);
         }
       } catch (e) {
         console.warn('Erro ao carregar historico_vinculos_profissionais:', e);
@@ -2108,19 +2185,21 @@ class StorageService {
 
       // 11. Fetch Historico Auditoria
       try {
-        const { data: auditData } = await supabase.from('historico_auditoria').select('*').order('created_at', { ascending: false });
-        if (auditData && auditData.length > 0) {
+        const { data: auditData, error: auditErr } = await supabase.from('historico_auditoria').select('*').order('created_at', { ascending: false });
+        if (auditErr) {
+          console.warn('Erro ao carregar historico_auditoria:', auditErr.message);
+        } else if (auditData && auditData.length > 0) {
           this.historicoAuditoria = auditData.map(a => ({
             id: a.id,
             targetId: a.target_id,
             targetTipo: a.target_tipo as 'PROFISSIONAL' | 'EMPRESA',
-            usuario: a.usuario,
-            dataFormatada: a.data_formatada,
-            campo: a.campo,
-            valorAnterior: a.valor_anterior,
-            valorNovo: a.valor_novo
+            usuario: a.usuario || a.usuario_nome || 'SISTEMA',
+            dataFormatada: a.data_formatada || a.timestamp || '',
+            campo: a.campo || a.campo_alterado || '',
+            valorAnterior: a.valor_anterior || '',
+            valorNovo: a.valor_novo || ''
           }));
-          localStorage.setItem(STORAGE_KEYS.HISTORICO_AUDITORIA, JSON.stringify(this.historicoAuditoria));
+          safeSetLocalStorage(STORAGE_KEYS.HISTORICO_AUDITORIA, this.historicoAuditoria);
         }
       } catch (ae) {
         console.warn('Erro ao carregar historico_auditoria do Supabase:', ae);
@@ -2128,8 +2207,10 @@ class StorageService {
 
       // 12. Fetch Council Config
       try {
-        const { data: cfgData } = await supabase.from('council_config').select('*').limit(1).maybeSingle();
-        if (cfgData) {
+        const { data: cfgData, error: cfgErr } = await supabase.from('council_config').select('*').limit(1).maybeSingle();
+        if (cfgErr) {
+          console.warn('Erro ao carregar council_config:', cfgErr.message);
+        } else if (cfgData) {
           this.councilConfig = {
             ...this.councilConfig,
             sigla: cfgData.sigla || this.councilConfig.sigla,
@@ -2190,10 +2271,18 @@ class StorageService {
             validarCNPJ: cfgData.validar_cnpj ?? this.councilConfig.validarCNPJ,
             validarCEP: cfgData.validar_cep ?? this.councilConfig.validarCEP,
             autoPreencherEnderecoCEP: cfgData.auto_preencher_endereco_cep ?? this.councilConfig.autoPreencherEnderecoCEP,
+            tamanhoMaximoAnexoMb: cfgData.tamanho_maximo_anexo_mb ?? this.councilConfig.tamanhoMaximoAnexoMb ?? 10,
+            situacoesImpedidasRT: Array.isArray(cfgData.situacoes_impedidas_rt) ? cfgData.situacoes_impedidas_rt : this.councilConfig.situacoesImpedidasRT,
+            textoPadraoNotificacao: cfgData.texto_padrao_notificacao ?? this.councilConfig.textoPadraoNotificacao,
+            proximoNumeroNotificacao: cfgData.proximo_numero_notificacao ?? this.councilConfig.proximoNumeroNotificacao,
+            proximoNumeroIntimacao: cfgData.proximo_numero_intimacao ?? this.councilConfig.proximoNumeroIntimacao,
+            proximoNumeroTermo: cfgData.proximo_numero_termo ?? this.councilConfig.proximoNumeroTermo,
+            proximoNumeroAutuacao: cfgData.proximo_numero_autuacao ?? this.councilConfig.proximoNumeroAutuacao,
+            geolocalizacaoAtiva: cfgData.geolocalizacao_ativa ?? this.councilConfig.geolocalizacaoAtiva,
             acessosInscritoPF: cfgData.acessos_inscrito_pf ? { ...DEFAULT_ACESSOS_INSCRITO_PF, ...cfgData.acessos_inscrito_pf } : this.councilConfig.acessosInscritoPF,
             acessosInscritoPJ: cfgData.acessos_inscrito_pj ? { ...DEFAULT_ACESSOS_INSCRITO_PJ, ...cfgData.acessos_inscrito_pj } : this.councilConfig.acessosInscritoPJ
           };
-          localStorage.setItem(STORAGE_KEYS.COUNCIL_CONFIG, JSON.stringify(this.councilConfig));
+          safeSetLocalStorage(STORAGE_KEYS.COUNCIL_CONFIG, this.councilConfig);
         }
       } catch (e) {
         console.warn('Erro ao carregar council_config:', e);
@@ -2213,7 +2302,7 @@ class StorageService {
     try {
       // 1. Council config
       const cfg = this.councilConfig;
-      const { error: cfgErr } = await supabase.from('council_config').upsert({
+      const fullCfgPayload: Record<string, any> = {
         id: 'default',
         sigla: cfg.sigla,
         nome_completo: cfg.nomeCompleto,
@@ -2228,8 +2317,23 @@ class StorageService {
         email: cfg.email,
         site: cfg.site,
         presidente: cfg.presidente,
+        vice_presidente: cfg.vicePresidente,
         tesoureiro: cfg.tesoureiro,
         secretario_geral: cfg.secretarioGeral,
+        assinatura_presidente_url: cfg.assinaturaPresidenteUrl,
+        assinatura_vice_presidente_url: cfg.assinaturaVicePresidenteUrl,
+        assinatura_tesoureiro_url: cfg.assinaturaTesoureiroUrl,
+        assinatura_secretario_geral_url: cfg.assinaturaSecretarioGeralUrl,
+        assinatura_certidao_papel: cfg.assinaturaCertidaoPapel || 'PRESIDENTE',
+        protocolo_proximo_numero: cfg.protocoloProximoNumero ?? 1,
+        protocolo_ultimo_ano: cfg.protocoloUltimoAno ?? new Date().getFullYear(),
+        protocolo_reinicia_ano: cfg.protocoloReiniciaAno ?? true,
+        protocolo_prefixo_interno: cfg.protocoloPrefixoInterno ?? '',
+        protocolo_sufixo_interno: cfg.protocoloSufixoInterno ?? '',
+        protocolo_prefixo_inscrito: cfg.protocoloPrefixoInscrito ?? '',
+        protocolo_sufixo_inscrito: cfg.protocoloSufixoInscrito ?? '-INS',
+        protocolo_prefixo_site: cfg.protocoloPrefixoSite ?? '',
+        protocolo_sufixo_site: cfg.protocoloSufixoSite ?? '-SITE',
         resolucao_anuidade: cfg.resolucaoAnuidade,
         valor_anuidade_pf: cfg.valorAnuidadePF,
         valor_anuidade_pj: cfg.valorAnuidadePJ,
@@ -2252,13 +2356,64 @@ class StorageService {
         prefixo_inscricao_provisoria_empresa: cfg.prefixoInscricaoProvisoriaEmpresa,
         sufixo_inscricao_provisoria_empresa: cfg.sufixoInscricaoProvisoriaEmpresa,
         digitos_minimos_inscricao_provisoria_empresa: cfg.digitosMinimosInscricaoProvisoriaEmpresa,
+        validade_provisoria_meses_profissional: cfg.validadeProvisoriaMesesProfissional ?? 12,
+        validade_provisoria_meses_empresa: cfg.validadeProvisoriaMesesEmpresa ?? 12,
         validar_cpf: cfg.validarCPF,
         validar_cnpj: cfg.validarCNPJ,
         validar_cep: cfg.validarCEP,
         auto_preencher_endereco_cep: cfg.autoPreencherEnderecoCEP,
+        tamanho_maximo_anexo_mb: cfg.tamanhoMaximoAnexoMb ?? 10,
+        situacoes_impedidas_rt: cfg.situacoesImpedidasRT || [],
+        texto_padrao_notificacao: cfg.textoPadraoNotificacao || '',
+        proximo_numero_notificacao: cfg.proximoNumeroNotificacao ?? 1,
+        proximo_numero_intimacao: cfg.proximoNumeroIntimacao ?? 1,
+        proximo_numero_termo: cfg.proximoNumeroTermo ?? 1,
+        proximo_numero_autuacao: cfg.proximoNumeroAutuacao ?? 1,
+        geolocalizacao_ativa: cfg.geolocalizacaoAtiva ?? true,
         acessos_inscrito_pf: cfg.acessosInscritoPF || DEFAULT_ACESSOS_INSCRITO_PF,
         acessos_inscrito_pj: cfg.acessosInscritoPJ || DEFAULT_ACESSOS_INSCRITO_PJ
-      });
+      };
+
+      let { error: cfgErr } = await supabase.from('council_config').upsert(fullCfgPayload);
+      if (cfgErr && (cfgErr.code === '42703' || cfgErr.message.includes('column') || cfgErr.message.includes('schema cache'))) {
+        const baseCfgRes = await supabase.from('council_config').upsert({
+          id: 'default',
+          sigla: cfg.sigla,
+          nome_completo: cfg.nomeCompleto,
+          jurisdicao: cfg.jurisdicao,
+          cidade_sede: cfg.cidadeSede,
+          uf: cfg.uf,
+          cnpj: cfg.cnpj,
+          endereco: cfg.endereco,
+          bairro: cfg.bairro,
+          cep: cfg.cep,
+          telefone: cfg.telefone,
+          email: cfg.email,
+          site: cfg.site,
+          presidente: cfg.presidente,
+          tesoureiro: cfg.tesoureiro,
+          secretario_geral: cfg.secretarioGeral,
+          resolucao_anuidade: cfg.resolucaoAnuidade,
+          valor_anuidade_pf: cfg.valorAnuidadePF,
+          valor_anuidade_pj: cfg.valorAnuidadePJ,
+          chave_pix: cfg.chavePix,
+          total_profissionais_registrados: cfg.totalProfissionaisRegistrados,
+          total_empresas_registradas: cfg.totalEmpresasRegistradas,
+          proximo_numero_inscricao_profissional: cfg.proximoNumeroInscricaoProfissional,
+          prefixo_inscricao_profissional: cfg.prefixoInscricaoProfissional,
+          sufixo_inscricao_profissional: cfg.sufixoInscricaoProfissional,
+          digitos_minimos_inscricao_profissional: cfg.digitosMinimosInscricaoProfissional,
+          proximo_numero_inscricao_empresa: cfg.proximoNumeroInscricaoEmpresa,
+          prefixo_inscricao_empresa: cfg.prefixoInscricaoEmpresa,
+          sufixo_inscricao_empresa: cfg.sufixoInscricaoEmpresa,
+          digitos_minimos_inscricao_empresa: cfg.digitosMinimosInscricaoEmpresa,
+          validar_cpf: cfg.validarCPF,
+          validar_cnpj: cfg.validarCNPJ,
+          validar_cep: cfg.validarCEP,
+          auto_preencher_endereco_cep: cfg.autoPreencherEnderecoCEP
+        });
+        cfgErr = baseCfgRes.error;
+      }
 
       if (cfgErr) throw new Error(`Falha ao migrar Council Config: ${cfgErr.message}`);
 
@@ -2270,10 +2425,29 @@ class StorageService {
         codigo: c.codigo || null,
         descricao: c.descricao || null,
         ativo: c.ativo,
-        ordem: c.ordem || 0
+        ordem: c.ordem || 0,
+        selecionar_empresa_vinculada: Boolean(c.selecionarEmpresaVinculada),
+        cargo_id: c.cargoId || null,
+        cargo_nome: c.cargoNome || null,
+        setor_id: c.setorId || null,
+        setor_nome: c.setorNome || null,
+        modulos_permitidos: c.modulosPermitidos || []
       }));
       if (cbRows.length > 0) {
-        const { error: cbErr } = await supabase.from('cadastros_basicos').upsert(cbRows, { onConflict: 'id' });
+        let { error: cbErr } = await supabase.from('cadastros_basicos').upsert(cbRows, { onConflict: 'id' });
+        if (cbErr && (cbErr.code === '42703' || cbErr.message.includes('column') || cbErr.message.includes('schema cache'))) {
+          const baseCbRows = this.cadastrosBasicos.map(c => ({
+            id: c.id,
+            categoria: c.categoria,
+            nome: c.nome,
+            codigo: c.codigo || null,
+            descricao: c.descricao || null,
+            ativo: c.ativo,
+            ordem: c.ordem || 0
+          }));
+          const retryCb = await supabase.from('cadastros_basicos').upsert(baseCbRows, { onConflict: 'id' });
+          cbErr = retryCb.error;
+        }
         if (cbErr) throw new Error(`Falha ao migrar Cadastros Básicos: ${cbErr.message}`);
       }
 
@@ -2453,7 +2627,6 @@ class StorageService {
 
       if (empRows.length > 0) {
         let { error: eErr } = await supabase.from('empresas').upsert(empRows, { onConflict: 'id' });
-        // Auto-recuperação se o banco PostgreSQL ainda estiver com tipo INTEGER para carga_horaria
         if (eErr && eErr.code === '22P02') {
           console.warn('Detectado erro 22P02 em migrateAllToSupabase. Aplicando fallback com inteiros arredondados...');
           const fallbackRows = empRows.map(r => ({
@@ -2597,46 +2770,67 @@ class StorageService {
         if (tErr) throw new Error(`Falha ao migrar Fiscalização: ${tErr.message}`);
       }
 
-      // 9. Protocolos
-      const protRows = this.protocolos.map(p => ({
-        id: p.id,
-        numero_protocolo: p.numeroProtocolo,
-        tipo: p.tipo,
-        interessado: p.interessado,
-        documento_interessado: p.documentoInteressado,
-        data_inscricao: p.dataInscricao || null,
-        data_abertura: p.dataAbertura,
-        data_ultima_atualizacao: p.dataUltimaAtualizacao || null,
-        prazo_resposta: p.prazoResposta || null,
-        status: p.status || 'Em Análise',
-        setor_atual: p.setorAtual || 'Secretaria Geral',
-        conselheiro_relator: p.conselheiroRelator || null,
-        parecer_relator: p.parecerRelator || null,
-        decisao_plenario: p.decisaoPlenario || null,
-        anexos: p.anexos || [],
-        historico: p.historico || []
-      }));
-      if (protRows.length > 0) {
-        const { error: prErr } = await supabase.from('protocolos_processos').upsert(protRows, { onConflict: 'id' });
-        if (prErr) throw new Error(`Falha ao migrar Protocolos: ${prErr.message}`);
+      // 9. Protocolos (sincroniza individualmente com fallback de colunas e proteção contra duplicidade)
+      for (const prot of this.protocolos) {
+        await this.syncSingleProtocoloToSupabase(prot);
       }
 
       // 10. Formulários Dinâmicos
-      const formRows = this.formularios.map(f => ({
-        id: f.id,
-        titulo: f.titulo,
-        categoria: f.categoria,
-        descricao: f.descricao || null,
-        publico_alvo: f.publicoAlvo || 'Ambos',
-        versao: String(f.versao || '1.0'),
-        ativo: f.ativo ?? true,
-        campos: f.campos || [],
-        respostas_recebidas: f.respostasRecebidas || 0,
-        data_criacao: f.dataCriacao || null
-      }));
-      if (formRows.length > 0) {
-        const { error: fErr } = await supabase.from('formularios_dinamicos').upsert(formRows, { onConflict: 'id' });
-        if (fErr) throw new Error(`Falha ao migrar Formulários: ${fErr.message}`);
+      for (const form of this.formularios) {
+        await this.syncSingleFormularioToSupabase(form);
+      }
+
+      // 10.1 Respostas de Formulários Dinâmicos
+      for (const resp of this.respostasForms) {
+        await this.syncSingleRespostaFormularioToSupabase(resp);
+      }
+
+      // 10.2 Histórico de Vínculos Profissionais
+      if (this.historicoVinculos.length > 0) {
+        const vincRows = this.historicoVinculos.map(v => ({
+          id: v.id,
+          profissional_id: v.profissionalId,
+          profissional_inscricao: v.profissionalInscricao || null,
+          profissional_nome: v.profissionalNome || null,
+          empresa_id: v.empresaId,
+          empresa_razao_social: v.empresaRazaoSocial,
+          empresa_nome_fantasia: v.empresaNomeFantasia || null,
+          empresa_cnpj: v.empresaCnpj,
+          empresa_inscricao: v.empresaInscricao || null,
+          cargo: v.cargo,
+          situacao_vinculo: v.situacaoVinculo || 'CTPS',
+          carga_horaria_semanal: v.cargaHorariaSemanal || 0,
+          data_inicio: v.dataInicio,
+          data_baixa: v.dataBaixa || null,
+          motivo_baixa: v.motivoBaixa || null,
+          protocolo_baixa: v.protocoloBaixa || null,
+          status: v.status || 'Ativo'
+        }));
+        const { error: vErr } = await supabase.from('historico_vinculos_profissionais').upsert(vincRows, { onConflict: 'id' });
+        if (vErr) console.warn('Aviso ao migrar histórico de vínculos:', vErr.message);
+      }
+
+      // 10.3 Histórico de Auditoria
+      if (this.historicoAuditoria.length > 0) {
+        const auditRows = this.historicoAuditoria.slice(0, 500).map(a => ({
+          id: a.id,
+          target_id: a.targetId,
+          target_tipo: a.targetTipo,
+          usuario: a.usuario || 'SISTEMA',
+          data_formatada: a.dataFormatada || '',
+          campo: a.campo || '',
+          valor_anterior: a.valorAnterior || '',
+          valor_novo: a.valorNovo || '',
+          timestamp: a.dataFormatada || '',
+          target_nome: a.targetId,
+          target_doc: '',
+          usuario_nome: a.usuario || 'SISTEMA',
+          usuario_papel: 'COLABORADOR',
+          acao: 'ALTERACAO_CADASTRAL',
+          campo_alterado: a.campo || ''
+        }));
+        const { error: aErr } = await supabase.from('historico_auditoria').upsert(auditRows, { onConflict: 'id' });
+        if (aErr) console.warn('Aviso ao migrar histórico de auditoria:', aErr.message);
       }
 
       // 11. Funcionários
@@ -2713,17 +2907,8 @@ class StorageService {
     return { ...this.councilConfig };
   }
 
-  public generateNextProtocoloNumero(origem: 'INTERNO' | 'INSCRITO' | 'SITE' = 'INTERNO'): string {
-    const cfg = this.getCouncilConfig();
-    const currentYear = new Date().getFullYear();
-    let num = cfg.protocoloProximoNumero ?? 1;
-    let lastYear = cfg.protocoloUltimoAno ?? currentYear;
-
-    if (cfg.protocoloReiniciaAno && currentYear !== lastYear) {
-      num = 1;
-      lastYear = currentYear;
-    }
-
+  private formatProtocoloNumero(num: number, year: number, origem: 'INTERNO' | 'INSCRITO' | 'SITE'): string {
+    const cfg = this.councilConfig;
     let prefix = '';
     let suffix = '';
 
@@ -2737,8 +2922,32 @@ class StorageService {
       prefix = cfg.protocoloPrefixoInterno || '';
       suffix = cfg.protocoloSufixoInterno || '';
     }
+    return `${prefix}${num}/${year}${suffix}`;
+  }
 
-    const formatted = `${prefix}${num}/${currentYear}${suffix}`;
+  public generateNextProtocoloNumero(origem: 'INTERNO' | 'INSCRITO' | 'SITE' = 'INTERNO'): string {
+    const cfg = this.getCouncilConfig();
+    const currentYear = new Date().getFullYear();
+    let num = cfg.protocoloProximoNumero ?? 1;
+    const lastYear = cfg.protocoloUltimoAno ?? currentYear;
+
+    if (cfg.protocoloReiniciaAno && currentYear !== lastYear) {
+      num = 1;
+    }
+
+    // Evita colisões locais analisando protocolos e respostas já carregadas em memória
+    const existingSet = new Set<string>([
+      ...this.protocolos.map(p => String(p.numeroProtocolo || '').toUpperCase().trim()),
+      ...this.respostasForms.map(r => String(r.protocoloGerado || '').toUpperCase().trim())
+    ]);
+
+    let formatted = this.formatProtocoloNumero(num, currentYear, origem);
+    let safetyCounter = 0;
+    while (existingSet.has(formatted.toUpperCase()) && safetyCounter < 5000) {
+      num += 1;
+      safetyCounter += 1;
+      formatted = this.formatProtocoloNumero(num, currentYear, origem);
+    }
 
     this.updateCouncilConfig({
       protocoloProximoNumero: num + 1,
@@ -2748,13 +2957,144 @@ class StorageService {
     return formatted;
   }
 
+  public async generateUniqueProtocoloNumeroAsync(origem: 'INTERNO' | 'INSCRITO' | 'SITE' = 'INTERNO'): Promise<string> {
+    const currentYear = new Date().getFullYear();
+    const cfg = this.getCouncilConfig();
+    let baseNum = cfg.protocoloReiniciaAno && currentYear !== (cfg.protocoloUltimoAno ?? currentYear)
+      ? 1
+      : (cfg.protocoloProximoNumero ?? 1);
+
+    const existingSet = new Set<string>([
+      ...this.protocolos.map(p => String(p.numeroProtocolo || '').toUpperCase().trim()),
+      ...this.respostasForms.map(r => String(r.protocoloGerado || '').toUpperCase().trim())
+    ]);
+
+    if (this.isOnline) {
+      try {
+        const [{ data: remoteCfg }, { data: remoteProts }, { data: remoteResps }] = await Promise.all([
+          supabase.from('council_config').select('protocolo_proximo_numero, protocolo_ultimo_ano, protocolo_reinicia_ano').limit(1).maybeSingle(),
+          supabase.from('protocolos_processos').select('numero_protocolo'),
+          supabase.from('respostas_formularios').select('protocolo_gerado')
+        ]);
+
+        if (remoteCfg && typeof remoteCfg.protocolo_proximo_numero === 'number') {
+          const remoteYear = remoteCfg.protocolo_ultimo_ano ?? currentYear;
+          if (!cfg.protocoloReiniciaAno || remoteYear === currentYear) {
+            baseNum = Math.max(baseNum, remoteCfg.protocolo_proximo_numero);
+          }
+        }
+        if (Array.isArray(remoteProts)) {
+          remoteProts.forEach((p: any) => {
+            if (p?.numero_protocolo) existingSet.add(String(p.numero_protocolo).toUpperCase().trim());
+          });
+        }
+        if (Array.isArray(remoteResps)) {
+          remoteResps.forEach((r: any) => {
+            if (r?.protocolo_gerado) existingSet.add(String(r.protocolo_gerado).toUpperCase().trim());
+          });
+        }
+      } catch (e) {
+        console.warn('Aviso ao consultar sequência global de protocolos no Supabase:', e);
+      }
+    }
+
+    let formatted = this.formatProtocoloNumero(baseNum, currentYear, origem);
+    let safety = 0;
+    while (existingSet.has(formatted.toUpperCase()) && safety < 5000) {
+      baseNum += 1;
+      safety += 1;
+      formatted = this.formatProtocoloNumero(baseNum, currentYear, origem);
+    }
+
+    this.updateCouncilConfig({
+      protocoloProximoNumero: baseNum + 1,
+      protocoloUltimoAno: currentYear
+    });
+
+    return formatted;
+  }
+
   public updateCouncilConfig(cfg: Partial<CouncilConfig>) {
     this.councilConfig = { ...this.councilConfig, ...cfg };
-    try {
-      localStorage.setItem(STORAGE_KEYS.COUNCIL_CONFIG, JSON.stringify(this.councilConfig));
-      if (this.isOnline) {
-        runBackgroundSupabase(
-          supabase.from('council_config').upsert({
+    safeSetLocalStorage(STORAGE_KEYS.COUNCIL_CONFIG, this.councilConfig);
+
+    if (this.isOnline) {
+      runBackgroundSupabase((async () => {
+        const fullPayload: Record<string, any> = {
+          id: 'default',
+          sigla: this.councilConfig.sigla,
+          nome_completo: this.councilConfig.nomeCompleto,
+          jurisdicao: this.councilConfig.jurisdicao,
+          cidade_sede: this.councilConfig.cidadeSede,
+          uf: this.councilConfig.uf,
+          cnpj: this.councilConfig.cnpj,
+          endereco: this.councilConfig.endereco,
+          bairro: this.councilConfig.bairro,
+          cep: this.councilConfig.cep,
+          telefone: this.councilConfig.telefone,
+          email: this.councilConfig.email,
+          site: this.councilConfig.site,
+          presidente: this.councilConfig.presidente,
+          vice_presidente: this.councilConfig.vicePresidente,
+          tesoureiro: this.councilConfig.tesoureiro,
+          secretario_geral: this.councilConfig.secretarioGeral,
+          assinatura_presidente_url: this.councilConfig.assinaturaPresidenteUrl,
+          assinatura_vice_presidente_url: this.councilConfig.assinaturaVicePresidenteUrl,
+          assinatura_tesoureiro_url: this.councilConfig.assinaturaTesoureiroUrl,
+          assinatura_secretario_geral_url: this.councilConfig.assinaturaSecretarioGeralUrl,
+          assinatura_certidao_papel: this.councilConfig.assinaturaCertidaoPapel,
+          protocolo_proximo_numero: this.councilConfig.protocoloProximoNumero,
+          protocolo_ultimo_ano: this.councilConfig.protocoloUltimoAno,
+          protocolo_reinicia_ano: this.councilConfig.protocoloReiniciaAno,
+          protocolo_prefixo_interno: this.councilConfig.protocoloPrefixoInterno,
+          protocolo_sufixo_interno: this.councilConfig.protocoloSufixoInterno,
+          protocolo_prefixo_inscrito: this.councilConfig.protocoloPrefixoInscrito,
+          protocolo_sufixo_inscrito: this.councilConfig.protocoloSufixoInscrito,
+          protocolo_prefixo_site: this.councilConfig.protocoloPrefixoSite,
+          protocolo_sufixo_site: this.councilConfig.protocoloSufixoSite,
+          resolucao_anuidade: this.councilConfig.resolucaoAnuidade,
+          valor_anuidade_pf: this.councilConfig.valorAnuidadePF,
+          valor_anuidade_pj: this.councilConfig.valorAnuidadePJ,
+          chave_pix: this.councilConfig.chavePix,
+          total_profissionais_registrados: this.councilConfig.totalProfissionaisRegistrados,
+          total_empresas_registradas: this.councilConfig.totalEmpresasRegistradas,
+          proximo_numero_inscricao_profissional: this.councilConfig.proximoNumeroInscricaoProfissional,
+          prefixo_inscricao_profissional: this.councilConfig.prefixoInscricaoProfissional,
+          sufixo_inscricao_profissional: this.councilConfig.sufixoInscricaoProfissional,
+          digitos_minimos_inscricao_profissional: this.councilConfig.digitosMinimosInscricaoProfissional,
+          proximo_numero_inscricao_empresa: this.councilConfig.proximoNumeroInscricaoEmpresa,
+          prefixo_inscricao_empresa: this.councilConfig.prefixoInscricaoEmpresa,
+          sufixo_inscricao_empresa: this.councilConfig.sufixoInscricaoEmpresa,
+          digitos_minimos_inscricao_empresa: this.councilConfig.digitosMinimosInscricaoEmpresa,
+          proximo_numero_inscricao_provisoria_profissional: this.councilConfig.proximoNumeroInscricaoProvisoriaProfissional,
+          prefixo_inscricao_provisoria_profissional: this.councilConfig.prefixoInscricaoProvisoriaProfissional,
+          sufixo_inscricao_provisoria_profissional: this.councilConfig.sufixoInscricaoProvisoriaProfissional,
+          digitos_minimos_inscricao_provisoria_profissional: this.councilConfig.digitosMinimosInscricaoProvisoriaProfissional,
+          proximo_numero_inscricao_provisoria_empresa: this.councilConfig.proximoNumeroInscricaoProvisoriaEmpresa,
+          prefixo_inscricao_provisoria_empresa: this.councilConfig.prefixoInscricaoProvisoriaEmpresa,
+          sufixo_inscricao_provisoria_empresa: this.councilConfig.sufixoInscricaoProvisoriaEmpresa,
+          digitos_minimos_inscricao_provisoria_empresa: this.councilConfig.digitosMinimosInscricaoProvisoriaEmpresa,
+          validade_provisoria_meses_profissional: this.councilConfig.validadeProvisoriaMesesProfissional ?? 12,
+          validade_provisoria_meses_empresa: this.councilConfig.validadeProvisoriaMesesEmpresa ?? 12,
+          validar_cpf: this.councilConfig.validarCPF,
+          validar_cnpj: this.councilConfig.validarCNPJ,
+          validar_cep: this.councilConfig.validarCEP,
+          auto_preencher_endereco_cep: this.councilConfig.autoPreencherEnderecoCEP,
+          tamanho_maximo_anexo_mb: this.councilConfig.tamanhoMaximoAnexoMb ?? 10,
+          situacoes_impedidas_rt: this.councilConfig.situacoesImpedidasRT || [],
+          texto_padrao_notificacao: this.councilConfig.textoPadraoNotificacao || '',
+          proximo_numero_notificacao: this.councilConfig.proximoNumeroNotificacao ?? 1,
+          proximo_numero_intimacao: this.councilConfig.proximoNumeroIntimacao ?? 1,
+          proximo_numero_termo: this.councilConfig.proximoNumeroTermo ?? 1,
+          proximo_numero_autuacao: this.councilConfig.proximoNumeroAutuacao ?? 1,
+          geolocalizacao_ativa: this.councilConfig.geolocalizacaoAtiva ?? true,
+          acessos_inscrito_pf: this.councilConfig.acessosInscritoPF || DEFAULT_ACESSOS_INSCRITO_PF,
+          acessos_inscrito_pj: this.councilConfig.acessosInscritoPJ || DEFAULT_ACESSOS_INSCRITO_PJ
+        };
+
+        const { error } = await supabase.from('council_config').upsert(fullPayload);
+        if (error && (error.code === '42703' || error.message.includes('column') || error.message.includes('schema cache'))) {
+          await supabase.from('council_config').upsert({
             id: 'default',
             sigla: this.councilConfig.sigla,
             nome_completo: this.councilConfig.nomeCompleto,
@@ -2769,23 +3109,8 @@ class StorageService {
             email: this.councilConfig.email,
             site: this.councilConfig.site,
             presidente: this.councilConfig.presidente,
-            vice_presidente: this.councilConfig.vicePresidente,
             tesoureiro: this.councilConfig.tesoureiro,
             secretario_geral: this.councilConfig.secretarioGeral,
-            assinatura_presidente_url: this.councilConfig.assinaturaPresidenteUrl,
-            assinatura_vice_presidente_url: this.councilConfig.assinaturaVicePresidenteUrl,
-            assinatura_tesoureiro_url: this.councilConfig.assinaturaTesoureiroUrl,
-            assinatura_secretario_geral_url: this.councilConfig.assinaturaSecretarioGeralUrl,
-            assinatura_certidao_papel: this.councilConfig.assinaturaCertidaoPapel,
-            protocolo_proximo_numero: this.councilConfig.protocoloProximoNumero,
-            protocolo_ultimo_ano: this.councilConfig.protocoloUltimoAno,
-            protocolo_reinicia_ano: this.councilConfig.protocoloReiniciaAno,
-            protocolo_prefixo_interno: this.councilConfig.protocoloPrefixoInterno,
-            protocolo_sufixo_interno: this.councilConfig.protocoloSufixoInterno,
-            protocolo_prefixo_inscrito: this.councilConfig.protocoloPrefixoInscrito,
-            protocolo_sufixo_inscrito: this.councilConfig.protocoloSufixoInscrito,
-            protocolo_prefixo_site: this.councilConfig.protocoloPrefixoSite,
-            protocolo_sufixo_site: this.councilConfig.protocoloSufixoSite,
             resolucao_anuidade: this.councilConfig.resolucaoAnuidade,
             valor_anuidade_pf: this.councilConfig.valorAnuidadePF,
             valor_anuidade_pj: this.councilConfig.valorAnuidadePJ,
@@ -2800,26 +3125,16 @@ class StorageService {
             prefixo_inscricao_empresa: this.councilConfig.prefixoInscricaoEmpresa,
             sufixo_inscricao_empresa: this.councilConfig.sufixoInscricaoEmpresa,
             digitos_minimos_inscricao_empresa: this.councilConfig.digitosMinimosInscricaoEmpresa,
-            proximo_numero_inscricao_provisoria_profissional: this.councilConfig.proximoNumeroInscricaoProvisoriaProfissional,
-            prefixo_inscricao_provisoria_profissional: this.councilConfig.prefixoInscricaoProvisoriaProfissional,
-            sufixo_inscricao_provisoria_profissional: this.councilConfig.sufixoInscricaoProvisoriaProfissional,
-            digitos_minimos_inscricao_provisoria_profissional: this.councilConfig.digitosMinimosInscricaoProvisoriaProfissional,
-            proximo_numero_inscricao_provisoria_empresa: this.councilConfig.proximoNumeroInscricaoProvisoriaEmpresa,
-            prefixo_inscricao_provisoria_empresa: this.councilConfig.prefixoInscricaoProvisoriaEmpresa,
-            sufixo_inscricao_provisoria_empresa: this.councilConfig.sufixoInscricaoProvisoriaEmpresa,
-            digitos_minimos_inscricao_provisoria_empresa: this.councilConfig.digitosMinimosInscricaoProvisoriaEmpresa,
-            validade_provisoria_meses_profissional: this.councilConfig.validadeProvisoriaMesesProfissional ?? 12,
-            validade_provisoria_meses_empresa: this.councilConfig.validadeProvisoriaMesesEmpresa ?? 12,
             validar_cpf: this.councilConfig.validarCPF,
             validar_cnpj: this.councilConfig.validarCNPJ,
             validar_cep: this.councilConfig.validarCEP,
-            auto_preencher_endereco_cep: this.councilConfig.autoPreencherEnderecoCEP,
-            acessos_inscrito_pf: this.councilConfig.acessosInscritoPF || DEFAULT_ACESSOS_INSCRITO_PF,
-            acessos_inscrito_pj: this.councilConfig.acessosInscritoPJ || DEFAULT_ACESSOS_INSCRITO_PJ
-          })
-        );
-      }
-    } catch (e) {}
+            auto_preencher_endereco_cep: this.councilConfig.autoPreencherEnderecoCEP
+          });
+        } else if (error) {
+          console.warn('Erro ao salvar council_config:', error.message);
+        }
+      })(), 'updateCouncilConfig');
+    }
     this.notify();
   }
 
@@ -3222,23 +3537,40 @@ class StorageService {
 
     this.cadastrosBasicos = this.deduplicateCadastrosBasicos(this.cadastrosBasicos);
 
-    try {
-      localStorage.setItem(STORAGE_KEYS.CADASTROS_BASICOS, JSON.stringify(this.cadastrosBasicos));
-      if (this.isOnline) {
-        runBackgroundSupabase(
-          supabase.from('cadastros_basicos').upsert({
+    safeSetLocalStorage(STORAGE_KEYS.CADASTROS_BASICOS, this.cadastrosBasicos);
+    if (this.isOnline) {
+      runBackgroundSupabase((async () => {
+        const fullRow = {
+          id: sanitized.id,
+          categoria: sanitized.categoria,
+          nome: sanitized.nome,
+          codigo: sanitized.codigo || null,
+          descricao: sanitized.descricao || null,
+          ativo: sanitized.ativo,
+          ordem: sanitized.ordem || 0,
+          selecionar_empresa_vinculada: Boolean(sanitized.selecionarEmpresaVinculada),
+          cargo_id: sanitized.cargoId || null,
+          cargo_nome: sanitized.cargoNome || null,
+          setor_id: sanitized.setorId || null,
+          setor_nome: sanitized.setorNome || null,
+          modulos_permitidos: sanitized.modulosPermitidos || []
+        };
+        const { error } = await supabase.from('cadastros_basicos').upsert(fullRow, { onConflict: 'id' });
+        if (error && (error.code === '42703' || error.message.includes('column') || error.message.includes('schema cache'))) {
+          await supabase.from('cadastros_basicos').upsert({
             id: sanitized.id,
             categoria: sanitized.categoria,
             nome: sanitized.nome,
             codigo: sanitized.codigo || null,
             descricao: sanitized.descricao || null,
             ativo: sanitized.ativo,
-            ordem: sanitized.ordem || 0,
-            selecionar_empresa_vinculada: Boolean(sanitized.selecionarEmpresaVinculada)
-          })
-        );
-      }
-    } catch (e) {}
+            ordem: sanitized.ordem || 0
+          }, { onConflict: 'id' });
+        } else if (error) {
+          this.addSyncError('Cadastros Básicos', sanitized.nome, error.message);
+        }
+      })(), 'saveCadastroBasico');
+    }
     this.notify();
     return { success: true };
   }
@@ -3338,14 +3670,13 @@ class StorageService {
     }
 
     this.cadastrosBasicos = this.cadastrosBasicos.filter(i => i.id !== id);
-    try {
-      localStorage.setItem(STORAGE_KEYS.CADASTROS_BASICOS, JSON.stringify(this.cadastrosBasicos));
-      if (this.isOnline) {
-        runBackgroundSupabase(
-          supabase.from('cadastros_basicos').delete().eq('id', id)
-        );
-      }
-    } catch (e) {}
+    safeSetLocalStorage(STORAGE_KEYS.CADASTROS_BASICOS, this.cadastrosBasicos);
+    if (this.isOnline) {
+      runBackgroundSupabase(
+        supabase.from('cadastros_basicos').delete().eq('id', id),
+        'deleteCadastroBasico'
+      );
+    }
     this.notify();
     return { success: true };
   }
@@ -5511,62 +5842,129 @@ class StorageService {
     return [...this.protocolos];
   }
 
-  public syncSingleProtocoloToSupabase(prot: any) {
-    if (!this.isOnline) return;
+  public resolveCanonicalSetorProtocolo(preferredName?: string, form?: FormularioDinamico): string {
+    const setoresAtivos = this.cadastrosBasicos.filter(
+      c => (c.categoria === 'SETOR_PROTOCOLO' || c.categoria === 'SETOR_LOTACAO') && c.ativo
+    );
+    const findMatch = (name?: string) => {
+      if (!name) return undefined;
+      const target = name.trim().toUpperCase();
+      return setoresAtivos.find(s => s.nome.trim().toUpperCase() === target);
+    };
 
-    runBackgroundSupabase((async () => {
-      const fullPayload: Record<string, any> = {
-        id: prot.id,
-        numero_protocolo: prot.numeroProtocolo,
-        tipo: prot.tipo,
-        assunto: prot.assunto || null,
-        interessado: prot.interessado,
-        documento_interessado: prot.documentoInteressado,
-        tipo_interessado: prot.tipoInteressado || null,
-        vinculo_id: prot.vinculoId || null,
-        vinculo_inscricao: prot.vinculoInscricao || null,
-        vinculo_detalhes: prot.vinculoDetalhes || null,
-        contato_email: prot.contatoEmail || null,
-        contato_telefone: prot.contatoTelefone || null,
-        data_inscricao: prot.dataInscricao || null,
-        data_abertura: prot.dataAbertura,
-        data_ultima_atualizacao: prot.dataUltimaAtualizacao || null,
-        prazo_resposta: prot.prazoResposta || null,
-        status: prot.status || 'Em Análise',
-        setor_atual: prot.setorAtual || 'Secretaria Geral',
-        conselheiro_relator: prot.conselheiroRelator || null,
-        parecer_relator: prot.parecerRelator || null,
-        decisao_plenario: prot.decisaoPlenario || null,
-        anexos: prot.anexos || [],
-        anexos_detalhados: prot.anexosDetalhados || [],
-        conteudo_completo_formulario: prot.conteudoCompletoFormulario || {},
-        historico: prot.historico || []
-      };
+    const direct = findMatch(preferredName) || findMatch(form?.setorTramitacaoNome);
+    if (direct) return direct.nome;
 
-      const { error } = await supabase.from('protocolos_processos').upsert(fullPayload, { onConflict: 'id' });
-      if (error && (error.message.includes('column') || error.code === '42703' || error.message.includes('schema cache'))) {
-        // Fallback para colunas básicas se a tabela no Supabase ainda não tiver as novas colunas
-        const basePayload = {
-          id: prot.id,
-          numero_protocolo: prot.numeroProtocolo,
-          tipo: prot.tipo,
-          interessado: prot.interessado,
-          documento_interessado: prot.documentoInteressado,
-          data_inscricao: prot.dataInscricao || null,
-          data_abertura: prot.dataAbertura,
-          data_ultima_atualizacao: prot.dataUltimaAtualizacao || null,
-          prazo_resposta: prot.prazoResposta || null,
-          status: prot.status || 'Em Análise',
-          setor_atual: prot.setorAtual || 'Secretaria Geral',
-          conselheiro_relator: prot.conselheiroRelator || null,
-          parecer_relator: prot.parecerRelator || null,
-          decisao_plenario: prot.decisaoPlenario || null,
-          anexos: prot.anexos || [],
-          historico: prot.historico || []
-        };
-        await supabase.from('protocolos_processos').upsert(basePayload, { onConflict: 'id' });
+    const isOuvidoria =
+      form?.categoria === 'Ouvidoria & Denúncias' ||
+      form?.categoria === 'Ouvidoria' ||
+      form?.titulo?.toUpperCase().includes('DENÚNCIA');
+    if (isOuvidoria) {
+      const jur = findMatch('JURIDICO') || findMatch('JURÍDICO');
+      if (jur) return jur.nome;
+    }
+
+    const secGeral =
+      findMatch('Secretaria Geral') ||
+      findMatch('SECRETARIA REGULATORIA') ||
+      findMatch('ATENDIMENTO') ||
+      setoresAtivos[0];
+    return secGeral?.nome || preferredName || 'Secretaria Geral';
+  }
+
+  public async syncSingleProtocoloToSupabase(prot: any, retryCount = 0): Promise<boolean> {
+    if (!this.isOnline) return false;
+
+    const safeDoc = String(prot.documentoInteressado || 'NÃO INFORMADO').slice(0, 100);
+    const safePrazo = String(prot.prazoResposta || '').slice(0, 50) || null;
+
+    const buildFullPayload = (numeroProt: string): Record<string, any> => ({
+      id: prot.id,
+      numero_protocolo: String(numeroProt || '').slice(0, 50),
+      tipo: String(prot.tipo || 'Processo Administrativo').slice(0, 100),
+      assunto: prot.assunto || null,
+      interessado: String(prot.interessado || 'INTERESSADO').slice(0, 255),
+      documento_interessado: safeDoc,
+      tipo_interessado: prot.tipoInteressado || null,
+      vinculo_id: prot.vinculoId || null,
+      vinculo_inscricao: prot.vinculoInscricao || null,
+      vinculo_detalhes: prot.vinculoDetalhes || null,
+      contato_email: prot.contatoEmail ? String(prot.contatoEmail).slice(0, 150) : null,
+      contato_telefone: prot.contatoTelefone ? String(prot.contatoTelefone).slice(0, 50) : null,
+      data_inscricao: prot.dataInscricao || null,
+      data_abertura: prot.dataAbertura || new Date().toLocaleDateString('pt-BR'),
+      data_ultima_atualizacao: prot.dataUltimaAtualizacao || null,
+      prazo_resposta: safePrazo,
+      status: String(prot.status || 'Em Análise').slice(0, 50),
+      setor_atual: String(prot.setorAtual || 'Secretaria Geral').slice(0, 100),
+      conselheiro_relator: prot.conselheiroRelator ? String(prot.conselheiroRelator).slice(0, 150) : null,
+      parecer_relator: prot.parecerRelator || null,
+      decisao_plenario: prot.decisaoPlenario || null,
+      anexos: Array.isArray(prot.anexos) ? prot.anexos : [],
+      anexos_detalhados: Array.isArray(prot.anexosDetalhados) ? prot.anexosDetalhados : [],
+      conteudo_completo_formulario: prot.conteudoCompletoFormulario || {},
+      historico: Array.isArray(prot.historico) ? prot.historico : []
+    });
+
+    const buildBasePayload = (numeroProt: string): Record<string, any> => ({
+      id: prot.id,
+      numero_protocolo: String(numeroProt || '').slice(0, 50),
+      tipo: String(prot.tipo || 'Processo Administrativo').slice(0, 100),
+      interessado: String(prot.interessado || 'INTERESSADO').slice(0, 255),
+      documento_interessado: safeDoc.slice(0, 20),
+      data_inscricao: prot.dataInscricao || null,
+      data_abertura: prot.dataAbertura || new Date().toLocaleDateString('pt-BR'),
+      data_ultima_atualizacao: prot.dataUltimaAtualizacao || null,
+      prazo_resposta: safePrazo ? safePrazo.slice(0, 20) : null,
+      status: String(prot.status || 'Em Análise').slice(0, 50),
+      setor_atual: String(prot.setorAtual || 'Secretaria Geral').slice(0, 100),
+      conselheiro_relator: prot.conselheiroRelator ? String(prot.conselheiroRelator).slice(0, 150) : null,
+      parecer_relator: prot.parecerRelator || null,
+      decisao_plenario: prot.decisaoPlenario || null,
+      anexos: Array.isArray(prot.anexos) ? prot.anexos : [],
+      historico: Array.isArray(prot.historico) ? prot.historico : []
+    });
+
+    try {
+      const fullPayload = buildFullPayload(prot.numeroProtocolo);
+      let { error } = await supabase.from('protocolos_processos').upsert(fullPayload, { onConflict: 'id' });
+
+      if (error && (error.code === '42703' || error.message.includes('column') || error.message.includes('schema cache'))) {
+        const retryBase = await supabase.from('protocolos_processos').upsert(buildBasePayload(prot.numeroProtocolo), { onConflict: 'id' });
+        error = retryBase.error;
       }
-    })());
+
+      // Colisão de numero_protocolo UNIQUE (23505): gera próximo número disponível globalmente e reenvia
+      if (error && error.code === '23505' && error.message.includes('numero_protocolo') && retryCount < 3) {
+        const oldNum = prot.numeroProtocolo;
+        const origem = prot.tipoInteressado === 'PUBLICO' ? 'SITE' : (prot.tipoInteressado ? 'INSCRITO' : 'INTERNO');
+        const newNum = await this.generateUniqueProtocoloNumeroAsync(origem);
+        prot.numeroProtocolo = newNum;
+        safeSetLocalStorage(STORAGE_KEYS.PROTOCOLOS, this.protocolos);
+
+        // Atualiza eventual resposta vinculada ao número anterior
+        const linkedResp = this.respostasForms.find(r => r.protocoloGerado === oldNum);
+        if (linkedResp) {
+          linkedResp.protocoloGerado = newNum;
+          safeSetLocalStorage(STORAGE_KEYS.RESPOSTAS_FORMS, this.respostasForms);
+          await this.syncSingleRespostaFormularioToSupabase(linkedResp);
+        }
+        this.notify();
+        return this.syncSingleProtocoloToSupabase(prot, retryCount + 1);
+      }
+
+      if (error) {
+        console.error('[Supabase - Protocolo] erro ao gravar:', error);
+        this.addSyncError('Protocolos', prot.numeroProtocolo || prot.id, error.message);
+        return false;
+      }
+
+      return true;
+    } catch (err: any) {
+      console.error('[Supabase - Protocolo] exceção:', err);
+      this.addSyncError('Protocolos', prot.numeroProtocolo || prot.id, err?.message || 'Erro desconhecido');
+      return false;
+    }
   }
 
   public saveProtocolo(prot: any) {
@@ -5576,33 +5974,120 @@ class StorageService {
     } else {
       this.protocolos.unshift(prot);
     }
-    try {
-      localStorage.setItem(STORAGE_KEYS.PROTOCOLOS, JSON.stringify(this.protocolos));
-      if (this.isOnline) {
-        this.syncSingleProtocoloToSupabase(prot);
-      }
-    } catch (e) {
-      console.warn('Erro ao salvar protocolo no localStorage:', e);
+    safeSetLocalStorage(STORAGE_KEYS.PROTOCOLOS, this.protocolos);
+    if (this.isOnline) {
+      void this.syncSingleProtocoloToSupabase(prot);
     }
     this.notify();
   }
 
+  public async saveProtocoloAsync(prot: any): Promise<boolean> {
+    const idx = this.protocolos.findIndex(p => p.id === prot.id);
+    if (idx >= 0) {
+      this.protocolos[idx] = prot;
+    } else {
+      this.protocolos.unshift(prot);
+    }
+    safeSetLocalStorage(STORAGE_KEYS.PROTOCOLOS, this.protocolos);
+    this.notify();
+    if (!this.isOnline) return false;
+    return this.syncSingleProtocoloToSupabase(prot);
+  }
+
   public deleteProtocolo(id: string) {
     this.protocolos = this.protocolos.filter(p => p.id !== id);
-    try {
-      localStorage.setItem(STORAGE_KEYS.PROTOCOLOS, JSON.stringify(this.protocolos));
-      if (this.isOnline) {
-        runBackgroundSupabase(
-          supabase.from('protocolos_processos').delete().eq('id', id)
-        );
-      }
-    } catch (e) {}
+    safeSetLocalStorage(STORAGE_KEYS.PROTOCOLOS, this.protocolos);
+    if (this.isOnline) {
+      runBackgroundSupabase(
+        supabase.from('protocolos_processos').delete().eq('id', id),
+        'deleteProtocolo'
+      );
+    }
     this.notify();
   }
 
   // Formulários Dinâmicos
   public getFormularios(): FormularioDinamico[] {
     return [...this.formularios];
+  }
+
+  public async syncSingleFormularioToSupabase(form: FormularioDinamico): Promise<boolean> {
+    if (!this.isOnline) return false;
+
+    const fullPayload = {
+      id: form.id,
+      titulo: form.titulo,
+      categoria: form.categoria,
+      descricao: form.descricao || null,
+      publico_alvo: form.publicoAlvo || 'Ambos',
+      versao: String(form.versao || '1.0'),
+      ativo: form.ativo ?? true,
+      campos: form.campos || [],
+      respostas_recebidas: form.respostasRecebidas || 0,
+      data_criacao: form.dataCriacao || null,
+      publicar_profissional: Boolean(form.publicarProfissional),
+      publicar_empresa: Boolean(form.publicarEmpresa),
+      publicar_site: Boolean(form.publicarSite),
+      permite_anexos: Boolean(form.permiteAnexos),
+      tipos_anexos_permitidos: form.tiposAnexosPermitidos || ['.pdf', '.docx', '.jpg', '.png'],
+      tamanho_maximo_mb: form.tamanhoMaximoMb || 15,
+      instrucoes_anexo: form.instrucoesAnexo || null,
+      setor_tramitacao_id: form.setorTramitacaoId || null,
+      setor_tramitacao_nome: form.setorTramitacaoNome || null,
+      status_protocolo_inicial: form.statusProtocoloInicial || null,
+      prazo_dias_conclusao: form.prazoDiasConclusao || 15,
+      permite_anonimo: Boolean(form.permiteAnonimo),
+      vincular_empresas_profissional: Boolean(form.vincularEmpresasProfissional),
+      vincular_profissionais_empresa: Boolean(form.vincularProfissionaisEmpresa)
+    };
+
+    try {
+      let { error } = await supabase.from('formularios_dinamicos').upsert(fullPayload, { onConflict: 'id' });
+
+      // Fallback se o banco ainda tiver coluna versao INTEGER (22P02)
+      if (error && error.code === '22P02') {
+        const retryIntVersao = await supabase.from('formularios_dinamicos').upsert({
+          ...fullPayload,
+          versao: Math.max(1, parseInt(String(form.versao || '1'), 10) || 1) as any
+        }, { onConflict: 'id' });
+        error = retryIntVersao.error;
+      }
+
+      // Fallback caso colunas estendidas ainda não existam
+      if (error && (error.code === '42703' || error.message.includes('column') || error.message.includes('schema cache'))) {
+        const basePayload = {
+          id: form.id,
+          titulo: form.titulo,
+          categoria: form.categoria,
+          descricao: form.descricao || null,
+          publico_alvo: form.publicoAlvo || 'Ambos',
+          versao: String(form.versao || '1.0'),
+          ativo: form.ativo ?? true,
+          campos: form.campos || [],
+          respostas_recebidas: form.respostasRecebidas || 0,
+          data_criacao: form.dataCriacao || null
+        };
+        let retryBase = await supabase.from('formularios_dinamicos').upsert(basePayload, { onConflict: 'id' });
+        if (retryBase.error && retryBase.error.code === '22P02') {
+          retryBase = await supabase.from('formularios_dinamicos').upsert({
+            ...basePayload,
+            versao: Math.max(1, parseInt(String(form.versao || '1'), 10) || 1) as any
+          }, { onConflict: 'id' });
+        }
+        error = retryBase.error;
+      }
+
+      if (error) {
+        console.error('[Supabase - Formulários] erro ao gravar:', error);
+        this.addSyncError('Formulários Dinâmicos', form.titulo, error.message);
+        return false;
+      }
+      return true;
+    } catch (err: any) {
+      console.error('[Supabase - Formulários] exceção:', err);
+      this.addSyncError('Formulários Dinâmicos', form.titulo, err?.message || 'Erro desconhecido');
+      return false;
+    }
   }
 
   public saveFormulario(form: FormularioDinamico) {
@@ -5612,72 +6097,22 @@ class StorageService {
     } else {
       this.formularios.unshift(form);
     }
-    try {
-      localStorage.setItem(STORAGE_KEYS.FORMULARIOS, JSON.stringify(this.formularios));
-      if (this.isOnline) {
-        runBackgroundSupabase((async () => {
-          const fullPayload = {
-            id: form.id,
-            titulo: form.titulo,
-            categoria: form.categoria,
-            descricao: form.descricao || null,
-            publico_alvo: form.publicoAlvo || 'Ambos',
-            versao: String(form.versao || '1.0'),
-            ativo: form.ativo ?? true,
-            campos: form.campos || [],
-            respostas_recebidas: form.respostasRecebidas || 0,
-            data_criacao: form.dataCriacao || null,
-            publicar_profissional: Boolean(form.publicarProfissional),
-            publicar_empresa: Boolean(form.publicarEmpresa),
-            publicar_site: Boolean(form.publicarSite),
-            permite_anexos: Boolean(form.permiteAnexos),
-            tipos_anexos_permitidos: form.tiposAnexosPermitidos || ['.pdf', '.docx', '.jpg', '.png'],
-            tamanho_maximo_mb: form.tamanhoMaximoMb || 15,
-            instrucoes_anexo: form.instrucoesAnexo || null,
-            setor_tramitacao_id: form.setorTramitacaoId || null,
-            setor_tramitacao_nome: form.setorTramitacaoNome || null,
-            status_protocolo_inicial: form.statusProtocoloInicial || null,
-            prazo_dias_conclusao: form.prazoDiasConclusao || 15,
-            permite_anonimo: Boolean(form.permiteAnonimo),
-            vincular_empresas_profissional: Boolean(form.vincularEmpresasProfissional),
-            vincular_profissionais_empresa: Boolean(form.vincularProfissionaisEmpresa)
-          };
-
-          const { error } = await supabase.from('formularios_dinamicos').upsert(fullPayload, { onConflict: 'id' });
-          if (error && (error.message.includes('column') || error.code === '42703' || error.message.includes('schema cache'))) {
-            // Fallback caso colunas ainda não existam no Supabase
-            const basePayload = {
-              id: form.id,
-              titulo: form.titulo,
-              categoria: form.categoria,
-              descricao: form.descricao || null,
-              publico_alvo: form.publicoAlvo || 'Ambos',
-              versao: String(form.versao || '1.0'),
-              ativo: form.ativo ?? true,
-              campos: form.campos || [],
-              respostas_recebidas: form.respostasRecebidas || 0,
-              data_criacao: form.dataCriacao || null
-            };
-            await supabase.from('formularios_dinamicos').upsert(basePayload, { onConflict: 'id' });
-          }
-        })());
-      }
-    } catch (e) {
-      console.warn('Erro ao salvar formulário no storage:', e);
+    safeSetLocalStorage(STORAGE_KEYS.FORMULARIOS, this.formularios);
+    if (this.isOnline) {
+      void this.syncSingleFormularioToSupabase(form);
     }
     this.notify();
   }
 
   public deleteFormulario(id: string) {
     this.formularios = this.formularios.filter(f => f.id !== id);
-    try {
-      localStorage.setItem(STORAGE_KEYS.FORMULARIOS, JSON.stringify(this.formularios));
-      if (this.isOnline) {
-        runBackgroundSupabase(
-          supabase.from('formularios_dinamicos').delete().eq('id', id)
-        );
-      }
-    } catch (e) {}
+    safeSetLocalStorage(STORAGE_KEYS.FORMULARIOS, this.formularios);
+    if (this.isOnline) {
+      runBackgroundSupabase(
+        supabase.from('formularios_dinamicos').delete().eq('id', id),
+        'deleteFormulario'
+      );
+    }
     this.notify();
   }
 
@@ -5688,31 +6123,66 @@ class StorageService {
     return [...this.respostasForms];
   }
 
-  public submitFormResponse(resposta: RespostaFormulario) {
-    if (!resposta.id) {
-      resposta.id = `resp-${Date.now()}`;
-    }
-    if (!resposta.dataEnvio) {
-      resposta.dataEnvio = new Date().toISOString();
-    }
-    if (!resposta.protocoloGerado) {
-      const canal = resposta.canalOrigem;
-      const origem = (canal === 'SITE' || canal === 'SITE_PUBLICO') ? 'SITE' : 'INSCRITO';
-      resposta.protocoloGerado = this.generateNextProtocoloNumero(origem);
-    }
+  public async syncSingleRespostaFormularioToSupabase(resposta: RespostaFormulario): Promise<boolean> {
+    if (!this.isOnline) return false;
 
-    this.respostasForms.unshift(resposta);
+    const fullPayload = {
+      id: resposta.id,
+      formulario_id: resposta.formularioId,
+      formulario_titulo: String(resposta.formularioTitulo || '').slice(0, 255),
+      autor_nome: String(resposta.autorNome || 'SOLICITANTE').slice(0, 255),
+      autor_documento: String(resposta.autorDocumento || 'NÃO INFORMADO').slice(0, 100),
+      autor_email: resposta.autorEmail ? String(resposta.autorEmail).slice(0, 150) : null,
+      autor_telefone: resposta.autorTelefone ? String(resposta.autorTelefone).slice(0, 50) : null,
+      canal_origem: resposta.canalOrigem || 'PROFISSIONAL',
+      protocolo_gerado: String(resposta.protocoloGerado || '').slice(0, 50),
+      data_envio: String(resposta.dataEnvio || new Date().toISOString()).slice(0, 30),
+      respostas: resposta.respostas || {},
+      dados_campos: resposta.dadosCampos || {},
+      anexos: Array.isArray(resposta.anexos) ? resposta.anexos : [],
+      status: String(resposta.status || 'Em Análise').slice(0, 50)
+    };
+
     try {
-      localStorage.setItem(STORAGE_KEYS.RESPOSTAS_FORMS, JSON.stringify(this.respostasForms));
-    } catch (e) {}
+      let { error } = await supabase.from('respostas_formularios').upsert(fullPayload, { onConflict: 'id' });
 
+      if (error && (error.code === '42703' || error.message.includes('column') || error.message.includes('schema cache'))) {
+        const retryBase = await supabase.from('respostas_formularios').upsert({
+          id: fullPayload.id,
+          formulario_id: fullPayload.formulario_id,
+          formulario_titulo: fullPayload.formulario_titulo,
+          autor_nome: fullPayload.autor_nome,
+          autor_documento: fullPayload.autor_documento.slice(0, 30),
+          protocolo_gerado: fullPayload.protocolo_gerado,
+          data_envio: fullPayload.data_envio,
+          respostas: fullPayload.respostas,
+          dados_campos: fullPayload.dados_campos,
+          status: fullPayload.status
+        }, { onConflict: 'id' });
+        error = retryBase.error;
+      }
+
+      if (error) {
+        console.error('[Supabase - Respostas Formulários] erro ao gravar:', error);
+        this.addSyncError('Respostas de Formulários', resposta.protocoloGerado || resposta.id, error.message);
+        return false;
+      }
+
+      return true;
+    } catch (err: any) {
+      console.error('[Supabase - Respostas Formulários] exceção:', err);
+      this.addSyncError('Respostas de Formulários', resposta.protocoloGerado || resposta.id, err?.message || 'Erro desconhecido');
+      return false;
+    }
+  }
+
+  private buildProtocoloFromFormResponse(resposta: RespostaFormulario): any {
     const form = this.formularios.find(f => f.id === resposta.formularioId);
     if (form) {
       form.respostasRecebidas = (form.respostasRecebidas || 0) + 1;
       this.saveFormulario(form);
     }
 
-    // Formata o texto completo das respostas preenchidas pelo usuário (tratando objetos de endereço e JSON)
     const formatValorCampo = (val: any): string => {
       if (val === null || val === undefined) return '';
       if (typeof val === 'object') {
@@ -5726,8 +6196,7 @@ class StorageService {
           if (val.complemento) parts.push(`Compl: ${val.complemento}`);
           if (val.bairro) parts.push(`Bairro: ${val.bairro}`);
           if (val.cidade || val.uf) {
-            const cidUf = [val.cidade, val.uf].filter(Boolean).join(' - ');
-            parts.push(cidUf);
+            parts.push([val.cidade, val.uf].filter(Boolean).join(' - '));
           }
           if (val.cep) parts.push(`CEP: ${val.cep}`);
           return parts.filter(Boolean).join(', ');
@@ -5740,7 +6209,8 @@ class StorageService {
       return String(val);
     };
 
-    const respostasFormatadasTexto = Object.entries(resposta.dadosCampos || resposta.respostas || {})
+    const rawDados = resposta.dadosCampos || resposta.respostas || {};
+    const respostasFormatadasTexto = Object.entries(rawDados)
       .map(([k, v]) => {
         const campo = form?.campos?.find(c => c.id === k);
         const label = campo?.label || k;
@@ -5748,29 +6218,39 @@ class StorageService {
       })
       .join('\n');
 
-    // Cálculo do prazo em dias definido no formulário dinâmico
     const diasPrazo = form?.prazoDiasConclusao || 15;
     const prazoCalculado = new Date(Date.now() + diasPrazo * 86400000).toLocaleDateString('pt-BR');
-
-    // Definição de setor de tramitação e status inicial configurados no modelo do formulário
-    const setorDestino = form?.setorTramitacaoNome || (form?.categoria === 'Ouvidoria & Denúncias' || form?.titulo?.toUpperCase().includes('DENÚNCIA') ? 'JURIDICO' : 'Secretaria Geral / Protocolo');
+    const setorDestino = this.resolveCanonicalSetorProtocolo(form?.setorTramitacaoNome, form);
     const statusInicial = form?.statusProtocoloInicial || (resposta.status && resposta.status !== 'Em Análise' ? resposta.status : 'PENDENTE');
+    const canalUpper = (resposta.canalOrigem || '').toUpperCase();
+    const isSite = canalUpper === 'SITE' || canalUpper === 'SITE_PUBLICO';
+    const isEmpresa = canalUpper === 'EMPRESA' || canalUpper === 'PORTAL_EMPRESA';
+
+    const protId = `prot-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const hojeData = new Date().toLocaleDateString('pt-BR');
+    const horaAtual = new Date().toLocaleTimeString('pt-BR').slice(0, 5);
+
+    const vinculoDetalhesTexto = resposta.vinculoDetalhes
+      ? `${resposta.vinculoDetalhes}\n${respostasFormatadasTexto}`.trim()
+      : respostasFormatadasTexto;
 
     const novoProt: any = {
-      id: `prot-${Date.now()}`,
+      id: protId,
       numeroProtocolo: resposta.protocoloGerado,
       tipo: form?.categoria || 'Processo Administrativo',
-      assunto: form?.titulo,
+      assunto: form?.titulo || resposta.formularioTitulo,
       interessado: resposta.autorNome,
       documentoInteressado: resposta.autorDocumento,
-      tipoInteressado: resposta.canalOrigem === 'PORTAL_EMPRESA' ? 'EMPRESA' : (resposta.canalOrigem === 'SITE_PUBLICO' || resposta.canalOrigem === 'SITE' ? 'PUBLICO' : 'PROFISSIONAL'),
+      tipoInteressado: isEmpresa ? 'EMPRESA' : (isSite ? 'PUBLICO' : 'PROFISSIONAL'),
+      vinculoId: resposta.vinculoId,
+      vinculoInscricao: resposta.vinculoInscricao,
       contatoEmail: resposta.autorEmail,
       contatoTelefone: resposta.autorTelefone,
-      vinculoDetalhes: respostasFormatadasTexto,
-      conteudoCompletoFormulario: resposta.dadosCampos || resposta.respostas || {},
-      dataInscricao: new Date().toLocaleDateString('pt-BR'),
-      dataAbertura: new Date().toLocaleDateString('pt-BR'),
-      dataUltimaAtualizacao: new Date().toLocaleDateString('pt-BR'),
+      vinculoDetalhes: vinculoDetalhesTexto,
+      conteudoCompletoFormulario: rawDados,
+      dataInscricao: hojeData,
+      dataAbertura: hojeData,
+      dataUltimaAtualizacao: hojeData,
       prazoResposta: prazoCalculado,
       status: statusInicial,
       setorAtual: setorDestino,
@@ -5778,37 +6258,78 @@ class StorageService {
       anexosDetalhados: resposta.anexos || [],
       historico: [
         {
-          data: new Date().toLocaleDateString('pt-BR') + ' ' + new Date().toLocaleTimeString('pt-BR').slice(0, 5),
-          setor: resposta.canalOrigem === 'SITE' || resposta.canalOrigem === 'SITE_PUBLICO' ? 'Portal Público Oficial' : 'Portal do Inscrito',
-          descricao: `Abertura automática de protocolo via formulário dinâmico: "${form?.titulo}". Encaminhado para o setor ${setorDestino} com status inicial ${statusInicial}.${resposta.anexos && resposta.anexos.length > 0 ? ` Contém ${resposta.anexos.length} arquivo(s) anexado(s).` : ''}`,
+          data: `${hojeData} ${horaAtual}`,
+          setor: isSite ? 'Portal Público Oficial' : 'Portal do Inscrito',
+          descricao: `Abertura automática de protocolo via formulário dinâmico: "${form?.titulo || resposta.formularioTitulo}". Encaminhado para o setor ${setorDestino} com status inicial ${statusInicial}.${resposta.anexos && resposta.anexos.length > 0 ? ` Contém ${resposta.anexos.length} arquivo(s) anexado(s).` : ''}`,
           responsavel: resposta.autorNome
         }
       ]
     };
+
+    return novoProt;
+  }
+
+  public submitFormResponse(resposta: RespostaFormulario) {
+    if (!resposta.id) {
+      resposta.id = `resp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    }
+    if (!resposta.dataEnvio) {
+      resposta.dataEnvio = new Date().toISOString();
+    }
+    if (!resposta.protocoloGerado) {
+      const canal = (resposta.canalOrigem || '').toUpperCase();
+      const origem = (canal === 'SITE' || canal === 'SITE_PUBLICO') ? 'SITE' : 'INSCRITO';
+      resposta.protocoloGerado = this.generateNextProtocoloNumero(origem);
+    }
+
+    this.respostasForms.unshift(resposta);
+    safeSetLocalStorage(STORAGE_KEYS.RESPOSTAS_FORMS, this.respostasForms);
+
+    const novoProt = this.buildProtocoloFromFormResponse(resposta);
     this.saveProtocolo(novoProt);
 
     if (this.isOnline) {
-      runBackgroundSupabase(
-        supabase.from('respostas_formularios').insert({
-          id: resposta.id,
-          formulario_id: resposta.formularioId,
-          formulario_titulo: resposta.formularioTitulo,
-          autor_nome: resposta.autorNome,
-          autor_documento: resposta.autorDocumento,
-          autor_email: resposta.autorEmail || null,
-          autor_telefone: resposta.autorTelefone || null,
-          canal_origem: resposta.canalOrigem || 'PROFISSIONAL',
-          protocolo_gerado: resposta.protocoloGerado,
-          data_envio: resposta.dataEnvio,
-          respostas: resposta.respostas || {},
-          dados_campos: resposta.dadosCampos || {},
-          anexos: resposta.anexos || [],
-          status: resposta.status || 'Em Análise'
-        })
-      );
+      void this.syncSingleRespostaFormularioToSupabase(resposta);
     }
 
     this.notify();
+  }
+
+  public async submitFormResponseAsync(resposta: RespostaFormulario): Promise<{ protocolo: string; synced: boolean; error?: string }> {
+    if (!resposta.id) {
+      resposta.id = `resp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    }
+    if (!resposta.dataEnvio) {
+      resposta.dataEnvio = new Date().toISOString();
+    }
+    if (!resposta.protocoloGerado) {
+      const canal = (resposta.canalOrigem || '').toUpperCase();
+      const origem = (canal === 'SITE' || canal === 'SITE_PUBLICO') ? 'SITE' : 'INSCRITO';
+      resposta.protocoloGerado = await this.generateUniqueProtocoloNumeroAsync(origem);
+    }
+
+    this.respostasForms.unshift(resposta);
+    safeSetLocalStorage(STORAGE_KEYS.RESPOSTAS_FORMS, this.respostasForms);
+
+    const novoProt = this.buildProtocoloFromFormResponse(resposta);
+    this.protocolos.unshift(novoProt);
+    safeSetLocalStorage(STORAGE_KEYS.PROTOCOLOS, this.protocolos);
+    this.notify();
+
+    if (!this.isOnline) {
+      return { protocolo: novoProt.numeroProtocolo, synced: false, error: 'Offline' };
+    }
+
+    const [protSynced, respSynced] = await Promise.all([
+      this.syncSingleProtocoloToSupabase(novoProt),
+      this.syncSingleRespostaFormularioToSupabase(resposta)
+    ]);
+
+    return {
+      protocolo: novoProt.numeroProtocolo,
+      synced: protSynced && respSynced,
+      error: !(protSynced && respSynced) ? 'Falha parcial ao sincronizar com o banco em nuvem' : undefined
+    };
   }
 
   public getEstatisticasFormularios(periodo: 'dia' | 'mes' | 'ano' | 'todos' = 'todos') {
@@ -5819,59 +6340,67 @@ class StorageService {
 
     const totalGeral = this.respostasForms.length;
 
+    const parseBrOrIso = (str?: string): Date | null => {
+      if (!str) return null;
+      const brMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+      if (brMatch) {
+        return new Date(Number(brMatch[3]), Number(brMatch[2]) - 1, Number(brMatch[1]));
+      }
+      const d = new Date(str);
+      return isNaN(d.getTime()) ? null : d;
+    };
+
     const respostasFiltradas = this.respostasForms.filter(r => {
       if (periodo === 'todos') return true;
-      const dataIso = r.dataEnvio ? new Date(r.dataEnvio) : null;
-      if (!dataIso || isNaN(dataIso.getTime())) {
-        // Fallback para strings com formato pt-BR
+      const d = parseBrOrIso(r.dataEnvio);
+      if (!d) {
         if (periodo === 'dia') return r.dataEnvio?.includes(hojeStr);
         return true;
       }
 
       if (periodo === 'dia') {
-        return (
-          dataIso.getDate() === agora.getDate() &&
-          dataIso.getMonth() === mesAtual &&
-          dataIso.getFullYear() === anoAtual
-        );
+        return d.getDate() === agora.getDate() && d.getMonth() === mesAtual && d.getFullYear() === anoAtual;
       }
       if (periodo === 'mes') {
-        return dataIso.getMonth() === mesAtual && dataIso.getFullYear() === anoAtual;
+        return d.getMonth() === mesAtual && d.getFullYear() === anoAtual;
       }
       if (periodo === 'ano') {
-        return dataIso.getFullYear() === anoAtual;
+        return d.getFullYear() === anoAtual;
       }
       return true;
     });
 
     const enviosHoje = this.respostasForms.filter(r => {
-      const d = r.dataEnvio ? new Date(r.dataEnvio) : null;
-      if (d && !isNaN(d.getTime())) {
-        return d.getDate() === agora.getDate() && d.getMonth() === mesAtual && d.getFullYear() === anoAtual;
-      }
+      const d = parseBrOrIso(r.dataEnvio);
+      if (d) return d.getDate() === agora.getDate() && d.getMonth() === mesAtual && d.getFullYear() === anoAtual;
       return r.dataEnvio?.includes(hojeStr);
     }).length;
 
     const enviosMes = this.respostasForms.filter(r => {
-      const d = r.dataEnvio ? new Date(r.dataEnvio) : null;
-      if (d && !isNaN(d.getTime())) {
-        return d.getMonth() === mesAtual && d.getFullYear() === anoAtual;
-      }
+      const d = parseBrOrIso(r.dataEnvio);
+      if (d) return d.getMonth() === mesAtual && d.getFullYear() === anoAtual;
       return true;
     }).length;
 
     const enviosAno = this.respostasForms.filter(r => {
-      const d = r.dataEnvio ? new Date(r.dataEnvio) : null;
-      if (d && !isNaN(d.getTime())) {
-        return d.getFullYear() === anoAtual;
-      }
+      const d = parseBrOrIso(r.dataEnvio);
+      if (d) return d.getFullYear() === anoAtual;
       return true;
     }).length;
 
     const porCanal = {
-      profissional: this.respostasForms.filter(r => r.canalOrigem === 'PROFISSIONAL').length,
-      empresa: this.respostasForms.filter(r => r.canalOrigem === 'EMPRESA').length,
-      site: this.respostasForms.filter(r => r.canalOrigem === 'SITE').length
+      profissional: this.respostasForms.filter(r => {
+        const c = (r.canalOrigem || '').toUpperCase();
+        return c === 'PROFISSIONAL' || c === 'PORTAL_PROFISSIONAL';
+      }).length,
+      empresa: this.respostasForms.filter(r => {
+        const c = (r.canalOrigem || '').toUpperCase();
+        return c === 'EMPRESA' || c === 'PORTAL_EMPRESA';
+      }).length,
+      site: this.respostasForms.filter(r => {
+        const c = (r.canalOrigem || '').toUpperCase();
+        return c === 'SITE' || c === 'SITE_PUBLICO';
+      }).length
     };
 
     return {
@@ -5904,32 +6433,31 @@ class StorageService {
       this.historicoVinculos.unshift(vinculo);
     }
 
-    try {
-      localStorage.setItem(STORAGE_KEYS.HISTORICO_VINCULOS, JSON.stringify(this.historicoVinculos));
-      if (this.isOnline) {
-        runBackgroundSupabase(
-          supabase.from('historico_vinculos_profissionais').upsert({
-            id: vinculo.id,
-            profissional_id: vinculo.profissionalId,
-            profissional_inscricao: vinculo.profissionalInscricao || null,
-            profissional_nome: vinculo.profissionalNome || null,
-            empresa_id: vinculo.empresaId,
-            empresa_razao_social: vinculo.empresaRazaoSocial,
-            empresa_nome_fantasia: vinculo.empresaNomeFantasia || null,
-            empresa_cnpj: vinculo.empresaCnpj,
-            empresa_inscricao: vinculo.empresaInscricao || null,
-            cargo: vinculo.cargo,
-            situacao_vinculo: vinculo.situacaoVinculo || 'CTPS',
-            carga_horaria_semanal: vinculo.cargaHorariaSemanal || 0,
-            data_inicio: vinculo.dataInicio,
-            data_baixa: vinculo.dataBaixa || null,
-            motivo_baixa: vinculo.motivoBaixa || null,
-            protocolo_baixa: vinculo.protocoloBaixa || null,
-            status: vinculo.status || 'Ativo'
-          }, { onConflict: 'id' })
-        );
-      }
-    } catch (e) {}
+    safeSetLocalStorage(STORAGE_KEYS.HISTORICO_VINCULOS, this.historicoVinculos);
+    if (this.isOnline) {
+      runBackgroundSupabase(
+        supabase.from('historico_vinculos_profissionais').upsert({
+          id: vinculo.id,
+          profissional_id: vinculo.profissionalId,
+          profissional_inscricao: vinculo.profissionalInscricao || null,
+          profissional_nome: vinculo.profissionalNome || null,
+          empresa_id: vinculo.empresaId,
+          empresa_razao_social: vinculo.empresaRazaoSocial,
+          empresa_nome_fantasia: vinculo.empresaNomeFantasia || null,
+          empresa_cnpj: vinculo.empresaCnpj,
+          empresa_inscricao: vinculo.empresaInscricao || null,
+          cargo: vinculo.cargo,
+          situacao_vinculo: vinculo.situacaoVinculo || 'CTPS',
+          carga_horaria_semanal: vinculo.cargaHorariaSemanal || 0,
+          data_inicio: vinculo.dataInicio,
+          data_baixa: vinculo.dataBaixa || null,
+          motivo_baixa: vinculo.motivoBaixa || null,
+          protocolo_baixa: vinculo.protocoloBaixa || null,
+          status: vinculo.status || 'Ativo'
+        }, { onConflict: 'id' }),
+        'saveHistoricoVinculo'
+      );
+    }
 
     this.notify();
   }
@@ -6025,14 +6553,12 @@ class StorageService {
 
     // Salva localmente
     this.historicoAuditoria.unshift(entry);
-    try {
-      localStorage.setItem(STORAGE_KEYS.HISTORICO_AUDITORIA, JSON.stringify(this.historicoAuditoria));
-    } catch (e) {}
+    safeSetLocalStorage(STORAGE_KEYS.HISTORICO_AUDITORIA, this.historicoAuditoria);
 
-    // Salva no Supabase
+    // Salva no Supabase com compatibilidade para o esquema novo e legado
     if (this.isOnline) {
-      runBackgroundSupabase(
-        supabase.from('historico_auditoria').insert({
+      runBackgroundSupabase((async () => {
+        const { error } = await supabase.from('historico_auditoria').insert({
           id: entry.id,
           target_id: entry.targetId,
           target_tipo: entry.targetTipo,
@@ -6040,9 +6566,33 @@ class StorageService {
           data_formatada: entry.dataFormatada,
           campo: entry.campo,
           valor_anterior: entry.valorAnterior,
-          valor_novo: entry.valorNovo
-        })
-      );
+          valor_novo: entry.valorNovo,
+          timestamp: entry.dataFormatada,
+          target_nome: entry.targetId,
+          target_doc: '',
+          usuario_nome: entry.usuario,
+          usuario_papel: 'COLABORADOR',
+          acao: 'ALTERACAO_CADASTRAL',
+          campo_alterado: entry.campo
+        });
+
+        if (error && (error.code === '42703' || error.message.includes('column') || error.message.includes('schema cache'))) {
+          await supabase.from('historico_auditoria').insert({
+            id: entry.id,
+            target_id: entry.targetId,
+            target_tipo: entry.targetTipo,
+            timestamp: entry.dataFormatada,
+            target_nome: entry.targetId,
+            target_doc: '',
+            usuario_nome: entry.usuario,
+            usuario_papel: 'COLABORADOR',
+            acao: 'ALTERACAO_CADASTRAL',
+            campo_alterado: entry.campo,
+            valor_anterior: entry.valorAnterior,
+            valor_novo: entry.valorNovo
+          });
+        }
+      })(), 'registrarAuditoria');
     }
   }
 
@@ -6717,52 +7267,49 @@ class StorageService {
       } catch (e) {}
     }
 
-    try {
-      localStorage.setItem(STORAGE_KEYS.FUNCIONARIOS, JSON.stringify(this.funcionarios));
-      if (this.isOnline) {
-        runBackgroundSupabase((async () => {
-          try {
-            await supabase.from('funcionarios').upsert({
-              id: sanitized.id,
-              nome: sanitized.nome,
-              cpf: sanitized.cpf,
-              rg: sanitized.rg || '',
-              matricula: sanitized.matricula,
-              email: sanitized.email,
-              telefone: sanitized.telefone || '',
-              celular: sanitized.celular || '',
-              foto_url: sanitized.fotoUrl || null,
-              cargo_id: sanitized.cargoId || '',
-              cargo_nome: sanitized.cargoNome || '',
-              setor_id: sanitized.setorId || '',
-              setor_nome: sanitized.setorNome || '',
-              permissoes_modulos: sanitized.permissoesModulos || [],
-              ativo: sanitized.ativo,
-              data_admissao: sanitized.dataAdmissao,
-              senha_hash: sanitized.senhaHash,
-              primeiro_acesso_pendente: sanitized.primeiroAcessoPendente,
-              zerar_senha_pendente: sanitized.zerarSenhaPendente,
-              ultimo_acesso: sanitized.ultimoAcesso,
-              observacoes: sanitized.observacoes || null,
-              possui_inscricao_profissional: sanitized.possuiInscricaoProfissional ?? false,
-              numero_inscricao_profissional: sanitized.numeroInscricaoProfissional || null,
-              setor_permissao_protocolos: sanitized.setorPermissaoProtocolos || 'APENAS_MEU',
-              setores_permitidos_protocolos: sanitized.setoresPermitidosProtocolos || [],
-              responsavel_permissao_protocolos: sanitized.responsavelPermissaoProtocolos || 'TODOS'
-            }, { onConflict: 'id' });
-          } catch (err) {
-            console.warn('Erro ao sincronizar funcionario no Supabase:', err);
-          }
-        })());
-      }
-    } catch (e) {}
+    safeSetLocalStorage(STORAGE_KEYS.FUNCIONARIOS, this.funcionarios);
+    if (this.isOnline) {
+      runBackgroundSupabase((async () => {
+        const { error } = await supabase.from('funcionarios').upsert({
+          id: sanitized.id,
+          nome: sanitized.nome,
+          cpf: sanitized.cpf,
+          rg: sanitized.rg || '',
+          matricula: sanitized.matricula,
+          email: sanitized.email,
+          telefone: sanitized.telefone || '',
+          celular: sanitized.celular || '',
+          foto_url: sanitized.fotoUrl || null,
+          cargo_id: sanitized.cargoId || '',
+          cargo_nome: sanitized.cargoNome || '',
+          setor_id: sanitized.setorId || '',
+          setor_nome: sanitized.setorNome || '',
+          permissoes_modulos: sanitized.permissoesModulos || [],
+          ativo: sanitized.ativo,
+          data_admissao: sanitized.dataAdmissao,
+          senha_hash: sanitized.senhaHash,
+          primeiro_acesso_pendente: sanitized.primeiroAcessoPendente,
+          zerar_senha_pendente: sanitized.zerarSenhaPendente,
+          ultimo_acesso: sanitized.ultimoAcesso,
+          observacoes: sanitized.observacoes || null,
+          possui_inscricao_profissional: sanitized.possuiInscricaoProfissional ?? false,
+          numero_inscricao_profissional: sanitized.numeroInscricaoProfissional || null,
+          setor_permissao_protocolos: sanitized.setorPermissaoProtocolos || 'APENAS_MEU',
+          setores_permitidos_protocolos: sanitized.setoresPermitidosProtocolos || [],
+          responsavel_permissao_protocolos: sanitized.responsavelPermissaoProtocolos || 'TODOS'
+        }, { onConflict: 'id' });
+        if (error) {
+          this.addSyncError('Funcionários', sanitized.nome, error.message);
+        }
+      })(), 'saveFuncionario');
+    }
 
     this.notify();
     return { success: true };
   }
 
   public deleteFuncionario(id: string): { success: boolean; message?: string } {
-    if (id === 'func-admin-master') {
+    if (id === 'func-admin-master' || id === '00000000-0000-4000-a000-000000000001') {
       return { success: false, message: 'O Administrador Geral Master do conselho não pode ser excluído.' };
     }
     const idx = this.funcionarios.findIndex(f => f.id === id);
@@ -6770,25 +7317,25 @@ class StorageService {
       return { success: false, message: 'Funcionário não encontrado.' };
     }
     this.funcionarios.splice(idx, 1);
-    try {
-      localStorage.setItem(STORAGE_KEYS.FUNCIONARIOS, JSON.stringify(this.funcionarios));
-    } catch (e) {}
+    safeSetLocalStorage(STORAGE_KEYS.FUNCIONARIOS, this.funcionarios);
+    if (this.isOnline) {
+      runBackgroundSupabase(
+        supabase.from('funcionarios').delete().eq('id', id),
+        'deleteFuncionario'
+      );
+    }
     this.notify();
     return { success: true };
   }
 
   public zerarSenha(tipo: 'FUNCIONARIO' | 'PROFISSIONAL' | 'EMPRESA', id: string): boolean {
-    const nowStr = new Date().toLocaleString('pt-BR');
     if (tipo === 'FUNCIONARIO') {
       const func = this.funcionarios.find(f => f.id === id);
       if (!func) return false;
       func.zerarSenhaPendente = true;
       func.primeiroAcessoPendente = true;
       func.senhaHash = '';
-      try {
-        localStorage.setItem(STORAGE_KEYS.FUNCIONARIOS, JSON.stringify(this.funcionarios));
-      } catch (e) {}
-      this.notify();
+      this.saveFuncionario(func);
       return true;
     } else if (tipo === 'PROFISSIONAL') {
       const prof = this.customProfissionais.find(p => p.id === id);
@@ -6823,9 +7370,7 @@ class StorageService {
       func.primeiroAcessoPendente = false;
       func.zerarSenhaPendente = false;
       func.ultimoAcesso = nowStr;
-      try {
-        localStorage.setItem(STORAGE_KEYS.FUNCIONARIOS, JSON.stringify(this.funcionarios));
-      } catch (e) {}
+      this.saveFuncionario(func);
 
       // Sincroniza também no perfil Profissional caso este CPF possua duplo vínculo
       const cleanDoc = func.cpf.replace(/\D/g, '');

@@ -215,7 +215,8 @@ export const FormulariosView: React.FC = () => {
       return;
     }
 
-    const currentVersao = selectedForm ? Number(selectedForm.versao || 1) : 1;
+    const editedForm = editingFormId ? formularios.find(f => f.id === editingFormId) : null;
+    const currentVersao = editedForm ? Number(editedForm.versao || 1) : 1;
     const formSalvo: FormularioDinamico = {
       id: editingFormId || `form-${Date.now()}`,
       titulo: formTitulo.trim(),
@@ -227,10 +228,10 @@ export const FormulariosView: React.FC = () => {
       prazoDiasConclusao: formPrazoDiasConclusao,
       permiteAnonimo: formPermiteAnonimo,
       ativo: true,
-      dataCriacao: editingFormId && selectedForm ? selectedForm.dataCriacao : new Date().toLocaleDateString('pt-BR'),
+      dataCriacao: editedForm ? editedForm.dataCriacao : new Date().toLocaleDateString('pt-BR'),
       versao: editingFormId ? currentVersao + 1 : 1,
       campos: [...campos],
-      respostasRecebidas: editingFormId && selectedForm ? (selectedForm.respostasRecebidas || 0) : 0,
+      respostasRecebidas: editedForm ? (editedForm.respostasRecebidas || 0) : 0,
       publicarProfissional,
       publicarEmpresa,
       publicarSite,
@@ -281,10 +282,10 @@ export const FormulariosView: React.FC = () => {
     toastService.info('Documento Anexado', `${list.length} arquivo(s) adicionado(s) para simulação de envio.`);
   };
 
-  const handleSimularEnvio = (e: React.FormEvent) => {
+  const handleSimularEnvio = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedForm) return;
     const canalOrigem = selectedForm.publicarSite ? 'SITE_PUBLICO' : (selectedForm.publicarEmpresa ? 'PORTAL_EMPRESA' : 'PORTAL_PROFISSIONAL');
-    const protocolo = storageService.generateNextProtocoloNumero(canalOrigem === 'SITE_PUBLICO' ? 'SITE' : 'INSCRITO');
 
     let autorNome = 'SOLICITANTE ANÔNIMO / CIDADÃO';
     let autorDoc = '000.000.000-00';
@@ -295,57 +296,76 @@ export const FormulariosView: React.FC = () => {
       const label = (campo?.label || '').toLowerCase();
       if (typeof val === 'string' && val.trim()) {
         if (label.includes('nome')) autorNome = val.trim().toUpperCase();
-        if (label.includes('cpf') || label.includes('cnpj') || label.includes('documento')) autorDoc = val.trim();
-        if (label.includes('email') || label.includes('e-mail')) autorEmail = val.trim();
+        if (label.includes('cpf') || label.includes('cnpj') || label.includes('documento')) autorDoc = val.trim().slice(0, 100);
+        if (label.includes('email') || label.includes('e-mail')) autorEmail = val.trim().slice(0, 150);
       }
     });
 
     const novaResposta: RespostaFormulario = {
-      id: `resp-${Date.now()}`,
+      id: `resp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       formularioId: selectedForm.id,
       formularioTitulo: selectedForm.titulo,
-      protocoloGerado: protocolo,
+      protocoloGerado: '',
       autorNome,
       autorDocumento: autorDoc,
       autorEmail,
-      canalOrigem: selectedForm.publicarSite ? 'SITE_PUBLICO' : (selectedForm.publicarEmpresa ? 'PORTAL_EMPRESA' : 'PORTAL_PROFISSIONAL'),
+      canalOrigem,
       dataEnvio: new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      status: 'Pendente',
+      status: selectedForm.statusProtocoloInicial || 'Pendente',
+      respostas: previewAnswers,
       dadosCampos: previewAnswers,
       anexos: previewAnexos
     };
 
-    storageService.submitFormResponse(novaResposta);
+    const result = await storageService.submitFormResponseAsync(novaResposta);
     setPreviewAnswers({});
     setPreviewAnexos([]);
 
-    toastService.success(
-      'Solicitação Submetida',
-      `Protocolo nº ${protocolo} gerado com sucesso para análise do conselho.`
-    );
+    if (result.synced) {
+      toastService.success(
+        'Solicitação Submetida',
+        `Protocolo nº ${result.protocolo} gerado e sincronizado com sucesso para análise do conselho.`
+      );
+    } else {
+      toastService.warning(
+        'Solicitação Registrada Localmente',
+        `Protocolo nº ${result.protocolo} criado, mas não foi possível sincronizar na nuvem (${result.error || 'verifique a conexão'}).`
+      );
+    }
   };
 
   // Estatísticas calculadas
   const statsGerais = storageService.getEstatisticasFormularios();
   const allRespostas = storageService.getRespostasFormularios();
 
-  // Filtro de Respostas por Período
-  const hojeStr = new Date().toLocaleDateString('pt-BR');
-  const mesAtualStr = '/' + String(new Date().getMonth() + 1).padStart(2, '0') + '/' + new Date().getFullYear();
-  const anoAtualStr = '/' + new Date().getFullYear();
+  // Filtro de Respostas por Período (aceita formato pt-BR DD/MM/AAAA e ISO)
+  const agora = new Date();
+  const parseBrOrIsoDate = (str?: string): Date | null => {
+    if (!str) return null;
+    const brMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if (brMatch) {
+      return new Date(Number(brMatch[3]), Number(brMatch[2]) - 1, Number(brMatch[1]));
+    }
+    const d = new Date(str);
+    return isNaN(d.getTime()) ? null : d;
+  };
 
   const respostasFiltradas = allRespostas.filter(r => {
     if (filtroFormularioId !== 'TODOS' && r.formularioId !== filtroFormularioId) {
       return false;
     }
+    if (filtroPeriodo === 'TODOS') return true;
+    const d = parseBrOrIsoDate(r.dataEnvio);
+    if (!d) return true;
+
     if (filtroPeriodo === 'DIA') {
-      return r.dataEnvio.startsWith(hojeStr);
+      return d.getDate() === agora.getDate() && d.getMonth() === agora.getMonth() && d.getFullYear() === agora.getFullYear();
     }
     if (filtroPeriodo === 'MES') {
-      return r.dataEnvio.includes(mesAtualStr);
+      return d.getMonth() === agora.getMonth() && d.getFullYear() === agora.getFullYear();
     }
     if (filtroPeriodo === 'ANO') {
-      return r.dataEnvio.includes(anoAtualStr);
+      return d.getFullYear() === agora.getFullYear();
     }
     return true;
   });
@@ -752,13 +772,20 @@ export const FormulariosView: React.FC = () => {
                           )}
                         </td>
                         <td className="p-3.5">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            resp.canalOrigem === 'SITE_PUBLICO' 
-                              ? 'bg-purple-100 text-purple-800' 
-                              : (resp.canalOrigem === 'PORTAL_EMPRESA' ? 'bg-teal-100 text-teal-800' : 'bg-cyan-100 text-cyan-800')
-                          }`}>
-                            {resp.canalOrigem === 'SITE_PUBLICO' ? 'Site Público' : (resp.canalOrigem === 'PORTAL_EMPRESA' ? 'Portal Empresa' : 'Portal Profissional')}
-                          </span>
+                          {(() => {
+                            const canal = (resp.canalOrigem || '').toUpperCase();
+                            const isSite = canal === 'SITE' || canal === 'SITE_PUBLICO';
+                            const isEmpresa = canal === 'EMPRESA' || canal === 'PORTAL_EMPRESA';
+                            return (
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                isSite
+                                  ? 'bg-purple-100 text-purple-800'
+                                  : (isEmpresa ? 'bg-teal-100 text-teal-800' : 'bg-cyan-100 text-cyan-800')
+                              }`}>
+                                {isSite ? 'Site Público' : (isEmpresa ? 'Portal Empresa' : 'Portal Profissional')}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="p-3.5 text-slate-500 font-mono text-[11px]">{resp.dataEnvio}</td>
                         <td className="p-3.5">

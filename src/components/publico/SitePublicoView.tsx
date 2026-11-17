@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Globe, 
   FileText, 
@@ -78,7 +78,7 @@ const NOTICIAS_PADRAO: NoticiaPublica[] = [
 ];
 
 export const SitePublicoView: React.FC<SitePublicoViewProps> = ({ 
-  councilConfig = storageService.getCouncilConfig(),
+  councilConfig: propCouncilConfig,
   onNavigateToPortal,
   onOpenLogin,
   isStandalonePublic = false
@@ -86,29 +86,32 @@ export const SitePublicoView: React.FC<SitePublicoViewProps> = ({
   const [activeTab, setActiveTab] = useState<'noticias' | 'formularios'>('formularios');
   const [searchTerm, setSearchTerm] = useState('');
   const [categoriaFilter, setCategoriaFilter] = useState('TODOS');
-  
+  const [councilConfigState, setCouncilConfigState] = useState<CouncilConfig>(() => propCouncilConfig || storageService.getCouncilConfig());
+  const [allFormularios, setAllFormularios] = useState<FormularioDinamico[]>(() => storageService.getFormularios());
+
+  useEffect(() => {
+    const unsub = storageService.subscribe(() => {
+      setAllFormularios(storageService.getFormularios());
+      setCouncilConfigState(storageService.getCouncilConfig());
+    });
+    return () => unsub();
+  }, []);
+
+  const councilConfig = propCouncilConfig || councilConfigState;
+
   // Formulários com publicação no site público
-  const allFormularios = storageService.getFormularios();
   const formulariosPublicos = allFormularios.filter(f => f.ativo && (f.publicarSite || f.publicoAlvo === 'Público Geral' || f.publicoAlvo === 'Cidadão' || f.publicoAlvo === 'Ambos'));
 
   // Estado do modal de preenchimento de formulário
   const [activeFormModal, setActiveFormModal] = useState<FormularioDinamico | null>(null);
   const [formResponses, setFormResponses] = useState<Record<string, any>>({});
-  const [solicitanteNome, setSolicitanteNome] = useState('');
-  const [solicitanteDoc, setSolicitanteDoc] = useState('');
-  const [solicitanteEmail, setSolicitanteEmail] = useState('');
-  const [solicitanteTelefone, setSolicitanteTelefone] = useState('');
-  const [anexosSelecionados, setAnexosSelecionados] = useState<{ nome: string; tamanho: number; tipo: string }[]>([]);
+  const [anexosSelecionados, setAnexosSelecionados] = useState<{ nome: string; tamanho: number; tipo: string; url?: string }[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [protocoloSucesso, setProtocoloSucesso] = useState<string | null>(null);
 
   const handleOpenForm = (form: FormularioDinamico) => {
     setActiveFormModal(form);
     setFormResponses({});
-    setSolicitanteNome('');
-    setSolicitanteDoc('');
-    setSolicitanteEmail('');
-    setSolicitanteTelefone('');
     setAnexosSelecionados([]);
     setProtocoloSucesso(null);
   };
@@ -143,9 +146,18 @@ export const SitePublicoView: React.FC<SitePublicoViewProps> = ({
     setAnexosSelecionados(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleSubmitPublicForm = (e: React.FormEvent) => {
+  const handleSubmitPublicForm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeFormModal) return;
+    if (!activeFormModal || isSubmitting) return;
+
+    // Valida campos obrigatórios antes de gerar protocolo
+    for (const campo of activeFormModal.campos) {
+      const v = formResponses[campo.id];
+      if (campo.obrigatorio && (v === undefined || v === null || v === '' || v === false)) {
+        toastService.warning('Campo Obrigatório', `Por favor preencha o campo: "${campo.label}"`);
+        return;
+      }
+    }
 
     // Tenta encontrar campos de identificação nos campos preenchidos
     let nomeFinal = 'CIDADÃO / SOLICITANTE';
@@ -158,52 +170,49 @@ export const SitePublicoView: React.FC<SitePublicoViewProps> = ({
       const label = (campo?.label || '').toLowerCase();
       if (typeof val === 'string' && val.trim()) {
         if (label.includes('nome')) nomeFinal = val.trim().toUpperCase();
-        if (label.includes('cpf') || label.includes('cnpj') || label.includes('documento')) docFinal = val.trim();
-        if (label.includes('email') || label.includes('e-mail')) emailFinal = val.trim();
-        if (label.includes('telefone') || label.includes('celular') || label.includes('whatsapp')) telFinal = val.trim();
+        if (label.includes('cpf') || label.includes('cnpj') || label.includes('documento')) docFinal = val.trim().slice(0, 100);
+        if (label.includes('email') || label.includes('e-mail')) emailFinal = val.trim().slice(0, 150);
+        if (label.includes('telefone') || label.includes('celular') || label.includes('whatsapp')) telFinal = val.trim().slice(0, 50);
       }
     });
 
-    // Valida campos obrigatórios
-    for (const campo of activeFormModal.campos) {
-      const v = formResponses[campo.id];
-      if (campo.obrigatorio && (v === undefined || v === null || v === '' || v === false)) {
-        toastService.warning('Campo Obrigatório', `Por favor preencha o campo: "${campo.label}"`);
-        return;
-      }
-    }
-
     setIsSubmitting(true);
 
-    const protNum = storageService.generateNextProtocoloNumero('SITE');
+    try {
+      const novaResposta: RespostaFormulario = {
+        id: `resp-pub-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        formularioId: activeFormModal.id,
+        formularioTitulo: activeFormModal.titulo,
+        autorNome: nomeFinal,
+        autorDocumento: docFinal,
+        autorEmail: emailFinal,
+        autorTelefone: telFinal,
+        canalOrigem: 'SITE',
+        protocoloGerado: '',
+        dataEnvio: new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        respostas: formResponses,
+        dadosCampos: formResponses,
+        anexos: anexosSelecionados,
+        status: activeFormModal.statusProtocoloInicial || 'Em Análise'
+      };
 
-    const novaResposta: RespostaFormulario = {
-      id: `resp-pub-${Date.now()}`,
-      formularioId: activeFormModal.id,
-      formularioTitulo: activeFormModal.titulo,
-      autorNome: nomeFinal,
-      autorDocumento: docFinal,
-      autorEmail: emailFinal,
-      autorTelefone: telFinal,
-      canalOrigem: 'SITE',
-      protocoloGerado: protNum,
-      dataEnvio: new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-      respostas: formResponses,
-      dadosCampos: formResponses,
-      anexos: anexosSelecionados,
-      status: 'Em Análise'
-    };
+      const result = await storageService.submitFormResponseAsync(novaResposta);
+      setProtocoloSucesso(result.protocolo);
 
-    storageService.submitFormResponse(novaResposta);
-
-    setTimeout(() => {
+      if (result.synced) {
+        toastService.success(
+          'Solicitação Enviada com Sucesso!',
+          `Seu protocolo foi gerado e salvo na base oficial: ${result.protocolo}. Guarde este número para acompanhamento.`
+        );
+      } else {
+        toastService.warning(
+          'Protocolo Registrado Localmente',
+          `Protocolo ${result.protocolo} criado, mas houve instabilidade ao gravar no banco online (${result.error || 'verifique a conexão'}).`
+        );
+      }
+    } finally {
       setIsSubmitting(false);
-      setProtocoloSucesso(protNum);
-      toastService.success(
-        'Solicitação Enviada com Sucesso!',
-        `Seu protocolo foi gerado: ${protNum}. Guarde este número para acompanhamento.`
-      );
-    }, 400);
+    }
   };
 
   const filteredFormularios = formulariosPublicos.filter(f => {

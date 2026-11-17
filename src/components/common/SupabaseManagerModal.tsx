@@ -58,7 +58,7 @@ export const SupabaseManagerModal: React.FC<SupabaseManagerModalProps> = ({ isOp
   };
 
   const handleCopySql = () => {
-    fetch('/supabase/schema.sql')
+    fetch('./supabase/schema.sql')
       .then(res => res.text())
       .then(text => {
         navigator.clipboard.writeText(text);
@@ -340,400 +340,60 @@ export const SupabaseManagerModal: React.FC<SupabaseManagerModalProps> = ({ isOp
 };
 
 const TABLES_LIST = [
-  { name: 'council_config', label: 'Configurações do Conselho', desc: 'Dados do CRF-AM, presidente, tesoureiro, taxas e controle de numeração cronológica.' },
-  { name: 'cadastros_basicos', label: 'Tabelas Auxiliares', desc: 'Tipos de Profissional, Especialidades/Habilitações, Situações e Tipos de Empresa.' },
-  { name: 'profissionais', label: 'Cadastro de Profissionais', desc: 'Farmacêuticos, dados civis, filiação (mãe/pai), fotos, contato e endereços.' },
-  { name: 'empresas', label: 'Pessoas Jurídicas (F协rmas)', desc: 'Farmácias, drogarias, laboratórios, QSA (Sócios) e Responsáveis Técnicos (RTs).' },
+  { name: 'council_config', label: 'Configurações do Conselho', desc: 'Dados do CRF, diretoria, assinaturas, numeração de protocolos e inscrições.' },
+  { name: 'cadastros_basicos', label: 'Tabelas Auxiliares', desc: 'Setores, cargos, perfis de acesso, tipos de profissional/empresa e assuntos.' },
+  { name: 'regras_assistencia', label: 'Regras de Assistência', desc: 'Regras de assistência farmacêutica e carga horária por município e estabelecimento.' },
+  { name: 'profissionais', label: 'Cadastro de Profissionais', desc: 'Farmacêuticos, dados civis, filiação, habilitações, fotos e endereços.' },
+  { name: 'empresas', label: 'Pessoas Jurídicas (Empresas)', desc: 'Farmácias, drogarias, laboratórios, QSA (Sócios) e Responsáveis Técnicos (RTs).' },
   { name: 'lancamentos_financeiros', label: 'Lançamentos & Anuidades', desc: 'Anuidades, taxas de CRT/ART, multas, boletos e PIX Copia e Cola.' },
   { name: 'processos_cobranca', label: 'Dívida Ativa & Cobrança', desc: 'Processos de execução fiscal, acordos, termos e Certidões de Dívida Ativa (CDA).' },
   { name: 'termos_fiscalizacao', label: 'Fiscalização & Autos de Infração', desc: 'Inspeções in loco, geolocalização, presenças de RT e assinaturas digitais.' },
-  { name: 'protocolos_processos', label: 'Protocolo e Tramitação', desc: 'Processos administrativos, pareceres de relatores e decisões de plenário.' },
-  { name: 'formularios_dinamicos', label: 'Formulários & Serviços Online', desc: 'Construtor de formulários, campos dinâmicos e fluxos de autoatendimento.' },
-  { name: 'respostas_formularios', label: 'Submissões de Formulários', desc: 'Histórico de protocolos gerados pelo portal do cidadão/profissional.' }
+  { name: 'protocolos_processos', label: 'Protocolo e Tramitação', desc: 'Processos administrativos, pareceres, anexos e dados de formulários submetidos.' },
+  { name: 'formularios_dinamicos', label: 'Formulários & Serviços Online', desc: 'Construtor de formulários, campos dinâmicos, canais e setor de tramitação.' },
+  { name: 'respostas_formularios', label: 'Submissões de Formulários', desc: 'Histórico de submissões multicanal vinculadas aos protocolos gerados.' },
+  { name: 'historico_vinculos_profissionais', label: 'Histórico de Vínculos RT', desc: 'Registro completo de entradas, cargas horárias e baixas de responsabilidade técnica.' },
+  { name: 'historico_auditoria', label: 'Auditoria e Logs', desc: 'Trilha de auditoria de alterações em cadastros e processos.' },
+  { name: 'funcionarios', label: 'Funcionários & Usuários', desc: 'Colaboradores do Conselho, setores de lotação, senhas e permissões de protocolo.' },
+  { name: 'perfis_permissoes_usuario', label: 'Permissões de Acesso (RBAC)', desc: 'Matriz granular de módulos e ações por perfil de usuário.' }
 ];
 
 const SQL_SCHEMA_SNIPPET = `-- ==============================================================================
--- SIGCON - SISTEMA INTEGRADO DE GESTÃO E FISCALIZAÇÃO PROFISSIONAL
--- SCRIPT DE CRIAÇÃO DO BANCO DE DADOS POSTGRESQL (SUPABASE)
--- Execute no SQL Editor do seu projeto Supabase
+-- SIGCON - SCRIPT MESTRE DE ATUALIZAÇÃO DO BANCO SUPABASE (100% IDEMPOTENTE)
+-- Use o botão "Copiar Script SQL Completo" acima para copiar a versão integral.
 -- ==============================================================================
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+-- Atualização crítica para Formulários Dinâmicos e Protocolos (Site Público & Portais):
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS assunto TEXT;
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS tipo_interessado VARCHAR(30) DEFAULT 'PUBLICO';
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS vinculo_id TEXT;
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS vinculo_inscricao VARCHAR(50);
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS vinculo_detalhes TEXT;
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS contato_email VARCHAR(150);
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS contato_telefone VARCHAR(50);
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS anexos_detalhados JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS conteudo_completo_formulario JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.protocolos_processos ALTER COLUMN documento_interessado TYPE VARCHAR(100);
+ALTER TABLE public.protocolos_processos ALTER COLUMN prazo_resposta TYPE VARCHAR(50);
 
--- 1. CONFIGURAÇÃO DO CONSELHO
-CREATE TABLE IF NOT EXISTS public.council_config (
-    id TEXT PRIMARY KEY DEFAULT 'default',
-    sigla VARCHAR(20) NOT NULL DEFAULT 'CRF-AM',
-    nome_completo VARCHAR(255) NOT NULL,
-    jurisdicao VARCHAR(100) NOT NULL,
-    cidade_sede VARCHAR(100) NOT NULL,
-    uf VARCHAR(2) NOT NULL,
-    cnpj VARCHAR(20) NOT NULL,
-    endereco TEXT,
-    bairro VARCHAR(100),
-    cep VARCHAR(10),
-    telefone VARCHAR(50),
-    email VARCHAR(150),
-    site VARCHAR(150),
-    presidente VARCHAR(150),
-    tesoureiro VARCHAR(150),
-    secretario_geral VARCHAR(150),
-    resolucao_anuidade VARCHAR(100),
-    valor_anuidade_pf NUMERIC(10,2) DEFAULT 620.00,
-    valor_anuidade_pj NUMERIC(10,2) DEFAULT 1240.00,
-    chave_pix VARCHAR(150),
-    total_profissionais_registrados INTEGER DEFAULT 11480,
-    total_empresas_registradas INTEGER DEFAULT 1340,
-    proximo_numero_inscricao_profissional INTEGER DEFAULT 4150,
-    prefixo_inscricao_profissional VARCHAR(20) DEFAULT 'CRF-AM',
-    sufixo_inscricao_profissional VARCHAR(20) DEFAULT '',
-    digitos_minimos_inscricao_profissional INTEGER DEFAULT 4,
-    proximo_numero_inscricao_empresa INTEGER DEFAULT 1250,
-    prefixo_inscricao_empresa VARCHAR(20) DEFAULT 'CRF-AM',
-    sufixo_inscricao_empresa VARCHAR(20) DEFAULT '-PJ',
-    digitos_minimos_inscricao_empresa INTEGER DEFAULT 4,
-    validar_cpf BOOLEAN DEFAULT TRUE,
-    validar_cnpj BOOLEAN DEFAULT TRUE,
-    validar_cep BOOLEAN DEFAULT TRUE,
-    auto_preencher_endereco_cep BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
-);
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS publicar_profissional BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS publicar_empresa BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS publicar_site BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS permite_anexos BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS tipos_anexos_permitidos JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS tamanho_maximo_mb INTEGER DEFAULT 15;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS instrucoes_anexo TEXT;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS setor_tramitacao_id TEXT;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS setor_tramitacao_nome VARCHAR(100);
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS status_protocolo_inicial VARCHAR(50);
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS prazo_dias_conclusao INTEGER DEFAULT 15;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS permite_anonimo BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS vincular_empresas_profissional BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS vincular_profissionais_empresa BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ALTER COLUMN versao TYPE VARCHAR(20) USING versao::text;
 
--- 2. CADASTROS BÁSICOS
-CREATE TABLE IF NOT EXISTS public.cadastros_basicos (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    categoria VARCHAR(50) NOT NULL,
-    nome VARCHAR(150) NOT NULL,
-    codigo VARCHAR(50),
-    descricao TEXT,
-    ativo BOOLEAN DEFAULT TRUE NOT NULL,
-    ordem INTEGER DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 3. PROFISSIONAIS
-CREATE TABLE IF NOT EXISTS public.profissionais (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    inscricao VARCHAR(50) NOT NULL UNIQUE,
-    nome VARCHAR(200) NOT NULL,
-    cpf VARCHAR(18) NOT NULL UNIQUE,
-    rg VARCHAR(30),
-    orgao_expeditor VARCHAR(30),
-    data_nascimento VARCHAR(20),
-    sexo VARCHAR(20),
-    nacionalidade VARCHAR(50) DEFAULT 'BRASILEIRA',
-    naturalidade VARCHAR(100),
-    nome_mae VARCHAR(200) NOT NULL,
-    nome_pai VARCHAR(200),
-    situacao VARCHAR(50) NOT NULL DEFAULT 'Definitivo',
-    tipo_associado VARCHAR(100) NOT NULL DEFAULT 'Farmacêutico',
-    habilitacoes TEXT[] DEFAULT '{}',
-    data_inscricao VARCHAR(20),
-    data_colacao_grau VARCHAR(20),
-    data_exp_diploma VARCHAR(20),
-    faculdade VARCHAR(200),
-    email_comercial VARCHAR(150),
-    email_pessoal VARCHAR(150),
-    telefone VARCHAR(50),
-    celular VARCHAR(50),
-    endereco TEXT,
-    complemento VARCHAR(100),
-    bairro VARCHAR(100),
-    cidade VARCHAR(100),
-    uf VARCHAR(2),
-    cep VARCHAR(10),
-    status_financeiro VARCHAR(50) DEFAULT 'Adimplente',
-    carteira_profissional VARCHAR(50),
-    foto_url TEXT,
-    observacoes TEXT,
-    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 4. EMPRESAS
-CREATE TABLE IF NOT EXISTS public.empresas (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    cnpj VARCHAR(20) NOT NULL UNIQUE,
-    razao_social VARCHAR(255) NOT NULL,
-    nome_fantasia VARCHAR(255),
-    inscricao VARCHAR(50) NOT NULL UNIQUE,
-    inscricao_estadual VARCHAR(50),
-    categoria VARCHAR(100),
-    tipo_estabelecimento VARCHAR(100) NOT NULL,
-    natureza_atividade TEXT,
-    tipo_empresa VARCHAR(50) DEFAULT 'Matriz',
-    condicao VARCHAR(50) DEFAULT 'Regular',
-    situacao VARCHAR(50) DEFAULT 'Definitiva',
-    capital_social NUMERIC(15,2) DEFAULT 0.00,
-    assistencia_plena BOOLEAN DEFAULT TRUE,
-    data_inscricao VARCHAR(20),
-    validade_crt VARCHAR(20),
-    numero_crt VARCHAR(50),
-    numero_processo VARCHAR(50),
-    endereco TEXT,
-    complemento VARCHAR(100),
-    bairro VARCHAR(100),
-    cidade VARCHAR(100),
-    uf VARCHAR(2),
-    cep VARCHAR(10),
-    rota VARCHAR(100),
-    area VARCHAR(100),
-    telefone VARCHAR(50),
-    email VARCHAR(150),
-    status_financeiro VARCHAR(50) DEFAULT 'Adimplente',
-    latitude NUMERIC(10,7),
-    longitude NUMERIC(10,7),
-    ultima_fiscalizacao VARCHAR(30),
-    resultado_ultima_fiscalizacao VARCHAR(50),
-    socios JSONB DEFAULT '[]'::jsonb,
-    responsaveis_tecnicos JSONB DEFAULT '[]'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 5. LANÇAMENTOS FINANCEIROS
-CREATE TABLE IF NOT EXISTS public.lancamentos_financeiros (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    target_id TEXT NOT NULL,
-    target_tipo VARCHAR(20) NOT NULL,
-    target_nome VARCHAR(255) NOT NULL,
-    target_doc VARCHAR(20) NOT NULL,
-    target_inscricao VARCHAR(50) NOT NULL,
-    descricao TEXT NOT NULL,
-    tipo VARCHAR(50) NOT NULL,
-    exercicio INTEGER NOT NULL,
-    parcela VARCHAR(20),
-    valor_original NUMERIC(12,2) NOT NULL,
-    desconto NUMERIC(12,2) DEFAULT 0.00,
-    juros_multa NUMERIC(12,2) DEFAULT 0.00,
-    valor_total NUMERIC(12,2) NOT NULL,
-    data_emissao VARCHAR(20) NOT NULL,
-    data_vencimento VARCHAR(20) NOT NULL,
-    data_pagamento VARCHAR(20),
-    status VARCHAR(50) DEFAULT 'Pendente',
-    codigo_barras TEXT,
-    linha_digitavel TEXT,
-    pix_copia_e_cola TEXT,
-    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 6. PROCESSOS DE COBRANÇA
-CREATE TABLE IF NOT EXISTS public.processos_cobranca (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    target_id TEXT NOT NULL,
-    target_tipo VARCHAR(20) NOT NULL,
-    target_nome VARCHAR(255) NOT NULL,
-    target_doc VARCHAR(20) NOT NULL,
-    target_inscricao VARCHAR(50) NOT NULL,
-    valor_total_debito NUMERIC(12,2) NOT NULL,
-    qtd_lancamentos INTEGER DEFAULT 1,
-    fase_cobranca VARCHAR(100) NOT NULL,
-    data_inicio VARCHAR(20) NOT NULL,
-    data_ultima_notificacao VARCHAR(20),
-    data_limite_defesa VARCHAR(20),
-    numero_cda VARCHAR(50),
-    livro_cda VARCHAR(20),
-    folha_cda VARCHAR(20),
-    data_cda VARCHAR(20),
-    status_acordo VARCHAR(50) DEFAULT 'Sem Acordo',
-    parcelas_acordo INTEGER,
-    valor_parcela_acordo NUMERIC(12,2),
-    historico_notificacoes JSONB DEFAULT '[]'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 7. TERMOS FISCALIZAÇÃO
-CREATE TABLE IF NOT EXISTS public.termos_fiscalizacao (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    numero_termo VARCHAR(50) NOT NULL,
-    numero_auto_infracao VARCHAR(50),
-    tipo_termo VARCHAR(50),
-    tipo_visita VARCHAR(50),
-    empresa_id TEXT NOT NULL,
-    empresa_inscricao VARCHAR(50),
-    empresa_razao_social VARCHAR(255),
-    empresa_nome VARCHAR(255),
-    empresa_cnpj VARCHAR(20),
-    cnpj VARCHAR(20),
-    endereco TEXT,
-    bairro VARCHAR(100),
-    cidade VARCHAR(100),
-    data_fiscalizacao VARCHAR(20),
-    hora_fiscalizacao VARCHAR(20),
-    data_hora VARCHAR(50),
-    fiscal_id TEXT,
-    fiscal_nome VARCHAR(150),
-    fiscal_matricula VARCHAR(50),
-    matricula_fiscal VARCHAR(50),
-    fiscal_assinante_nome VARCHAR(150),
-    fiscal_assinante_matricula VARCHAR(50),
-    latitude NUMERIC(10,7),
-    longitude NUMERIC(10,7),
-    endereco_geo TEXT,
-    presenca_rt BOOLEAN DEFAULT FALSE,
-    rt_presente BOOLEAN DEFAULT FALSE,
-    rt_nome_presente VARCHAR(150),
-    rt_presente_nome VARCHAR(150),
-    rt_crf_presente VARCHAR(50),
-    rt_presente_inscricao VARCHAR(50),
-    motivo_ausencia_rt TEXT,
-    documentos_verificados JSONB DEFAULT '{}'::jsonb,
-    relato_fiscal TEXT,
-    irregularidades_constatadas TEXT[] DEFAULT '{}',
-    infracoes_identificadas TEXT[] DEFAULT '{}',
-    artigos_incorridos TEXT[] DEFAULT '{}',
-    auto_infracao_gerado BOOLEAN DEFAULT FALSE,
-    valor_multa_previsto NUMERIC(12,2) DEFAULT 0.00,
-    orientacoes_fiscais TEXT,
-    observacoes_notificado TEXT,
-    prazo_regularizacao_dias INTEGER,
-    notificacao_prazo_dias INTEGER,
-    status VARCHAR(50) DEFAULT 'Concluído e Assinado',
-    status_sincronizacao VARCHAR(50) DEFAULT 'Sincronizado',
-    assinatura_fiscal TEXT,
-    assinatura_fiscal_data_hora VARCHAR(50),
-    assinatura_responsavel TEXT,
-    assinatura_notificado TEXT,
-    assinatura_notificado_data_hora VARCHAR(50),
-    recusa_assinatura BOOLEAN DEFAULT FALSE,
-    motivo_recusa TEXT,
-    tipo_signatario_notificado VARCHAR(50),
-    nome_signatario_notificado VARCHAR(150),
-    documento_signatario_notificado VARCHAR(50),
-    inscricao_signatario_notificado VARCHAR(50),
-    cargo_signatario_notificado VARCHAR(100),
-    motivo_assinatura_terceiro TEXT,
-    hash_validacao_digital VARCHAR(100),
-    fotos_comprovantes TEXT[] DEFAULT '{}',
-    foto_evidencias TEXT[] DEFAULT '{}',
-    sincronizado BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 8. PROTOCOLOS E FORMULÁRIOS
-CREATE TABLE IF NOT EXISTS public.protocolos_processos (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    numero_protocolo VARCHAR(50) NOT NULL UNIQUE,
-    tipo VARCHAR(100) NOT NULL,
-    interessado VARCHAR(255) NOT NULL,
-    documento_interessado VARCHAR(30) NOT NULL,
-    data_inscricao VARCHAR(20),
-    data_abertura VARCHAR(20) NOT NULL,
-    data_ultima_atualizacao VARCHAR(20),
-    prazo_resposta VARCHAR(20),
-    status VARCHAR(50) DEFAULT 'Em Análise',
-    setor_atual VARCHAR(100) DEFAULT 'Secretaria Geral',
-    conselheiro_relator VARCHAR(150),
-    parecer_relator TEXT,
-    decisao_plenario TEXT,
-    anexos TEXT[] DEFAULT '{}',
-    historico JSONB DEFAULT '[]'::jsonb,
-    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS public.formularios_dinamicos (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    titulo VARCHAR(255) NOT NULL,
-    categoria VARCHAR(100) NOT NULL,
-    descricao TEXT,
-    publico_alvo VARCHAR(50) DEFAULT 'Ambos',
-    versao VARCHAR(20) DEFAULT '1.0',
-    ativo BOOLEAN DEFAULT TRUE,
-    campos JSONB NOT NULL DEFAULT '[]'::jsonb,
-    respostas_recebidas INTEGER DEFAULT 0,
-    data_criacao VARCHAR(20),
-    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS public.respostas_formularios (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    formulario_id TEXT NOT NULL,
-    formulario_titulo VARCHAR(255) NOT NULL,
-    autor_nome VARCHAR(255) NOT NULL,
-    autor_documento VARCHAR(30) NOT NULL,
-    protocolo_gerado VARCHAR(50) NOT NULL,
-    data_envio VARCHAR(30) NOT NULL,
-    respostas JSONB DEFAULT '{}'::jsonb,
-    dados_campos JSONB DEFAULT '{}'::jsonb,
-    status VARCHAR(50) DEFAULT 'Em Análise',
-    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- 9. FUNCIONÁRIOS
-CREATE TABLE IF NOT EXISTS public.funcionarios (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    nome VARCHAR(255) NOT NULL,
-    cpf VARCHAR(20) NOT NULL UNIQUE,
-    rg VARCHAR(50),
-    matricula VARCHAR(50) NOT NULL,
-    email VARCHAR(150),
-    telefone VARCHAR(50),
-    celular VARCHAR(50),
-    foto_url TEXT,
-    cargo_id VARCHAR(50),
-    cargo_nome VARCHAR(100),
-    setor_id VARCHAR(50),
-    setor_nome VARCHAR(100),
-    role VARCHAR(50) DEFAULT 'FUNCIONARIO',
-    permissoes_modulos TEXT[] DEFAULT '{}',
-    ativo BOOLEAN DEFAULT TRUE,
-    data_admissao VARCHAR(20),
-    senha_hash TEXT,
-    primeiro_acesso_pendente BOOLEAN DEFAULT FALSE,
-    zerar_senha_pendente BOOLEAN DEFAULT FALSE,
-    ultimo_acesso VARCHAR(50),
-    observacoes TEXT,
-    possui_inscricao_profissional BOOLEAN DEFAULT FALSE,
-    numero_inscricao_profissional VARCHAR(50),
-    setor_permissao_protocolos VARCHAR(50) DEFAULT 'APENAS_MEU',
-    setores_permitidos_protocolos TEXT[] DEFAULT '{}',
-    responsavel_permissao_protocolos VARCHAR(50) DEFAULT 'TODOS',
-    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
--- Atualização incremental de colunas caso a tabela funcionarios já exista
-ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS setor_permissao_protocolos VARCHAR(50) DEFAULT 'APENAS_MEU';
-ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS setores_permitidos_protocolos TEXT[] DEFAULT '{}';
-ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS responsavel_permissao_protocolos VARCHAR(50) DEFAULT 'TODOS';
-
--- 10. HABILITAR ROW LEVEL SECURITY (RLS) E POLÍTICAS PÚBLICAS IDEMPOTENTES
-ALTER TABLE public.council_config ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.cadastros_basicos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.regras_assistencia ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.profissionais ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.empresas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.lancamentos_financeiros ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.processos_cobranca ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.termos_fiscalizacao ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.protocolos_processos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.formularios_dinamicos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.respostas_formularios ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.funcionarios ENABLE ROW LEVEL SECURITY;
-
-DO $$
-DECLARE
-    tbl text;
-BEGIN
-    FOR tbl IN 
-        SELECT unnest(ARRAY[
-            'council_config', 'cadastros_basicos', 'regras_assistencia', 
-            'profissionais', 'empresas', 'lancamentos_financeiros', 
-            'processos_cobranca', 'termos_fiscalizacao', 'protocolos_processos', 
-            'formularios_dinamicos', 'respostas_formularios', 'funcionarios'
-        ])
-    LOOP
-        EXECUTE format('DROP POLICY IF EXISTS "Public access %I" ON public.%I;', tbl, tbl);
-        EXECUTE format('CREATE POLICY "Public access %I" ON public.%I FOR ALL USING (true) WITH CHECK (true);', tbl, tbl);
-    END LOOP;
-END $$;
-`;
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Em Análise';
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS canal_origem VARCHAR(50) DEFAULT 'PROFISSIONAL';
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS autor_email VARCHAR(150);
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS autor_telefone VARCHAR(50);
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS anexos JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.respostas_formularios ALTER COLUMN autor_documento TYPE VARCHAR(100);`;

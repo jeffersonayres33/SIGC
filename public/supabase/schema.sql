@@ -1,5 +1,5 @@
 -- ==============================================================================
--- SISCON - SISTEMA INTEGRADO DE GESTÃO E FISCALIZAÇÃO PROFISSIONAL
+-- SIGCON - SISTEMA INTEGRADO DE GESTÃO E FISCALIZAÇÃO PROFISSIONAL
 -- SCRIPT MESTRE DE BANCO DE DADOS POSTGRESQL (SUPABASE) - 100% IDEMPOTENTE
 -- ==============================================================================
 
@@ -33,14 +33,29 @@ CREATE TABLE IF NOT EXISTS public.council_config (
     email VARCHAR(150),
     site VARCHAR(150),
     presidente VARCHAR(150),
+    vice_presidente VARCHAR(150),
     tesoureiro VARCHAR(150),
     secretario_geral VARCHAR(150),
+    assinatura_presidente_url TEXT,
+    assinatura_vice_presidente_url TEXT,
+    assinatura_tesoureiro_url TEXT,
+    assinatura_secretario_geral_url TEXT,
+    assinatura_certidao_papel VARCHAR(50) DEFAULT 'PRESIDENTE',
     resolucao_anuidade VARCHAR(100),
     valor_anuidade_pf NUMERIC(10,2) DEFAULT 620.00,
     valor_anuidade_pj NUMERIC(10,2) DEFAULT 1240.00,
     chave_pix VARCHAR(150),
     total_profissionais_registrados INTEGER DEFAULT 11480,
     total_empresas_registradas INTEGER DEFAULT 1340,
+    protocolo_proximo_numero INTEGER DEFAULT 1,
+    protocolo_ultimo_ano INTEGER DEFAULT 2026,
+    protocolo_reinicia_ano BOOLEAN DEFAULT TRUE,
+    protocolo_prefixo_interno VARCHAR(30) DEFAULT '',
+    protocolo_sufixo_interno VARCHAR(30) DEFAULT '',
+    protocolo_prefixo_inscrito VARCHAR(30) DEFAULT '',
+    protocolo_sufixo_inscrito VARCHAR(30) DEFAULT '-INS',
+    protocolo_prefixo_site VARCHAR(30) DEFAULT '',
+    protocolo_sufixo_site VARCHAR(30) DEFAULT '-SITE',
     proximo_numero_inscricao_profissional INTEGER DEFAULT 4150,
     prefixo_inscricao_profissional VARCHAR(20) DEFAULT 'CRF-AM',
     sufixo_inscricao_profissional VARCHAR(20) DEFAULT '',
@@ -49,13 +64,69 @@ CREATE TABLE IF NOT EXISTS public.council_config (
     prefixo_inscricao_empresa VARCHAR(20) DEFAULT 'CRF-AM',
     sufixo_inscricao_empresa VARCHAR(20) DEFAULT '-PJ',
     digitos_minimos_inscricao_empresa INTEGER DEFAULT 4,
+    proximo_numero_inscricao_provisoria_profissional INTEGER DEFAULT 1,
+    prefixo_inscricao_provisoria_profissional VARCHAR(20) DEFAULT 'PROV-PF',
+    sufixo_inscricao_provisoria_profissional VARCHAR(20) DEFAULT '',
+    digitos_minimos_inscricao_provisoria_profissional INTEGER DEFAULT 4,
+    proximo_numero_inscricao_provisoria_empresa INTEGER DEFAULT 1,
+    prefixo_inscricao_provisoria_empresa VARCHAR(20) DEFAULT 'PROV-PJ',
+    sufixo_inscricao_provisoria_empresa VARCHAR(20) DEFAULT '',
+    digitos_minimos_inscricao_provisoria_empresa INTEGER DEFAULT 4,
+    validade_provisoria_meses_profissional INTEGER DEFAULT 12,
+    validade_provisoria_meses_empresa INTEGER DEFAULT 12,
     validar_cpf BOOLEAN DEFAULT TRUE,
     validar_cnpj BOOLEAN DEFAULT TRUE,
     validar_cep BOOLEAN DEFAULT TRUE,
     auto_preencher_endereco_cep BOOLEAN DEFAULT TRUE,
+    tamanho_maximo_anexo_mb INTEGER DEFAULT 10,
+    situacoes_impedidas_rt JSONB DEFAULT '[]'::jsonb,
+    texto_padrao_notificacao TEXT,
+    proximo_numero_notificacao INTEGER DEFAULT 1,
+    proximo_numero_intimacao INTEGER DEFAULT 1,
+    proximo_numero_termo INTEGER DEFAULT 1,
+    proximo_numero_autuacao INTEGER DEFAULT 1,
+    geolocalizacao_ativa BOOLEAN DEFAULT TRUE,
+    acessos_inscrito_pf JSONB DEFAULT '{}'::jsonb,
+    acessos_inscrito_pj JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS vice_presidente VARCHAR(150);
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS assinatura_presidente_url TEXT;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS assinatura_vice_presidente_url TEXT;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS assinatura_tesoureiro_url TEXT;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS assinatura_secretario_geral_url TEXT;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS assinatura_certidao_papel VARCHAR(50) DEFAULT 'PRESIDENTE';
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_proximo_numero INTEGER DEFAULT 1;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_ultimo_ano INTEGER DEFAULT 2026;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_reinicia_ano BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_prefixo_interno VARCHAR(30) DEFAULT '';
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_sufixo_interno VARCHAR(30) DEFAULT '';
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_prefixo_inscrito VARCHAR(30) DEFAULT '';
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_sufixo_inscrito VARCHAR(30) DEFAULT '-INS';
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_prefixo_site VARCHAR(30) DEFAULT '';
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_sufixo_site VARCHAR(30) DEFAULT '-SITE';
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS proximo_numero_inscricao_provisoria_profissional INTEGER DEFAULT 1;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS prefixo_inscricao_provisoria_profissional VARCHAR(20) DEFAULT 'PROV-PF';
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS sufixo_inscricao_provisoria_profissional VARCHAR(20) DEFAULT '';
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS digitos_minimos_inscricao_provisoria_profissional INTEGER DEFAULT 4;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS proximo_numero_inscricao_provisoria_empresa INTEGER DEFAULT 1;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS prefixo_inscricao_provisoria_empresa VARCHAR(20) DEFAULT 'PROV-PJ';
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS sufixo_inscricao_provisoria_empresa VARCHAR(20) DEFAULT '';
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS digitos_minimos_inscricao_provisoria_empresa INTEGER DEFAULT 4;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS validade_provisoria_meses_profissional INTEGER DEFAULT 12;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS validade_provisoria_meses_empresa INTEGER DEFAULT 12;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS tamanho_maximo_anexo_mb INTEGER DEFAULT 10;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS situacoes_impedidas_rt JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS texto_padrao_notificacao TEXT;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS proximo_numero_notificacao INTEGER DEFAULT 1;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS proximo_numero_intimacao INTEGER DEFAULT 1;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS proximo_numero_termo INTEGER DEFAULT 1;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS proximo_numero_autuacao INTEGER DEFAULT 1;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS geolocalizacao_ativa BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS acessos_inscrito_pf JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS acessos_inscrito_pj JSONB DEFAULT '{}'::jsonb;
 
 -- ------------------------------------------------------------------------------
 -- 2. CADASTROS BÁSICOS
@@ -67,10 +138,24 @@ CREATE TABLE IF NOT EXISTS public.cadastros_basicos (
     codigo VARCHAR(50),
     descricao TEXT,
     ativo BOOLEAN DEFAULT TRUE,
-    ordem INTEGER DEFAULT 0,
+    ordem NUMERIC(10,2) DEFAULT 0,
+    selecionar_empresa_vinculada BOOLEAN DEFAULT FALSE,
+    cargo_id VARCHAR(50),
+    cargo_nome VARCHAR(150),
+    setor_id VARCHAR(50),
+    setor_nome VARCHAR(150),
+    modulos_permitidos TEXT[] DEFAULT '{}',
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+ALTER TABLE public.cadastros_basicos ADD COLUMN IF NOT EXISTS selecionar_empresa_vinculada BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.cadastros_basicos ADD COLUMN IF NOT EXISTS cargo_id VARCHAR(50);
+ALTER TABLE public.cadastros_basicos ADD COLUMN IF NOT EXISTS cargo_nome VARCHAR(150);
+ALTER TABLE public.cadastros_basicos ADD COLUMN IF NOT EXISTS setor_id VARCHAR(50);
+ALTER TABLE public.cadastros_basicos ADD COLUMN IF NOT EXISTS setor_nome VARCHAR(150);
+ALTER TABLE public.cadastros_basicos ADD COLUMN IF NOT EXISTS modulos_permitidos TEXT[] DEFAULT '{}';
+ALTER TABLE public.cadastros_basicos ALTER COLUMN ordem TYPE NUMERIC(10,2) USING ordem::numeric;
 
 CREATE INDEX IF NOT EXISTS idx_cadastros_basicos_cat ON public.cadastros_basicos(categoria);
 
@@ -81,13 +166,21 @@ CREATE TABLE IF NOT EXISTS public.regras_assistencia (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     municipio VARCHAR(100) NOT NULL,
     tipo_estabelecimento VARCHAR(100) NOT NULL,
-    horas_minimas INTEGER NOT NULL DEFAULT 40,
+    tipo_exigencia VARCHAR(100) DEFAULT 'ASSISTENCIA_PLENA',
+    horas_minimas NUMERIC(10,2) NOT NULL DEFAULT 40,
     dias_semana TEXT[] DEFAULT '{}',
-    ativo BOOLEAN DEFAULT true,
+    descricao TEXT,
+    base_legal TEXT,
+    ativo BOOLEAN DEFAULT TRUE,
     observacoes TEXT,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+ALTER TABLE public.regras_assistencia ADD COLUMN IF NOT EXISTS tipo_exigencia VARCHAR(100) DEFAULT 'ASSISTENCIA_PLENA';
+ALTER TABLE public.regras_assistencia ADD COLUMN IF NOT EXISTS descricao TEXT;
+ALTER TABLE public.regras_assistencia ADD COLUMN IF NOT EXISTS base_legal TEXT;
+ALTER TABLE public.regras_assistencia ALTER COLUMN horas_minimas TYPE NUMERIC(10,2) USING horas_minimas::numeric;
 
 CREATE INDEX IF NOT EXISTS idx_regras_municipio_tipo ON public.regras_assistencia(municipio, tipo_estabelecimento);
 
@@ -179,11 +272,12 @@ CREATE TABLE IF NOT EXISTS public.profissionais (
     data_desbloqueio_prevista VARCHAR(20),
     usuario_bloqueio VARCHAR(150),
     observacoes_bloqueio TEXT,
+    e_colaborador_crf BOOLEAN DEFAULT FALSE,
+    matricula_colaborador VARCHAR(50),
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Garantir colunas em profissionais para tabelas pré-existentes
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Ativo';
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS situacao VARCHAR(50) DEFAULT 'Definitivo';
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS status_financeiro VARCHAR(50) DEFAULT 'Adimplente';
@@ -193,8 +287,9 @@ ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS dt_inicio_insc VARCHAR
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS categoria VARCHAR(100) DEFAULT 'Farmacêutico';
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS especialidade VARCHAR(100);
 ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS email VARCHAR(150);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS e_colaborador_crf BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS matricula_colaborador VARCHAR(50);
 
--- Garantir restrições UNIQUE para CPF e Inscrição
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profissionais_cpf_key') THEN
@@ -270,8 +365,8 @@ CREATE TABLE IF NOT EXISTS public.empresas (
     responsaveis_tecnicos JSONB DEFAULT '[]'::jsonb,
     horarios_funcionamento JSONB DEFAULT '[]'::jsonb,
     horarios_assistencia JSONB DEFAULT '[]'::jsonb,
-    carga_horaria_funcionamento_semanal INTEGER DEFAULT 0,
-    carga_horaria_assistencia_semanal INTEGER DEFAULT 0,
+    carga_horaria_funcionamento_semanal NUMERIC(10,2) DEFAULT 0.00,
+    carga_horaria_assistencia_semanal NUMERIC(10,2) DEFAULT 0.00,
     justificativa_condicao TEXT,
     regra_assistencia_aplicada VARCHAR(150),
     bloqueado BOOLEAN DEFAULT FALSE,
@@ -284,7 +379,6 @@ CREATE TABLE IF NOT EXISTS public.empresas (
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Garantir colunas em empresas para tabelas pré-existentes
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Regular';
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS condicao VARCHAR(50) DEFAULT 'Regular';
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS situacao VARCHAR(50) DEFAULT 'Definitiva';
@@ -292,6 +386,10 @@ ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS status_financeiro VARCHAR(5
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS recadastrado BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS data_recadastramento VARCHAR(20);
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS dt_inicio_insc VARCHAR(20);
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS carga_horaria_funcionamento_semanal NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS carga_horaria_assistencia_semanal NUMERIC(10,2) DEFAULT 0.00;
+ALTER TABLE public.empresas ALTER COLUMN carga_horaria_funcionamento_semanal TYPE NUMERIC(10,2) USING carga_horaria_funcionamento_semanal::numeric;
+ALTER TABLE public.empresas ALTER COLUMN carga_horaria_assistencia_semanal TYPE NUMERIC(10,2) USING carga_horaria_assistencia_semanal::numeric;
 
 DO $$
 BEGIN
@@ -516,27 +614,72 @@ CREATE TABLE IF NOT EXISTS public.protocolos_processos (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     numero_protocolo VARCHAR(50) NOT NULL,
     tipo VARCHAR(100) NOT NULL,
+    assunto TEXT,
     interessado VARCHAR(255) NOT NULL,
-    documento_interessado VARCHAR(20) NOT NULL,
+    documento_interessado VARCHAR(100) NOT NULL,
+    tipo_interessado VARCHAR(30) DEFAULT 'PUBLICO',
+    vinculo_id TEXT,
+    vinculo_inscricao VARCHAR(50),
+    vinculo_detalhes TEXT,
+    contato_email VARCHAR(150),
+    contato_telefone VARCHAR(50),
     data_inscricao VARCHAR(20),
     data_abertura VARCHAR(20) NOT NULL,
     data_ultima_atualizacao VARCHAR(20),
-    prazo_resposta VARCHAR(20),
+    prazo_resposta VARCHAR(50),
     status VARCHAR(50) DEFAULT 'Em Análise',
     setor_atual VARCHAR(100) DEFAULT 'Secretaria Geral',
     conselheiro_relator VARCHAR(150),
     parecer_relator TEXT,
     decisao_plenario TEXT,
     anexos JSONB DEFAULT '[]'::jsonb,
+    anexos_detalhados JSONB DEFAULT '[]'::jsonb,
+    conteudo_completo_formulario JSONB DEFAULT '{}'::jsonb,
     historico JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Em Análise';
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS assunto TEXT;
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS tipo_interessado VARCHAR(30) DEFAULT 'PUBLICO';
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS vinculo_id TEXT;
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS vinculo_inscricao VARCHAR(50);
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS vinculo_detalhes TEXT;
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS contato_email VARCHAR(150);
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS contato_telefone VARCHAR(50);
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS anexos_detalhados JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS conteudo_completo_formulario JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.protocolos_processos ALTER COLUMN documento_interessado TYPE VARCHAR(100);
+ALTER TABLE public.protocolos_processos ALTER COLUMN prazo_resposta TYPE VARCHAR(50);
+
+-- Converter anexos de text[] legado para JSONB com segurança
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'protocolos_processos'
+          AND column_name = 'anexos'
+          AND data_type = 'ARRAY'
+    ) THEN
+        ALTER TABLE public.protocolos_processos ALTER COLUMN anexos DROP DEFAULT;
+        ALTER TABLE public.protocolos_processos ALTER COLUMN anexos TYPE JSONB USING to_jsonb(anexos);
+        ALTER TABLE public.protocolos_processos ALTER COLUMN anexos SET DEFAULT '[]'::jsonb;
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'protocolos_processos_numero_protocolo_key')
+       AND NOT EXISTS (SELECT 1 FROM public.protocolos_processos GROUP BY numero_protocolo HAVING COUNT(*) > 1) THEN
+        ALTER TABLE public.protocolos_processos ADD CONSTRAINT protocolos_processos_numero_protocolo_key UNIQUE (numero_protocolo);
+    END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_protocolos_numero ON public.protocolos_processos(numero_protocolo);
 CREATE INDEX IF NOT EXISTS idx_protocolos_status ON public.protocolos_processos(status);
+CREATE INDEX IF NOT EXISTS idx_protocolos_interessado ON public.protocolos_processos(documento_interessado);
 
 -- ------------------------------------------------------------------------------
 -- 10. FORMULÁRIOS DINÂMICOS E RESPOSTAS
@@ -552,105 +695,151 @@ CREATE TABLE IF NOT EXISTS public.formularios_dinamicos (
     campos JSONB NOT NULL DEFAULT '[]'::jsonb,
     respostas_recebidas INTEGER DEFAULT 0,
     data_criacao VARCHAR(20),
+    publicar_profissional BOOLEAN DEFAULT FALSE,
+    publicar_empresa BOOLEAN DEFAULT FALSE,
+    publicar_site BOOLEAN DEFAULT FALSE,
+    permite_anexos BOOLEAN DEFAULT TRUE,
+    tipos_anexos_permitidos JSONB DEFAULT '[]'::jsonb,
+    tamanho_maximo_mb INTEGER DEFAULT 15,
+    instrucoes_anexo TEXT,
+    setor_tramitacao_id TEXT,
+    setor_tramitacao_nome VARCHAR(100),
+    status_protocolo_inicial VARCHAR(50),
+    prazo_dias_conclusao INTEGER DEFAULT 15,
+    permite_anonimo BOOLEAN DEFAULT FALSE,
+    vincular_empresas_profissional BOOLEAN DEFAULT FALSE,
+    vincular_profissionais_empresa BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS publicar_profissional BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS publicar_empresa BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS publicar_site BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS permite_anexos BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS tipos_anexos_permitidos JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS tamanho_maximo_mb INTEGER DEFAULT 15;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS instrucoes_anexo TEXT;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS setor_tramitacao_id TEXT;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS setor_tramitacao_nome VARCHAR(100);
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS status_protocolo_inicial VARCHAR(50);
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS prazo_dias_conclusao INTEGER DEFAULT 15;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS permite_anonimo BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS vincular_empresas_profissional BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS vincular_profissionais_empresa BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ALTER COLUMN versao TYPE VARCHAR(20) USING versao::text;
 
 CREATE TABLE IF NOT EXISTS public.respostas_formularios (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     formulario_id TEXT NOT NULL,
     formulario_titulo VARCHAR(255) NOT NULL,
     autor_nome VARCHAR(255) NOT NULL,
-    autor_documento VARCHAR(30) NOT NULL,
+    autor_documento VARCHAR(100) NOT NULL,
     protocolo_gerado VARCHAR(50) NOT NULL,
     data_envio VARCHAR(30) NOT NULL,
     respostas JSONB DEFAULT '{}'::jsonb,
     dados_campos JSONB DEFAULT '{}'::jsonb,
+    canal_origem VARCHAR(50) DEFAULT 'PROFISSIONAL',
+    autor_email VARCHAR(150),
+    autor_telefone VARCHAR(50),
+    anexos JSONB DEFAULT '[]'::jsonb,
     status VARCHAR(50) DEFAULT 'Em Análise',
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
 ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Em Análise';
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS canal_origem VARCHAR(50) DEFAULT 'PROFISSIONAL';
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS autor_email VARCHAR(150);
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS autor_telefone VARCHAR(50);
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS anexos JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.respostas_formularios ALTER COLUMN autor_documento TYPE VARCHAR(100);
+
+CREATE INDEX IF NOT EXISTS idx_respostas_form_id ON public.respostas_formularios(formulario_id);
+CREATE INDEX IF NOT EXISTS idx_respostas_protocolo ON public.respostas_formularios(protocolo_gerado);
 
 -- ------------------------------------------------------------------------------
--- 11. HISTÓRICO DE AUDITORIA
+-- 11. HISTÓRICO DE VÍNCULOS PROFISSIONAIS (RT)
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.historico_vinculos_profissionais (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    profissional_id TEXT NOT NULL,
+    profissional_inscricao VARCHAR(50),
+    profissional_nome VARCHAR(255),
+    empresa_id TEXT NOT NULL,
+    empresa_razao_social VARCHAR(255) NOT NULL,
+    empresa_nome_fantasia VARCHAR(255),
+    empresa_cnpj VARCHAR(20) NOT NULL,
+    empresa_inscricao VARCHAR(50),
+    cargo VARCHAR(150) NOT NULL,
+    situacao_vinculo VARCHAR(100) DEFAULT 'CTPS',
+    carga_horaria_semanal NUMERIC(10,2) DEFAULT 0.00,
+    data_inicio VARCHAR(20) NOT NULL,
+    data_baixa VARCHAR(20),
+    motivo_baixa TEXT,
+    protocolo_baixa VARCHAR(50),
+    status VARCHAR(50) DEFAULT 'Ativo',
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_hist_vinculos_prof ON public.historico_vinculos_profissionais(profissional_id);
+CREATE INDEX IF NOT EXISTS idx_hist_vinculos_emp ON public.historico_vinculos_profissionais(empresa_id);
+
+-- ------------------------------------------------------------------------------
+-- 12. HISTÓRICO DE AUDITORIA
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.historico_auditoria (
     id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    timestamp VARCHAR(30) NOT NULL,
     target_id TEXT NOT NULL,
     target_tipo VARCHAR(20) NOT NULL,
-    target_nome VARCHAR(255) NOT NULL,
-    target_doc VARCHAR(30) NOT NULL,
-    usuario_nome VARCHAR(100) NOT NULL,
-    usuario_papel VARCHAR(50) NOT NULL,
-    acao VARCHAR(100) NOT NULL,
-    campo_alterado VARCHAR(100) NOT NULL,
+    usuario VARCHAR(150),
+    data_formatada VARCHAR(30),
+    campo VARCHAR(100),
+    timestamp VARCHAR(30),
+    target_nome VARCHAR(255),
+    target_doc VARCHAR(50),
+    usuario_nome VARCHAR(150),
+    usuario_papel VARCHAR(50),
+    acao VARCHAR(100),
+    campo_alterado VARCHAR(100),
     valor_anterior TEXT,
     valor_novo TEXT,
     motivo TEXT,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- ------------------------------------------------------------------------------
--- TRIGGERS DE ATUALIZAÇÃO
--- ------------------------------------------------------------------------------
+ALTER TABLE public.historico_auditoria ADD COLUMN IF NOT EXISTS usuario VARCHAR(150);
+ALTER TABLE public.historico_auditoria ADD COLUMN IF NOT EXISTS data_formatada VARCHAR(30);
+ALTER TABLE public.historico_auditoria ADD COLUMN IF NOT EXISTS campo VARCHAR(100);
+ALTER TABLE public.historico_auditoria ADD COLUMN IF NOT EXISTS timestamp VARCHAR(30);
+ALTER TABLE public.historico_auditoria ADD COLUMN IF NOT EXISTS target_nome VARCHAR(255);
+ALTER TABLE public.historico_auditoria ADD COLUMN IF NOT EXISTS target_doc VARCHAR(50);
+ALTER TABLE public.historico_auditoria ADD COLUMN IF NOT EXISTS usuario_nome VARCHAR(150);
+ALTER TABLE public.historico_auditoria ADD COLUMN IF NOT EXISTS usuario_papel VARCHAR(50);
+ALTER TABLE public.historico_auditoria ADD COLUMN IF NOT EXISTS acao VARCHAR(100);
+ALTER TABLE public.historico_auditoria ADD COLUMN IF NOT EXISTS campo_alterado VARCHAR(100);
+
 DO $$
 DECLARE
-    t text;
+    col text;
 BEGIN
-    FOR t IN 
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-          AND table_name IN (
-            'council_config', 'cadastros_basicos', 'regras_assistencia', 
-            'profissionais', 'empresas', 'lancamentos_financeiros', 
-            'processos_cobranca', 'termos_fiscalizacao', 'protocolos_processos', 
-            'formularios_dinamicos', 'respostas_formularios'
-          )
+    FOREACH col IN ARRAY ARRAY['timestamp', 'target_nome', 'target_doc', 'usuario_nome', 'usuario_papel', 'acao', 'campo_alterado']
     LOOP
-        EXECUTE format('DROP TRIGGER IF EXISTS trg_update_%I ON public.%I;', t, t);
-        EXECUTE format('CREATE TRIGGER trg_update_%I BEFORE UPDATE ON public.%I FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();', t, t);
+        IF EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'historico_auditoria'
+              AND column_name = col
+              AND is_nullable = 'NO'
+        ) THEN
+            EXECUTE format('ALTER TABLE public.historico_auditoria ALTER COLUMN %I DROP NOT NULL;', col);
+        END IF;
     END LOOP;
 END $$;
 
 -- ------------------------------------------------------------------------------
--- ROW LEVEL SECURITY (RLS) & POLÍTICAS PÚBLICAS RE-EXECUTÁVEIS
--- ------------------------------------------------------------------------------
-ALTER TABLE public.council_config ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.cadastros_basicos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.regras_assistencia ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.profissionais ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.empresas ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.lancamentos_financeiros ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.processos_cobranca ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.termos_fiscalizacao ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.protocolos_processos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.formularios_dinamicos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.respostas_formularios ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.historico_auditoria ENABLE ROW LEVEL SECURITY;
-
-DO $$
-DECLARE
-    tbl text;
-BEGIN
-    FOR tbl IN 
-        SELECT unnest(ARRAY[
-            'council_config', 'cadastros_basicos', 'regras_assistencia', 
-            'profissionais', 'empresas', 'lancamentos_financeiros', 
-            'processos_cobranca', 'termos_fiscalizacao', 'protocolos_processos', 
-            'formularios_dinamicos', 'respostas_formularios', 'historico_auditoria', 'funcionarios'
-        ])
-    LOOP
-        EXECUTE format('DROP POLICY IF EXISTS "Public access %I" ON public.%I;', tbl, tbl);
-        EXECUTE format('CREATE POLICY "Public access %I" ON public.%I FOR ALL USING (true) WITH CHECK (true);', tbl, tbl);
-    END LOOP;
-END $$;
-
--- ------------------------------------------------------------------------------
--- TABELA DE FUNCIONÁRIOS E USUÁRIO DESENVOLVEDOR MASTER
+-- 13. FUNCIONÁRIOS E USUÁRIO DESENVOLVEDOR MASTER
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.funcionarios (
     id VARCHAR(100) PRIMARY KEY,
@@ -666,6 +855,7 @@ CREATE TABLE IF NOT EXISTS public.funcionarios (
     cargo_nome VARCHAR(150),
     setor_id VARCHAR(50),
     setor_nome VARCHAR(150),
+    role VARCHAR(50) DEFAULT 'FUNCIONARIO',
     permissoes_modulos TEXT[] DEFAULT '{}',
     ativo BOOLEAN NOT NULL DEFAULT TRUE,
     data_admissao VARCHAR(20),
@@ -674,15 +864,22 @@ CREATE TABLE IF NOT EXISTS public.funcionarios (
     zerar_senha_pendente BOOLEAN NOT NULL DEFAULT FALSE,
     ultimo_acesso VARCHAR(50),
     observacoes TEXT,
+    possui_inscricao_profissional BOOLEAN DEFAULT FALSE,
+    numero_inscricao_profissional VARCHAR(50),
+    setor_permissao_protocolos VARCHAR(50) DEFAULT 'APENAS_MEU',
+    setores_permitidos_protocolos TEXT[] DEFAULT '{}',
+    responsavel_permissao_protocolos VARCHAR(50) DEFAULT 'TODOS',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
-ALTER TABLE public.funcionarios ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Public access funcionarios" ON public.funcionarios;
-CREATE POLICY "Public access funcionarios" ON public.funcionarios FOR ALL USING (true) WITH CHECK (true);
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'FUNCIONARIO';
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS possui_inscricao_profissional BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS numero_inscricao_profissional VARCHAR(50);
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS setor_permissao_protocolos VARCHAR(50) DEFAULT 'APENAS_MEU';
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS setores_permitidos_protocolos TEXT[] DEFAULT '{}';
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS responsavel_permissao_protocolos VARCHAR(50) DEFAULT 'TODOS';
 
--- Usuário Desenvolvedor Supremo: Jefferson Ayres (CPF: 934.135.302-59)
 INSERT INTO public.funcionarios (
     id, nome, cpf, rg, matricula, email, telefone, celular, foto_url,
     cargo_id, cargo_nome, setor_id, setor_nome,
@@ -717,3 +914,78 @@ ON CONFLICT (cpf) DO UPDATE SET
     permissoes_modulos = EXCLUDED.permissoes_modulos,
     ativo = TRUE;
 
+-- ------------------------------------------------------------------------------
+-- 14. TABELA DE PERMISSÕES E PERFIS DE USUÁRIOS
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.perfis_permissoes_usuario (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    usuario_id VARCHAR(100),
+    documento VARCHAR(20),
+    tipo_perfil VARCHAR(50),
+    nome VARCHAR(255),
+    cargo_ou_titulo VARCHAR(150),
+    matricula VARCHAR(50),
+    numero_inscricao VARCHAR(50),
+    modulos_permitidos TEXT[] DEFAULT '{}',
+    permissoes_acoes JSONB DEFAULT '{}'::jsonb,
+    ativo BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS usuario_id VARCHAR(100);
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS documento VARCHAR(20);
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS tipo_perfil VARCHAR(50);
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS nome VARCHAR(255);
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS cargo_ou_titulo VARCHAR(150);
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS matricula VARCHAR(50);
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS numero_inscricao VARCHAR(50);
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS modulos_permitidos TEXT[] DEFAULT '{}';
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS permissoes_acoes JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
+ALTER TABLE public.perfis_permissoes_usuario ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now());
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'perfis_permissoes_usuario'
+          AND column_name = 'cpf'
+    ) THEN
+        UPDATE public.perfis_permissoes_usuario
+        SET documento = COALESCE(documento, cpf)
+        WHERE documento IS NULL;
+    END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_perfis_permissoes_doc ON public.perfis_permissoes_usuario(documento);
+CREATE INDEX IF NOT EXISTS idx_perfis_permissoes_tipo ON public.perfis_permissoes_usuario(tipo_perfil);
+
+-- ------------------------------------------------------------------------------
+-- 15. TRIGGERS DE ATUALIZAÇÃO E ROW LEVEL SECURITY (RLS) 100% IDEMPOTENTE
+-- ------------------------------------------------------------------------------
+DO $$
+DECLARE
+    tbl text;
+    tables text[] := ARRAY[
+        'council_config', 'cadastros_basicos', 'regras_assistencia',
+        'profissionais', 'empresas', 'lancamentos_financeiros',
+        'processos_cobranca', 'termos_fiscalizacao', 'protocolos_processos',
+        'formularios_dinamicos', 'respostas_formularios', 'historico_vinculos_profissionais',
+        'historico_auditoria', 'funcionarios', 'perfis_permissoes_usuario'
+    ];
+BEGIN
+    FOREACH tbl IN ARRAY tables
+    LOOP
+        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', tbl);
+        EXECUTE format('DROP POLICY IF EXISTS "Public access %I" ON public.%I;', tbl, tbl);
+        EXECUTE format('CREATE POLICY "Public access %I" ON public.%I FOR ALL USING (true) WITH CHECK (true);', tbl, tbl);
+
+        IF tbl <> 'historico_auditoria' THEN
+            EXECUTE format('DROP TRIGGER IF EXISTS trg_update_%I ON public.%I;', tbl, tbl);
+            EXECUTE format('CREATE TRIGGER trg_update_%I BEFORE UPDATE ON public.%I FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();', tbl, tbl);
+        END IF;
+    END LOOP;
+END $$;
