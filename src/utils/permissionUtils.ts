@@ -21,7 +21,9 @@ export const MODULOS_SISTEMA: ModuloInfo[] = [
   { id: 'fiscalizacao', nome: '7. Fiscalização em Campo', descricao: 'Autos de infração/notificação, GPS e offline' },
   { id: 'relatorios', nome: '8. Relatórios & BI Diretoria', descricao: 'Relatórios gerenciais e inteligência de dados' },
   { id: 'formularios', nome: '9. Formulários Dinâmicos', descricao: 'Formulários dinâmicos de requerimentos' },
-  { id: 'portal_inscrito', nome: '10. Portal do Inscrito (PF/PJ)', descricao: 'Autoatendimento de profissionais e empresas' },
+  { id: 'website', nome: '10. WebSITE (Portal Institucional)', descricao: 'Gestão de notícias, banners, logo e menus do site público' },
+  { id: 'transparencia', nome: '11. Transparência & Balanços', descricao: 'Gestão e publicação de balanços no Portal Transparência' },
+  { id: 'portal_inscrito', nome: '12. Portal do Inscrito (PF/PJ)', descricao: 'Autoatendimento de profissionais e empresas' },
   { id: 'configuracoes', nome: 'Painel do Administrador', descricao: 'Configurações gerais, parâmetros e sistema' },
   { id: 'funcionarios', nome: 'Cadastro de Funcionários', descricao: 'Gestão de colaboradores, acessos e cargos' },
   { id: 'microsservicos', nome: 'Microsservicos & Cloud', descricao: 'Status dos serviços distribuídos e gateway' },
@@ -130,8 +132,8 @@ export function hasModulePermission(
   const rawSection = String(sectionOrModule || '').toLowerCase().trim();
   const targetModule = normalizeSectionToModule(rawSection);
 
-  // O Site Oficial / Portal Público é livre para todos os perfis e público em geral
-  if (targetModule === 'site_publico') {
+  // O Site Oficial / Portal Público e o Portal Transparência são livres para todos os perfis e público em geral
+  if (targetModule === 'site_publico' || targetModule === 'portal_transparencia') {
     return true;
   }
 
@@ -151,6 +153,12 @@ export function hasModulePermission(
 
   // Se não estiver explicitamente liberado na lista individual e não for Master Developer, aplica restrição de papel caso simulado
   if (simulatedRole) {
+    if (activeRole === 'ADMIN' || activeRole === 'DEVELOPER') {
+      if (targetModule === 'dev' || targetModule === 'dev_configuracao' || targetModule === 'microsservicos') {
+        return isMasterDeveloper(user) || activeRole === 'DEVELOPER';
+      }
+      return true;
+    }
     if (activeRole === 'FISCAL') {
       return ['dashboard', 'fiscalizacao', 'empresas', 'profissionais', 'formularios'].includes(targetModule);
     }
@@ -161,7 +169,7 @@ export function hasModulePermission(
       return ['dashboard', 'cobranca_juridico', 'protocolos', 'profissionais', 'empresas', 'relatorios'].includes(targetModule);
     }
     if (activeRole === 'DIRETORIA') {
-      return ['dashboard', 'relatorios', 'protocolos', 'profissionais', 'empresas', 'financeiro', 'fiscalizacao', 'cobranca_juridico'].includes(targetModule);
+      return ['dashboard', 'relatorios', 'protocolos', 'profissionais', 'empresas', 'financeiro', 'fiscalizacao', 'cobranca_juridico', 'website', 'transparencia'].includes(targetModule);
     }
   }
 
@@ -265,12 +273,17 @@ export function hasModulePermission(
   // ============================================================================
   // USUÁRIOS ADMINISTRATIVOS E COLABORADORES INTERNOS DO CONSELHO
   // ============================================================================
-  if (user.role === 'ADMIN' && user.tipo === 'ADMIN') {
+  if (user.role === 'ADMIN' || user.tipo === 'ADMIN') {
     return true;
   }
 
   if (userPerms.length === 0) {
     return targetModule === 'dashboard';
+  }
+
+  // Colaboradores com acesso a configurações ou formulários também podem gerenciar WebSITE e Transparência quando não bloqueados
+  if ((targetModule === 'website' || targetModule === 'transparencia') && (userPerms.includes('configuracoes') || userPerms.includes('admin'))) {
+    return true;
   }
 
   // Permissões do Portal do Inscrito para Funcionários e Colaboradores
@@ -397,6 +410,9 @@ export function getModuleName(sectionOrModule: string): string {
     case 'portal_empresa_requerimento': return 'Empresa • Requerimento Eletrônico';
     case 'portal_empresa_formularios': return 'Empresa • Formulários Dinâmicos';
     case 'dev_configuracao': return 'DEV • Configuração de Microsserviços & Cloud';
+    case 'website': return 'WebSITE • Gestão de Notícias, Banners & Configuração';
+    case 'transparencia': return 'Transparência • Gestão do Portal da Transparência';
+    case 'portal_transparencia': return 'Portal da Transparência';
     case 'backup_restore': return 'Backup & Restauração de Dados';
     case 'admin': return 'Parâmetros Administrativos';
     default: return sectionOrModule.replace(/_/g, ' ').toUpperCase();

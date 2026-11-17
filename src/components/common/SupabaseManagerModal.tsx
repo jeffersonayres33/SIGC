@@ -354,7 +354,11 @@ const TABLES_LIST = [
   { name: 'historico_vinculos_profissionais', label: 'Histórico de Vínculos RT', desc: 'Registro completo de entradas, cargas horárias e baixas de responsabilidade técnica.' },
   { name: 'historico_auditoria', label: 'Auditoria e Logs', desc: 'Trilha de auditoria de alterações em cadastros e processos.' },
   { name: 'funcionarios', label: 'Funcionários & Usuários', desc: 'Colaboradores do Conselho, setores de lotação, senhas e permissões de protocolo.' },
-  { name: 'perfis_permissoes_usuario', label: 'Permissões de Acesso (RBAC)', desc: 'Matriz granular de módulos e ações por perfil de usuário.' }
+  { name: 'perfis_permissoes_usuario', label: 'Permissões de Acesso (RBAC)', desc: 'Matriz granular de módulos e ações por perfil de usuário.' },
+  { name: 'website_config', label: 'Configurações do WebSITE', desc: 'Logo institucional, paginação de notícias por página e menus dinâmicos com links.' },
+  { name: 'website_noticias', label: 'Notícias do WebSITE', desc: 'Publicações, comunicados, categorias e destaques exibidos no site público.' },
+  { name: 'website_banners', label: 'Banners do WebSITE', desc: 'Banners rotativos, imagens de capa, legendas e botões de ação do site.' },
+  { name: 'transparencia_documentos', label: 'Portal Transparência', desc: 'Balanços patrimoniais, orçamentários, relatórios de gestão e arquivos públicos originais.' }
 ];
 
 const SQL_SCHEMA_SNIPPET = `-- ==============================================================================
@@ -373,7 +377,8 @@ DECLARE
         'profissionais', 'empresas', 'lancamentos_financeiros',
         'processos_cobranca', 'termos_fiscalizacao', 'protocolos_processos',
         'formularios_dinamicos', 'respostas_formularios', 'historico_vinculos_profissionais',
-        'historico_auditoria', 'funcionarios', 'perfis_permissoes_usuario'
+        'historico_auditoria', 'funcionarios', 'perfis_permissoes_usuario',
+        'website_config', 'website_noticias', 'website_banners', 'transparencia_documentos'
     ];
 BEGIN
     FOR pol IN SELECT tablename, policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = ANY(target_tables) LOOP
@@ -385,7 +390,7 @@ BEGIN
     FOR col IN SELECT c.table_name, c.column_name FROM information_schema.columns c WHERE c.table_schema = 'public' AND c.data_type = 'uuid' AND c.table_name = ANY(target_tables) LOOP
         EXECUTE format('ALTER TABLE public.%I ALTER COLUMN %I DROP DEFAULT;', col.table_name, col.column_name);
         EXECUTE format('ALTER TABLE public.%I ALTER COLUMN %I TYPE TEXT USING %I::text;', col.table_name, col.column_name, col.column_name);
-        IF col.column_name = 'id' AND col.table_name <> 'council_config' THEN
+        IF col.column_name = 'id' AND col.table_name <> 'council_config' AND col.table_name <> 'website_config' THEN
             EXECUTE format('ALTER TABLE public.%I ALTER COLUMN id SET DEFAULT gen_random_uuid()::text;', col.table_name);
         END IF;
     END LOOP;
@@ -432,4 +437,82 @@ ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS canal_origem V
 ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS autor_email VARCHAR(150);
 ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS autor_telefone VARCHAR(50);
 ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS anexos JSONB DEFAULT '[]'::jsonb;
-ALTER TABLE public.respostas_formularios ALTER COLUMN autor_documento TYPE VARCHAR(100);`;
+ALTER TABLE public.respostas_formularios ALTER COLUMN autor_documento TYPE VARCHAR(100);
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_regras_cores JSONB DEFAULT '[]'::jsonb;
+
+-- Novas Tabelas: Módulo WebSITE e Portal Transparência:
+CREATE TABLE IF NOT EXISTS public.website_config (
+    id TEXT PRIMARY KEY DEFAULT 'default',
+    noticias_por_pagina INTEGER DEFAULT 6,
+    logo_url TEXT DEFAULT '',
+    titulo_site VARCHAR(255) DEFAULT '',
+    subtitulo_site TEXT DEFAULT '',
+    menus JSONB DEFAULT '[]'::jsonb,
+    transparencia_menus JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+ALTER TABLE public.website_config ADD COLUMN IF NOT EXISTS transparencia_menus JSONB DEFAULT '[]'::jsonb;
+
+CREATE TABLE IF NOT EXISTS public.website_noticias (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    titulo VARCHAR(255) NOT NULL,
+    resumo TEXT,
+    conteudo TEXT,
+    categoria VARCHAR(100) DEFAULT 'Institucional',
+    data_publicacao VARCHAR(30),
+    autor VARCHAR(150) DEFAULT 'Assessoria de Comunicação',
+    imagem_url TEXT,
+    destaque BOOLEAN DEFAULT FALSE,
+    publicado BOOLEAN DEFAULT TRUE,
+    ordem INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.website_banners (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    titulo VARCHAR(255) NOT NULL,
+    subtitulo TEXT,
+    imagem_url TEXT,
+    texto_botao VARCHAR(100),
+    link_destino TEXT,
+    ordem INTEGER DEFAULT 1,
+    ativo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.transparencia_documentos (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    titulo VARCHAR(255) NOT NULL,
+    descricao TEXT,
+    categoria VARCHAR(100) NOT NULL,
+    exercicio INTEGER NOT NULL,
+    competencia VARCHAR(100),
+    data_publicacao VARCHAR(30),
+    valor_total NUMERIC(14,2),
+    responsavel VARCHAR(150),
+    numero_documento VARCHAR(100),
+    arquivo_nome VARCHAR(255),
+    arquivo_tipo VARCHAR(150),
+    arquivo_tamanho NUMERIC(12,2),
+    arquivo_tamanho_bytes BIGINT,
+    arquivo_url TEXT,
+    storage_path TEXT,
+    publicado BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+DO $$
+DECLARE
+    tbl text;
+    tables text[] := ARRAY['website_config', 'website_noticias', 'website_banners', 'transparencia_documentos'];
+BEGIN
+    FOREACH tbl IN ARRAY tables LOOP
+        EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', tbl);
+        EXECUTE format('DROP POLICY IF EXISTS "Public access %I" ON public.%I;', tbl, tbl);
+        EXECUTE format('CREATE POLICY "Public access %I" ON public.%I FOR ALL USING (true) WITH CHECK (true);', tbl, tbl);
+    END LOOP;
+END $$;`;

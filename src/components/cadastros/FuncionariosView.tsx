@@ -54,6 +54,8 @@ const MODULOS_DISPONIVEIS: { id: string; nome: string; descricao: string }[] = [
   { id: 'protocolos', nome: 'Protocolos & Requerimentos', descricao: 'Processos e despachos administrativos' },
   { id: 'relatorios', nome: 'Relatórios & BI Diretoria', descricao: 'Exportações e inteligência de dados' },
   { id: 'formularios', nome: 'Formulários Dinâmicos', descricao: 'Criação e estatísticas de formulários' },
+  { id: 'website', nome: 'WebSITE (Notícias, Banners & Config)', descricao: 'Gerenciamento completo de notícias, banners, logo e menus do site' },
+  { id: 'transparencia', nome: 'Transparência (Balanços Públicos)', descricao: 'Gestão e publicação de balanços no Portal da Transparência' },
   { id: 'portal_inscrito', nome: 'Portal do Inscrito (Geral)', descricao: 'Autoatendimento unificado' },
   { id: 'portal_inscrito_pf', nome: 'Portal do Inscrito — Profissional (PF)', descricao: 'Autoatendimento exclusivo PF, anuidades, requerimentos e certidões' },
   { id: 'portal_inscrito_pj', nome: 'Portal do Inscrito — Empresas (PJ)', descricao: 'Autoatendimento exclusivo PJ, CRT Digital e requerimentos' },

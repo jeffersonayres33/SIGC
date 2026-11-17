@@ -43,6 +43,7 @@ import { ImpedimentosArtConfig } from './ImpedimentosArtConfig';
 import { BackupRestoreConfig } from './BackupRestoreConfig';
 import { FiscalizacaoEletronicaConfig } from './FiscalizacaoEletronicaConfig';
 import { InscritosConfig } from './InscritosConfig';
+import { ProtocoloCoresConfig } from './ProtocoloCoresConfig';
 import { CapturaAssinaturaModal } from './CapturaAssinaturaModal';
 import { 
   maskCNPJ, 
@@ -54,7 +55,7 @@ import {
   formatInscricaoCompleta 
 } from '../../utils/documentUtils';
 
-export type ConfigTab = 'geral' | 'fiscalizacao' | 'assistencia' | 'impedimentos_art' | 'backup_restore' | 'inscrito' | 'inscrito_pf' | 'inscrito_pj';
+export type ConfigTab = 'geral' | 'fiscalizacao' | 'protocolo' | 'assistencia' | 'impedimentos_art' | 'backup_restore' | 'inscrito' | 'inscrito_pf' | 'inscrito_pj';
 
 interface ConfiguracoesViewProps {
   initialTab?: ConfigTab;
@@ -297,6 +298,7 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
           <span className="font-bold text-blue-700 uppercase">
             {activeTab === 'geral' && 'Configuração > Geral (Dados do Conselho, Numeração & Validações)'}
             {activeTab === 'fiscalizacao' && 'Configuração > Fiscalização Eletrônica (Módulo Tablet & Campo)'}
+            {activeTab === 'protocolo' && 'Configuração > Protocolo (Cores Dinâmicas de Vencimento, Prazos & Status)'}
             {(activeTab === 'inscrito' || activeTab === 'inscrito_pf' || activeTab === 'inscrito_pj') && 'Configuração > Inscrito (Acessos e Permissões PF / PJ)'}
             {activeTab === 'assistencia' && 'Assistência Farmacêutica por Município'}
             {activeTab === 'impedimentos_art' && 'Impedimentos de ART / RT'}
@@ -312,6 +314,8 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({ initialTab
         <InscritosConfig initialSubTab={activeTab === 'inscrito_pj' ? 'PJ' : 'PF'} />
       ) : activeTab === 'fiscalizacao' ? (
         <FiscalizacaoEletronicaConfig />
+      ) : activeTab === 'protocolo' ? (
+        <ProtocoloCoresConfig />
       ) : activeTab === 'assistencia' ? (
         <AssistenciaFarmaceuticaConfig />
       ) : activeTab === 'impedimentos_art' ? (

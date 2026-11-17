@@ -18,6 +18,9 @@ import { ConfiguracoesView, ConfigTab } from './components/configuracoes/Configu
 import { BackupRestoreConfig } from './components/configuracoes/BackupRestoreConfig';
 import { FuncionariosView } from './components/cadastros/FuncionariosView';
 import { SitePublicoView } from './components/publico/SitePublicoView';
+import { WebsiteAdminView, WebsiteSubTab } from './components/website/WebsiteAdminView';
+import { TransparenciaAdminView } from './components/transparencia/TransparenciaAdminView';
+import { PortalTransparenciaView } from './components/transparencia/PortalTransparenciaView';
 import { LoginView } from './components/auth/LoginView';
 import { ToastContainer } from './components/common/ToastContainer';
 
@@ -37,10 +40,12 @@ import { AccessDeniedView } from './components/common/AccessDeniedView';
 export default function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(() => storageService.getCurrentAuthUser());
   const [showLoginScreen, setShowLoginScreen] = useState(false);
+  const [showPublicTransparencia, setShowPublicTransparencia] = useState(false);
   const [activeSection, setActiveSection] = useState<MainSection>(() => getDefaultAllowedSection(storageService.getCurrentAuthUser(), storageService.getCurrentAuthUser()?.role));
   const [configTab, setConfigTab] = useState<ConfigTab>('geral');
   const [cadastrosBasicosGroup, setCadastrosBasicosGroup] = useState<'PROFISSIONAIS' | 'EMPRESAS' | 'PROTOCOLOS' | 'FUNCIONARIOS' | 'ADMIN'>('PROFISSIONAIS');
   const [fiscalizacaoSubTab, setFiscalizacaoSubTab] = useState<'eletronica' | 'termo_inspecao'>('eletronica');
+  const [websiteSubTab, setWebsiteSubTab] = useState<WebsiteSubTab>('noticias');
   const [currentUserRole, setCurrentUserRole] = useState<UserRole>(() => {
     const saved = storageService.getCurrentAuthUser();
     return saved ? saved.role : 'ADMIN';
@@ -136,12 +141,27 @@ export default function App() {
       );
     }
 
+    if (showPublicTransparencia) {
+      return (
+        <div className="min-h-screen bg-slate-50 font-sans selection:bg-blue-600 selection:text-white">
+          <PortalTransparenciaView
+            councilConfig={councilConfig}
+            isStandalonePublic={true}
+            onBackToSite={() => setShowPublicTransparencia(false)}
+            onOpenLogin={() => setShowLoginScreen(true)}
+          />
+          <ToastContainer />
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-slate-50 font-sans selection:bg-blue-600 selection:text-white">
         <SitePublicoView
           councilConfig={councilConfig}
           isStandalonePublic={true}
           onOpenLogin={() => setShowLoginScreen(true)}
+          onOpenTransparencia={() => setShowPublicTransparencia(true)}
         />
         <ToastContainer />
       </div>
@@ -182,6 +202,7 @@ export default function App() {
             storageService.logout();
             setAuthUser(null);
             setShowLoginScreen(false);
+            setShowPublicTransparencia(false);
             toastService.info('Sessão Encerrada', 'Você saiu do sistema com segurança.');
           }}
           onSwitchProfile={(targetTipo) => {
@@ -212,6 +233,8 @@ export default function App() {
               ? configTab 
               : activeSection === 'fiscalizacao' 
               ? fiscalizacaoSubTab 
+              : activeSection === 'website'
+              ? websiteSubTab
               : cadastrosBasicosGroup
           }
           onSelectSection={(section, subTab) => {
@@ -224,6 +247,9 @@ export default function App() {
             }
             if (section === 'fiscalizacao' && subTab) {
               setFiscalizacaoSubTab(subTab as 'eletronica' | 'termo_inspecao');
+            }
+            if (section === 'website') {
+              setWebsiteSubTab((subTab as WebsiteSubTab) || 'noticias');
             }
           }}
           currentRole={currentUserRole}
@@ -317,7 +343,31 @@ export default function App() {
                 )}
 
                 {activeSection === 'site_publico' && (
-                  <SitePublicoView />
+                  <SitePublicoView
+                    onOpenTransparencia={() => setActiveSection('portal_transparencia')}
+                  />
+                )}
+
+                {activeSection === 'website' && (
+                  <WebsiteAdminView
+                    key={websiteSubTab}
+                    initialTab={websiteSubTab}
+                    onTabChange={setWebsiteSubTab}
+                    onPreviewSite={() => setActiveSection('site_publico')}
+                  />
+                )}
+
+                {activeSection === 'transparencia' && (
+                  <TransparenciaAdminView
+                    onOpenPublicPortal={() => setActiveSection('portal_transparencia')}
+                  />
+                )}
+
+                {activeSection === 'portal_transparencia' && (
+                  <PortalTransparenciaView
+                    councilConfig={councilConfig}
+                    onBackToSite={() => setActiveSection('site_publico')}
+                  />
                 )}
 
                 {activeSection === 'protocolos' && (

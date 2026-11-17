@@ -179,6 +179,7 @@ ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS proximo_numero_autuac
 ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS geolocalizacao_ativa BOOLEAN DEFAULT TRUE;
 ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS acessos_inscrito_pf JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS acessos_inscrito_pj JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_regras_cores JSONB DEFAULT '[]'::jsonb;
 
 -- ------------------------------------------------------------------------------
 -- 2. CADASTROS BÁSICOS
@@ -938,7 +939,7 @@ BEGIN
         UPDATE public.funcionarios SET
             nome = 'Jefferson Ayres (Desenvolvedor)',
             cargo_nome = 'Desenvolvedor Master / Arquiteto de Software',
-            permissoes_modulos = ARRAY['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'],
+            permissoes_modulos = ARRAY['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'website', 'transparencia', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'],
             ativo = TRUE
         WHERE cpf = '934.135.302-59';
     ELSE
@@ -961,7 +962,7 @@ BEGIN
             'Desenvolvedor Master / Arquiteto de Software',
             'setlot-7',
             'Tecnologia da Informação e Engenharia de Software',
-            ARRAY['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'],
+            ARRAY['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'website', 'transparencia', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'],
             TRUE,
             '2020-01-01',
             NULL,
@@ -1023,7 +1024,111 @@ CREATE INDEX IF NOT EXISTS idx_perfis_permissoes_doc ON public.perfis_permissoes
 CREATE INDEX IF NOT EXISTS idx_perfis_permissoes_tipo ON public.perfis_permissoes_usuario(tipo_perfil);
 
 -- ------------------------------------------------------------------------------
--- 15. TRIGGERS DE ATUALIZAÇÃO E ROW LEVEL SECURITY (RLS) 100% IDEMPOTENTE
+-- 15. MÓDULO WEBSITE (CONFIGURAÇÃO, NOTÍCIAS, BANNERS) & PORTAL TRANSPARÊNCIA
+-- ------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.website_config (
+    id TEXT PRIMARY KEY DEFAULT 'default',
+    noticias_por_pagina INTEGER DEFAULT 6,
+    logo_url TEXT DEFAULT '',
+    titulo_site VARCHAR(255) DEFAULT '',
+    subtitulo_site TEXT DEFAULT '',
+    menus JSONB DEFAULT '[]'::jsonb,
+    transparencia_menus JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.website_config ADD COLUMN IF NOT EXISTS noticias_por_pagina INTEGER DEFAULT 6;
+ALTER TABLE public.website_config ADD COLUMN IF NOT EXISTS logo_url TEXT DEFAULT '';
+ALTER TABLE public.website_config ADD COLUMN IF NOT EXISTS titulo_site VARCHAR(255) DEFAULT '';
+ALTER TABLE public.website_config ADD COLUMN IF NOT EXISTS subtitulo_site TEXT DEFAULT '';
+ALTER TABLE public.website_config ADD COLUMN IF NOT EXISTS menus JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.website_config ADD COLUMN IF NOT EXISTS transparencia_menus JSONB DEFAULT '[]'::jsonb;
+
+CREATE TABLE IF NOT EXISTS public.website_noticias (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    titulo VARCHAR(255) NOT NULL,
+    resumo TEXT,
+    conteudo TEXT,
+    categoria VARCHAR(100) DEFAULT 'Institucional',
+    data_publicacao VARCHAR(30),
+    autor VARCHAR(150) DEFAULT 'Assessoria de Comunicação',
+    imagem_url TEXT,
+    destaque BOOLEAN DEFAULT FALSE,
+    publicado BOOLEAN DEFAULT TRUE,
+    ordem INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.website_noticias ADD COLUMN IF NOT EXISTS destaque BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.website_noticias ADD COLUMN IF NOT EXISTS publicado BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.website_noticias ADD COLUMN IF NOT EXISTS ordem INTEGER DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS idx_website_noticias_publicado ON public.website_noticias(publicado);
+CREATE INDEX IF NOT EXISTS idx_website_noticias_ordem ON public.website_noticias(ordem);
+
+CREATE TABLE IF NOT EXISTS public.website_banners (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    titulo VARCHAR(255) NOT NULL,
+    subtitulo TEXT,
+    imagem_url TEXT,
+    texto_botao VARCHAR(100),
+    link_destino TEXT,
+    ordem INTEGER DEFAULT 1,
+    ativo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.website_banners ADD COLUMN IF NOT EXISTS texto_botao VARCHAR(100);
+ALTER TABLE public.website_banners ADD COLUMN IF NOT EXISTS link_destino TEXT;
+ALTER TABLE public.website_banners ADD COLUMN IF NOT EXISTS ordem INTEGER DEFAULT 1;
+ALTER TABLE public.website_banners ADD COLUMN IF NOT EXISTS ativo BOOLEAN DEFAULT TRUE;
+
+CREATE INDEX IF NOT EXISTS idx_website_banners_ativo ON public.website_banners(ativo);
+CREATE INDEX IF NOT EXISTS idx_website_banners_ordem ON public.website_banners(ordem);
+
+CREATE TABLE IF NOT EXISTS public.transparencia_documentos (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    titulo VARCHAR(255) NOT NULL,
+    descricao TEXT,
+    categoria VARCHAR(100) NOT NULL,
+    exercicio INTEGER NOT NULL,
+    competencia VARCHAR(100),
+    data_publicacao VARCHAR(30),
+    valor_total NUMERIC(14,2),
+    responsavel VARCHAR(150),
+    numero_documento VARCHAR(100),
+    arquivo_nome VARCHAR(255),
+    arquivo_tipo VARCHAR(150),
+    arquivo_tamanho NUMERIC(12,2),
+    arquivo_tamanho_bytes BIGINT,
+    arquivo_url TEXT,
+    storage_path TEXT,
+    publicado BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.transparencia_documentos ADD COLUMN IF NOT EXISTS competencia VARCHAR(100);
+ALTER TABLE public.transparencia_documentos ADD COLUMN IF NOT EXISTS valor_total NUMERIC(14,2);
+ALTER TABLE public.transparencia_documentos ADD COLUMN IF NOT EXISTS responsavel VARCHAR(150);
+ALTER TABLE public.transparencia_documentos ADD COLUMN IF NOT EXISTS numero_documento VARCHAR(100);
+ALTER TABLE public.transparencia_documentos ADD COLUMN IF NOT EXISTS arquivo_nome VARCHAR(255);
+ALTER TABLE public.transparencia_documentos ADD COLUMN IF NOT EXISTS arquivo_tipo VARCHAR(150);
+ALTER TABLE public.transparencia_documentos ADD COLUMN IF NOT EXISTS arquivo_tamanho NUMERIC(12,2);
+ALTER TABLE public.transparencia_documentos ADD COLUMN IF NOT EXISTS arquivo_tamanho_bytes BIGINT;
+ALTER TABLE public.transparencia_documentos ADD COLUMN IF NOT EXISTS arquivo_url TEXT;
+ALTER TABLE public.transparencia_documentos ADD COLUMN IF NOT EXISTS storage_path TEXT;
+ALTER TABLE public.transparencia_documentos ADD COLUMN IF NOT EXISTS publicado BOOLEAN DEFAULT TRUE;
+
+CREATE INDEX IF NOT EXISTS idx_transparencia_exercicio ON public.transparencia_documentos(exercicio);
+CREATE INDEX IF NOT EXISTS idx_transparencia_categoria ON public.transparencia_documentos(categoria);
+CREATE INDEX IF NOT EXISTS idx_transparencia_publicado ON public.transparencia_documentos(publicado);
+
+-- ------------------------------------------------------------------------------
+-- 16. TRIGGERS DE ATUALIZAÇÃO E ROW LEVEL SECURITY (RLS) 100% IDEMPOTENTE
 -- ------------------------------------------------------------------------------
 DO $$
 DECLARE
@@ -1033,7 +1138,8 @@ DECLARE
         'profissionais', 'empresas', 'lancamentos_financeiros',
         'processos_cobranca', 'termos_fiscalizacao', 'protocolos_processos',
         'formularios_dinamicos', 'respostas_formularios', 'historico_vinculos_profissionais',
-        'historico_auditoria', 'funcionarios', 'perfis_permissoes_usuario'
+        'historico_auditoria', 'funcionarios', 'perfis_permissoes_usuario',
+        'website_config', 'website_noticias', 'website_banners', 'transparencia_documentos'
     ];
 BEGIN
     FOREACH tbl IN ARRAY tables

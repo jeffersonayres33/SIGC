@@ -84,7 +84,7 @@ export function formatAttachmentSize(arq: { tamanho?: number; tamanhoMb?: number
  */
 export async function uploadOriginalFile(
   file: File,
-  folder: 'protocolos' | 'formularios' | 'site-publico' | 'portal' = 'protocolos'
+  folder: 'protocolos' | 'formularios' | 'site-publico' | 'portal' | 'website' | 'transparencia' = 'protocolos'
 ): Promise<StoredAttachment> {
   const tamanhoMb = Number((file.size / (1024 * 1024)).toFixed(2));
   const mime = file.type || 'application/octet-stream';
@@ -135,6 +135,89 @@ export async function uploadOriginalFile(
 }
 
 /**
+ * Converte Data URLs (especialmente PDFs em base64 que o Chrome bloqueia dentro de <iframe>)
+ * e arquivos remotos em Blob Object URLs de mesma origem para pré-visualização segura.
+ */
+export function dataUrlToBlob(dataUrl: string, fallbackMime?: string): Blob | null {
+  try {
+    const normalized = normalizeDataUrlHeader(dataUrl);
+    const commaIdx = normalized.indexOf(',');
+    if (commaIdx === -1) return null;
+
+    const header = normalized.slice(0, commaIdx);
+    const payload = normalized.slice(commaIdx + 1);
+    const mimeMatch = header.match(/^data:([^;]+)/i);
+    const mime = mimeMatch?.[1] || fallbackMime || 'application/octet-stream';
+    const isBase64 = /;base64/i.test(header);
+
+    if (isBase64) {
+      const cleanBase64 = payload.replace(/\s/g, '');
+      const binaryStr = atob(cleanBase64);
+      const len = binaryStr.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+      }
+      return new Blob([bytes], { type: mime });
+    }
+
+    const decoded = decodeURIComponent(payload);
+    return new Blob([decoded], { type: mime });
+  } catch (err) {
+    console.warn('Falha ao converter Data URL para Blob:', err);
+    return null;
+  }
+}
+
+export async function resolveSafePreviewUrl(
+  rawUrl?: string,
+  mimeType?: string,
+  fileName?: string
+): Promise<{ url: string; revoke?: () => void }> {
+  const normalized = normalizeDataUrlHeader(rawUrl?.trim());
+  if (!isValidDownloadableUrl(normalized)) {
+    return { url: '' };
+  }
+
+  const lowerName = (fileName || '').toLowerCase();
+  const isPdf =
+    normalized.startsWith('data:application/pdf') ||
+    (mimeType || '').toLowerCase() === 'application/pdf' ||
+    /\.pdf(\?.*)?$/i.test(lowerName);
+
+  if (normalized.startsWith('data:')) {
+    const blob = dataUrlToBlob(normalized, isPdf ? 'application/pdf' : mimeType);
+    if (blob) {
+      const objectUrl = URL.createObjectURL(blob);
+      return {
+        url: objectUrl,
+        revoke: () => URL.revokeObjectURL(objectUrl)
+      };
+    }
+    return { url: normalized };
+  }
+
+  if (isPdf && (normalized.startsWith('http://') || normalized.startsWith('https://'))) {
+    try {
+      const res = await fetch(normalized);
+      if (res.ok) {
+        const rawBlob = await res.blob();
+        const pdfBlob = rawBlob.type === 'application/pdf' ? rawBlob : new Blob([rawBlob], { type: 'application/pdf' });
+        const objectUrl = URL.createObjectURL(pdfBlob);
+        return {
+          url: objectUrl,
+          revoke: () => URL.revokeObjectURL(objectUrl)
+        };
+      }
+    } catch {
+      // Fallback para URL original se CORS impedir fetch direto
+    }
+  }
+
+  return { url: normalized };
+}
+
+/**
  * Faz o download do arquivo original exatamente como foi enviado (sem gerar PDFs substitutos).
  */
 export async function downloadOriginalAttachment(arq: { nome: string; url?: string; tipo?: string }): Promise<{ ok: boolean; reason?: string }> {
@@ -162,6 +245,21 @@ export async function downloadOriginalAttachment(arq: { nome: string; url?: stri
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
       return { ok: true };
+    }
+
+    if (rawUrl.startsWith('data:')) {
+      const blob = dataUrlToBlob(rawUrl, arq.tipo);
+      if (blob) {
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objectUrl;
+        a.download = arq.nome;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+        return { ok: true };
+      }
     }
 
     const a = document.createElement('a');

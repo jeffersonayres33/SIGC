@@ -800,7 +800,112 @@ export interface AuthUser {
   permissoesAcoes?: Record<string, PermissoesAcoesModulo>; // Controle granular ativo para a sessão
   precisaTrocarSenha?: boolean;
   ultimoAcesso?: string;
-  perfisDisponiveis?: AuthProfile[]; // Preenchido quando o mesmo CPF possui vínculo de Funcionário e Profissional
+  perfisDisponiveis?: AuthProfile[]; // Preenido quando o mesmo CPF possui vínculo de Funcionário e Profissional
 }
+
+export interface SiteNoticia {
+  id: string;
+  titulo: string;
+  resumo: string;
+  conteudo: string;
+  categoria: string;
+  dataPublicacao: string;
+  autor: string;
+  imagemUrl?: string;
+  destaque?: boolean;
+  publicado: boolean;
+  ordem?: number;
+}
+
+export interface SiteBanner {
+  id: string;
+  titulo: string;
+  subtitulo?: string;
+  imagemUrl?: string;
+  textoBotao?: string;
+  linkDestino?: string;
+  ordem: number;
+  ativo: boolean;
+}
+
+export interface SiteMenuItem {
+  id: string;
+  label: string;
+  url: string;
+  ordem: number;
+  ativo: boolean;
+  abrirNovaAba?: boolean;
+}
+
+export interface TransparenciaMenuItem {
+  id: string;
+  label: string;
+  tipo: 'CATEGORIA' | 'LINK_EXTERNO';
+  categoriaFiltro?: string;
+  url?: string;
+  descricao?: string;
+  ordem: number;
+  ativo: boolean;
+  abrirNovaAba?: boolean;
+}
+
+export interface SiteConfig {
+  id?: string;
+  noticiasPorPagina: number;
+  logoUrl?: string;
+  tituloSite?: string;
+  subtituloSite?: string;
+  menus: SiteMenuItem[];
+  transparenciaMenus?: TransparenciaMenuItem[];
+}
+
+export type ProtocoloCorOpcao =
+  | 'vermelho'
+  | 'amarelo'
+  | 'cinza'
+  | 'verde'
+  | 'azul'
+  | 'laranja'
+  | 'roxo';
+
+export type ProtocoloCorEscopo = 'TODOS' | 'STATUS' | 'SETOR' | 'TIPO_INTERESSADO';
+export type ProtocoloCorCondicao = 'VENCIDO' | 'PRAZO_RESTANTE' | 'STATUS_IGUAL';
+export type ProtocoloCorOperador = 'MENOR_IGUAL' | 'MENOR' | 'IGUAL' | 'MAIOR_IGUAL';
+
+export interface ProtocoloCorRegra {
+  id: string;
+  nome: string;
+  ativo: boolean;
+  ordem: number;
+  escopo: ProtocoloCorEscopo;
+  escopoValor?: string;
+  condicao: ProtocoloCorCondicao;
+  operador?: ProtocoloCorOperador;
+  percentualLimite?: number;
+  statusAlvo?: string;
+  cor: ProtocoloCorOpcao;
+}
+
+export interface TransparenciaDocumento {
+  id: string;
+  titulo: string;
+  descricao?: string;
+  categoria: string;
+  exercicio: number;
+  competencia?: string;
+  dataPublicacao: string;
+  valorTotal?: number;
+  responsavel?: string;
+  numeroDocumento?: string;
+  arquivoNome?: string;
+  arquivoTipo?: string;
+  arquivoTamanho?: number;
+  arquivoTamanhoBytes?: number;
+  arquivoUrl?: string;
+  storagePath?: string;
+  publicado: boolean;
+}
+
+
 
 

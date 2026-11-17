@@ -139,8 +139,74 @@ ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS data_recadastramento VARCHA
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS dt_inicio_insc VARCHAR(20);
 ALTER TABLE public.empresas ALTER COLUMN carga_horaria_funcionamento_semanal TYPE NUMERIC(10,2) USING carga_horaria_funcionamento_semanal::numeric;
 ALTER TABLE public.empresas ALTER COLUMN carga_horaria_assistencia_semanal TYPE NUMERIC(10,2) USING carga_horaria_assistencia_semanal::numeric;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_regras_cores JSONB DEFAULT '[]'::jsonb;
 
--- 4. RLS nas tabelas existentes:
+-- 4. Módulo WebSITE & Portal Transparência:
+CREATE TABLE IF NOT EXISTS public.website_config (
+    id TEXT PRIMARY KEY DEFAULT 'default',
+    noticias_por_pagina INTEGER DEFAULT 6,
+    logo_url TEXT DEFAULT '',
+    titulo_site VARCHAR(255) DEFAULT '',
+    subtitulo_site TEXT DEFAULT '',
+    menus JSONB DEFAULT '[]'::jsonb,
+    transparencia_menus JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+ALTER TABLE public.website_config ADD COLUMN IF NOT EXISTS transparencia_menus JSONB DEFAULT '[]'::jsonb;
+
+CREATE TABLE IF NOT EXISTS public.website_noticias (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    titulo VARCHAR(255) NOT NULL,
+    resumo TEXT,
+    conteudo TEXT,
+    categoria VARCHAR(100) DEFAULT 'Institucional',
+    data_publicacao VARCHAR(30),
+    autor VARCHAR(150) DEFAULT 'Assessoria de Comunicação',
+    imagem_url TEXT,
+    destaque BOOLEAN DEFAULT FALSE,
+    publicado BOOLEAN DEFAULT TRUE,
+    ordem INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.website_banners (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    titulo VARCHAR(255) NOT NULL,
+    subtitulo TEXT,
+    imagem_url TEXT,
+    texto_botao VARCHAR(100),
+    link_destino TEXT,
+    ordem INTEGER DEFAULT 1,
+    ativo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS public.transparencia_documentos (
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    titulo VARCHAR(255) NOT NULL,
+    descricao TEXT,
+    categoria VARCHAR(100) NOT NULL,
+    exercicio INTEGER NOT NULL,
+    competencia VARCHAR(100),
+    data_publicacao VARCHAR(30),
+    valor_total NUMERIC(14,2),
+    responsavel VARCHAR(150),
+    numero_documento VARCHAR(100),
+    arquivo_nome VARCHAR(255),
+    arquivo_tipo VARCHAR(150),
+    arquivo_tamanho NUMERIC(12,2),
+    arquivo_tamanho_bytes BIGINT,
+    arquivo_url TEXT,
+    storage_path TEXT,
+    publicado BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 5. RLS nas tabelas existentes e novas:
 DO $$
 DECLARE
     tbl text;
@@ -149,7 +215,8 @@ DECLARE
         'profissionais', 'empresas', 'lancamentos_financeiros',
         'processos_cobranca', 'termos_fiscalizacao', 'protocolos_processos',
         'formularios_dinamicos', 'respostas_formularios', 'historico_vinculos_profissionais',
-        'historico_auditoria', 'funcionarios', 'perfis_permissoes_usuario'
+        'historico_auditoria', 'funcionarios', 'perfis_permissoes_usuario',
+        'website_config', 'website_noticias', 'website_banners', 'transparencia_documentos'
     ];
 BEGIN
     FOREACH tbl IN ARRAY tables

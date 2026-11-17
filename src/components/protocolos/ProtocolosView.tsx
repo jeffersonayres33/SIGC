@@ -39,18 +39,24 @@ import {
   ArrowUp,
   ArrowDown
 } from 'lucide-react';
-import { ProtocoloProcesso, ItemCadastroBasico, Profissional, Empresa, Funcionario } from '../../types';
+import { ProtocoloProcesso, ItemCadastroBasico, Profissional, Empresa, Funcionario, ProtocoloCorRegra } from '../../types';
 import { storageService } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
 import { maskCPF, maskCNPJ, sanitizeToUpper } from '../../utils/documentUtils';
 import { exportToCSV, exportToPDF } from '../../services/exportService';
 import { isMasterDeveloper } from '../../utils/permissionUtils';
 import {
+  DEFAULT_PROTOCOLO_COR_REGRAS,
+  PROTOCOLO_COLOR_PALETTE,
+  evaluateProtocoloColorRule
+} from '../../utils/protocoloColorUtils';
+import {
   uploadOriginalFile,
   downloadOriginalAttachment,
   formatAttachmentSize,
   normalizeDataUrlHeader,
   isValidDownloadableUrl,
+  resolveSafePreviewUrl,
   StoredAttachment
 } from '../../services/fileStorageService';
 
@@ -112,6 +118,8 @@ export const ProtocolosView: React.FC = () => {
     tamanho?: number;
     tamanhoBytes?: number;
   } | null>(null);
+  const [safePreviewUrl, setSafePreviewUrl] = useState<string>('');
+  const [isLoadingPreview, setIsLoadingPreview] = useState<boolean>(false);
   const [protocoloToDelete, setProtocoloToDelete] = useState<ProtocoloProcesso | null>(null);
 
   // Cadastros Básicos vinculados dinamicamente
@@ -127,6 +135,12 @@ export const ProtocolosView: React.FC = () => {
   const [allProfissionais, setAllProfissionais] = useState<Profissional[]>([]);
   const [allEmpresas, setAllEmpresas] = useState<Empresa[]>([]);
   const [allFuncionarios, setAllFuncionarios] = useState<Funcionario[]>([]);
+  const [regrasCores, setRegrasCores] = useState<ProtocoloCorRegra[]>(() => {
+    const cfg = storageService.getCouncilConfig();
+    return cfg.protocoloRegrasCores && cfg.protocoloRegrasCores.length > 0
+      ? cfg.protocoloRegrasCores
+      : DEFAULT_PROTOCOLO_COR_REGRAS;
+  });
 
   // Estados para Modal de Consulta de Profissionais (com todos os filtros do cadastro)
   const [isConsultaProfissionalOpen, setIsConsultaProfissionalOpen] = useState(false);
@@ -157,6 +171,12 @@ export const ProtocolosView: React.FC = () => {
     setAllProfissionais(storageService.getProfissionais());
     setAllEmpresas(storageService.getEmpresas());
     setAllFuncionarios(storageService.getFuncionarios().filter(f => f.ativo !== false));
+    const cfg = storageService.getCouncilConfig();
+    setRegrasCores(
+      cfg.protocoloRegrasCores && cfg.protocoloRegrasCores.length > 0
+        ? cfg.protocoloRegrasCores
+        : DEFAULT_PROTOCOLO_COR_REGRAS
+    );
   };
 
   useEffect(() => {
@@ -295,6 +315,36 @@ export const ProtocolosView: React.FC = () => {
       );
     }
   };
+
+  useEffect(() => {
+    let revokeFn: (() => void) | undefined;
+    let active = true;
+
+    if (!modalPreviewAnexo?.url) {
+      setSafePreviewUrl('');
+      setIsLoadingPreview(false);
+      return;
+    }
+
+    setIsLoadingPreview(true);
+    resolveSafePreviewUrl(modalPreviewAnexo.url, modalPreviewAnexo.tipo, modalPreviewAnexo.nome)
+      .then((res) => {
+        if (!active) {
+          res.revoke?.();
+          return;
+        }
+        revokeFn = res.revoke;
+        setSafePreviewUrl(res.url);
+      })
+      .finally(() => {
+        if (active) setIsLoadingPreview(false);
+      });
+
+    return () => {
+      active = false;
+      revokeFn?.();
+    };
+  }, [modalPreviewAnexo]);
 
   const handleVisualizarAnexo = (arq: { nome: string; url?: string; tipo?: string; tamanho?: number; tamanhoBytes?: number }) => {
     const resolved = resolveAttachmentWithSource(arq);
@@ -1025,8 +1075,8 @@ export const ProtocolosView: React.FC = () => {
         )}
       </div>
 
-      {/* Barra Informativa de Processos Filtrados */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-1">
+      {/* Barra Informativa de Processos Filtrados & Legenda Dinâmica de Cores */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 px-1">
         <div className="flex items-center flex-wrap gap-2">
           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-800 text-xs font-bold uppercase tracking-wide shadow-2xs">
             <FileText className="w-3.5 h-3.5 text-blue-600" />
@@ -1035,6 +1085,30 @@ export const ProtocolosView: React.FC = () => {
           <span className="text-xs text-slate-500 font-medium">
             (de um total de {allProcessos.length} no sistema)
           </span>
+        </div>
+
+        <div className="flex items-center flex-wrap gap-1.5">
+          {regrasCores
+            .filter(r => r.ativo !== false)
+            .slice()
+            .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
+            .map((regra) => {
+              const st = PROTOCOLO_COLOR_PALETTE[regra.cor] || PROTOCOLO_COLOR_PALETTE.cinza;
+              const matchCount = sortedProcessos.filter(
+                p => evaluateProtocoloColorRule(p, regrasCores).matchedRule?.id === regra.id
+              ).length;
+              return (
+                <span
+                  key={regra.id}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold ${st.legendClass}`}
+                  title={`Regra #${regra.ordem}: ${regra.nome}`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${st.dotClass}`} />
+                  <span>{regra.nome}</span>
+                  <span className="font-mono opacity-80">({matchCount})</span>
+                </span>
+              );
+            })}
         </div>
       </div>
 
@@ -1063,10 +1137,21 @@ export const ProtocolosView: React.FC = () => {
                   </td>
                 </tr>
               ) : (
-                sortedProcessos.map((proc) => (
-                  <tr key={proc.id} className="hover:bg-blue-50/40 transition-colors">
+                sortedProcessos.map((proc) => {
+                  const colorEval = evaluateProtocoloColorRule(proc, regrasCores);
+                  const rowColorClass = colorEval.style ? colorEval.style.rowClass : 'hover:bg-blue-50/40';
+                  return (
+                  <tr key={proc.id} className={`transition-colors ${rowColorClass}`}>
                     <td className="py-3.5 px-4 font-mono font-bold text-blue-700 whitespace-nowrap">
-                      {proc.numeroProtocolo}
+                      <div className="flex items-center gap-1.5">
+                        {colorEval.style && (
+                          <span
+                            className={`w-2 h-2 rounded-full shrink-0 ${colorEval.style.dotClass}`}
+                            title={colorEval.matchedRule?.nome}
+                          />
+                        )}
+                        <span>{proc.numeroProtocolo}</span>
+                      </div>
                     </td>
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -1097,10 +1182,22 @@ export const ProtocolosView: React.FC = () => {
                     </td>
                     <td className="py-3.5 px-4">
                       <span className="font-semibold text-slate-800 uppercase">{proc.tipo}</span>
-                      <div className="text-[10px] text-slate-400">Aberto em: {proc.dataAbertura}</div>
+                      <div className="text-[10px] text-slate-500 flex flex-wrap items-center gap-1.5 mt-0.5">
+                        <span>Aberto em: {proc.dataAbertura}</span>
+                        {colorEval.metrics.prazoLabel && (
+                          <span
+                            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-bold ${
+                              colorEval.style ? colorEval.style.badgeClass : 'bg-slate-100 text-slate-600 border-slate-200'
+                            }`}
+                          >
+                            <Clock className="w-2.5 h-2.5" />
+                            {colorEval.metrics.prazoLabel}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3.5 px-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium text-[11px] border border-slate-200 uppercase">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-white/80 text-slate-700 font-medium text-[11px] border border-slate-200 uppercase">
                         {proc.setorAtual}
                       </span>
                     </td>
@@ -1109,7 +1206,9 @@ export const ProtocolosView: React.FC = () => {
                     </td>
                     <td className="py-3.5 px-4 text-center whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
-                        proc.status?.toUpperCase().includes('DEFERIDO') || proc.status?.toUpperCase().includes('APROVADO')
+                        colorEval.style
+                          ? colorEval.style.badgeClass
+                          : proc.status?.toUpperCase().includes('DEFERIDO') || proc.status?.toUpperCase().includes('APROVADO')
                           ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                           : proc.status?.toUpperCase().includes('INDEFERIDO')
                           ? 'bg-rose-50 text-rose-700 border border-rose-200'
@@ -1123,7 +1222,7 @@ export const ProtocolosView: React.FC = () => {
                     <td className="py-3.5 px-4 text-right whitespace-nowrap space-x-1.5">
                       <button
                         onClick={() => setSelectedProcesso(proc)}
-                        className="p-1.5 rounded-lg bg-slate-100 hover:bg-blue-100 text-blue-700 border border-slate-200 transition-colors cursor-pointer"
+                        className="p-1.5 rounded-lg bg-white/80 hover:bg-blue-100 text-blue-700 border border-slate-200 transition-colors cursor-pointer"
                         title="Ver Autos do Processo"
                         aria-label="Ver Autos do Processo"
                       >
@@ -1147,7 +1246,8 @@ export const ProtocolosView: React.FC = () => {
                       </button>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -2514,25 +2614,35 @@ export const ProtocolosView: React.FC = () => {
 
             <div className="p-5 overflow-y-auto flex-1 flex flex-col items-center justify-center bg-slate-100 min-h-[350px]">
               {(() => {
-                const previewUrl = normalizeDataUrlHeader(modalPreviewAnexo.url);
-                const hasBinary = isValidDownloadableUrl(previewUrl);
+                const rawPreviewUrl = normalizeDataUrlHeader(modalPreviewAnexo.url);
+                const hasBinary = isValidDownloadableUrl(rawPreviewUrl);
+                const effectiveUrl = safePreviewUrl || rawPreviewUrl;
                 const lowerNome = (modalPreviewAnexo.nome || '').toLowerCase();
                 const lowerTipo = (modalPreviewAnexo.tipo || '').toLowerCase();
                 const isImage = hasBinary && (
-                  previewUrl.startsWith('data:image/') ||
+                  rawPreviewUrl.startsWith('data:image/') ||
                   lowerTipo.startsWith('image/') ||
                   /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(lowerNome)
                 );
                 const isPdf = hasBinary && (
-                  previewUrl.startsWith('data:application/pdf') ||
+                  rawPreviewUrl.startsWith('data:application/pdf') ||
                   lowerTipo === 'application/pdf' ||
                   /\.pdf(\?.*)?$/i.test(lowerNome)
                 );
 
+                if (isLoadingPreview) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-3 text-slate-500">
+                      <RefreshCw className="w-7 h-7 animate-spin text-blue-600" />
+                      <span className="text-xs font-bold uppercase tracking-wider">Carregando pré-visualização segura...</span>
+                    </div>
+                  );
+                }
+
                 if (isImage) {
                   return (
                     <img
-                      src={previewUrl}
+                      src={effectiveUrl}
                       alt={modalPreviewAnexo.nome}
                       className="max-w-full max-h-[65vh] object-contain rounded-xl shadow-md"
                     />
@@ -2541,11 +2651,19 @@ export const ProtocolosView: React.FC = () => {
 
                 if (isPdf) {
                   return (
-                    <iframe
-                      src={previewUrl}
-                      title={modalPreviewAnexo.nome}
-                      className="w-full h-[65vh] rounded-xl border border-slate-300 shadow-xs bg-white"
-                    />
+                    <div className="w-full flex flex-col space-y-3">
+                      <object
+                        data={effectiveUrl}
+                        type="application/pdf"
+                        className="w-full h-[65vh] rounded-xl border border-slate-300 shadow-xs bg-white"
+                      >
+                        <iframe
+                          src={effectiveUrl}
+                          title={modalPreviewAnexo.nome}
+                          className="w-full h-[65vh] rounded-xl border border-slate-300 shadow-xs bg-white"
+                        />
+                      </object>
+                    </div>
                   );
                 }
 

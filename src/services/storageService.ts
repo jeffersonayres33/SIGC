@@ -25,7 +25,14 @@ import {
   UserRole,
   RegraAcessoInscrito,
   PermissoesAcoesModulo,
-  HistoricoVinculoProfissional
+  HistoricoVinculoProfissional,
+  SiteNoticia,
+  SiteBanner,
+  SiteMenuItem,
+  SiteConfig,
+  TransparenciaDocumento,
+  TransparenciaMenuItem,
+  ProtocoloCorRegra
 } from '../types';
 import { 
   INITIAL_PROFISSIONAIS, 
@@ -39,6 +46,7 @@ import {
   generateSingleProfissional 
 } from './mockDataGenerator';
 import { sanitizeToUpper, formatInscricaoCompleta, dateToInput, inputToDate, maskCPF, maskCNPJ } from '../utils/documentUtils';
+import { DEFAULT_PROTOCOLO_COR_REGRAS } from '../utils/protocoloColorUtils';
 import { supabase, checkSupabaseConnection, SupabaseHealthCheck } from './supabaseClient';
 
 const STORAGE_KEYS = {
@@ -60,7 +68,11 @@ const STORAGE_KEYS = {
   FUNCIONARIOS: 'siscon_funcionarios_v1',
   AUTH_SESSION: 'siscon_auth_session_v1',
   REMEMBERED_DOC: 'siscon_remembered_doc_v1',
-  SNAPSHOTS: 'siscon_local_snapshots_v1'
+  SNAPSHOTS: 'siscon_local_snapshots_v1',
+  WEBSITE_CONFIG: 'siscon_website_config_v1',
+  WEBSITE_NOTICIAS: 'siscon_website_noticias_v1',
+  WEBSITE_BANNERS: 'siscon_website_banners_v1',
+  TRANSPARENCIA_DOCS: 'siscon_transparencia_docs_v1'
 };
 
 function runBackgroundSupabase(queryPromise: any, contextLabel?: string) {
@@ -114,6 +126,139 @@ function safeSetLocalStorage(key: string, data: any): boolean {
     return false;
   }
 }
+
+export const DEFAULT_TRANSPARENCIA_MENUS: TransparenciaMenuItem[] = [
+  { id: 'tmenu-1', label: 'Todos os Demonstrativos', tipo: 'CATEGORIA', categoriaFiltro: 'TODOS', ordem: 1, ativo: true },
+  { id: 'tmenu-2', label: 'Balanço Patrimonial', tipo: 'CATEGORIA', categoriaFiltro: 'Balanço Patrimonial', ordem: 2, ativo: true },
+  { id: 'tmenu-3', label: 'Balanço Orçamentário', tipo: 'CATEGORIA', categoriaFiltro: 'Balanço Orçamentário', ordem: 3, ativo: true },
+  { id: 'tmenu-4', label: 'Balanço Financeiro', tipo: 'CATEGORIA', categoriaFiltro: 'Balanço Financeiro', ordem: 4, ativo: true },
+  { id: 'tmenu-5', label: 'Receitas e Despesas', tipo: 'CATEGORIA', categoriaFiltro: 'Receitas e Despesas', ordem: 5, ativo: true },
+  { id: 'tmenu-6', label: 'Relatório de Gestão', tipo: 'CATEGORIA', categoriaFiltro: 'Relatório de Gestão', ordem: 6, ativo: true },
+  { id: 'tmenu-7', label: 'Licitações e Contratos', tipo: 'CATEGORIA', categoriaFiltro: 'Licitações e Contratos', ordem: 7, ativo: true },
+  { id: 'tmenu-8', label: 'Folha e Diárias', tipo: 'CATEGORIA', categoriaFiltro: 'Folha e Diárias', ordem: 8, ativo: true }
+];
+
+export const INITIAL_SITE_CONFIG: SiteConfig = {
+  id: 'default',
+  noticiasPorPagina: 6,
+  logoUrl: '',
+  tituloSite: '',
+  subtituloSite: 'Serviços de autoatendimento, transparência regulatória, formulários eletrônicos para o cidadão e comunicados oficiais.',
+  menus: [
+    { id: 'menu-1', label: 'Início', url: '#inicio', ordem: 1, ativo: true, abrirNovaAba: false },
+    { id: 'menu-2', label: 'Serviços Online', url: '#formularios', ordem: 2, ativo: true, abrirNovaAba: false },
+    { id: 'menu-3', label: 'Notícias & Editais', url: '#noticias', ordem: 3, ativo: true, abrirNovaAba: false },
+    { id: 'menu-4', label: 'Portal Transparência', url: '#transparencia', ordem: 4, ativo: true, abrirNovaAba: false }
+  ],
+  transparenciaMenus: DEFAULT_TRANSPARENCIA_MENUS
+};
+
+export const INITIAL_SITE_BANNERS: SiteBanner[] = [
+  {
+    id: 'ban-1',
+    titulo: 'Transparência Pública & Prestação de Contas',
+    subtitulo: 'Consulte os balanços patrimoniais, demonstrativos orçamentários, receitas e despesas oficiais do Conselho com acesso livre ao cidadão.',
+    imagemUrl: '',
+    textoBotao: 'Acessar Portal Transparência',
+    linkDestino: '#transparencia',
+    ordem: 1,
+    ativo: true
+  },
+  {
+    id: 'ban-2',
+    titulo: 'Peticionamento Eletrônico & Formulários 24h',
+    subtitulo: 'Protocole requerimentos, solicitações de certidões, denúncias e manifestações de ouvidoria diretamente pela internet.',
+    imagemUrl: '',
+    textoBotao: 'Ver Serviços Disponíveis',
+    linkDestino: '#formularios',
+    ordem: 2,
+    ativo: true
+  }
+];
+
+export const INITIAL_SITE_NOTICIAS: SiteNoticia[] = [
+  {
+    id: 'not-1',
+    titulo: 'Conselho intensifica operações de fiscalização orientativa em estabelecimentos da capital e interior',
+    resumo: 'Equipes utilizam formulários eletrônicos com verificação em tempo real da presença de Responsável Técnico e regularidade das certidões.',
+    conteudo: 'O Departamento de Fiscalização ampliou o calendário de inspeções técnicas preventivas e orientativas em toda a jurisdição. Durante as vistorias, os fiscais verificam a regularidade da Certidão de Regularidade Técnica (CRT), a presença do profissional responsável durante todo o horário de funcionamento e o cumprimento das boas práticas sanitárias.',
+    categoria: 'Fiscalização',
+    dataPublicacao: '05/11/2026',
+    autor: 'Assessoria de Comunicação',
+    imagemUrl: '',
+    destaque: true,
+    publicado: true,
+    ordem: 1
+  },
+  {
+    id: 'not-2',
+    titulo: 'Nova Resolução regulamenta procedimentos digitais de responsabilidade e renovação de certidão',
+    resumo: 'Diretrizes aprovadas em Plenário modernizam as normas de assistência plena e emissão eletrônica de documentos oficiais.',
+    conteudo: 'Aprovada em Sessão Plenária Ordinária, a nova normativa estabelece prazos reduzidos para tramitação eletrônica de processos de anotação de responsabilidade técnica, permitindo o acompanhamento integral das movimentações pelo Portal do Inscrito.',
+    categoria: 'Legislação',
+    dataPublicacao: '01/11/2026',
+    autor: 'Comissão de Legislação e Normas',
+    imagemUrl: '',
+    destaque: false,
+    publicado: true,
+    ordem: 2
+  },
+  {
+    id: 'not-3',
+    titulo: 'Abertura de canal público de Ouvidoria, LAI e Peticionamento Eletrônico',
+    resumo: 'Cidadãos e inscritos podem protocolar manifestações, pedidos da Lei de Acesso à Informação e consultas diretamente pelo site oficial.',
+    conteudo: 'Em conformidade com a Lei de Acesso à Informação (Lei nº 12.527/2011), o novo canal de peticionamento público integra solicitações enviadas pelo site diretamente à mesa de protocolos administrativos da autarquia, gerando número de acompanhamento imediato.',
+    categoria: 'Institucional',
+    dataPublicacao: '28/10/2026',
+    autor: 'Ouvidoria Geral',
+    imagemUrl: '',
+    destaque: false,
+    publicado: true,
+    ordem: 3
+  }
+];
+
+export const INITIAL_TRANSPARENCIA_DOCS: TransparenciaDocumento[] = [
+  {
+    id: 'transp-1',
+    titulo: 'Balanço Patrimonial Consolidado — Exercício 2025',
+    descricao: 'Demonstração analítica do ativo, passivo, patrimônio líquido e resultados acumulados da autarquia referente ao exercício financeiro encerrado.',
+    categoria: 'Balanço Patrimonial',
+    exercicio: 2025,
+    competencia: 'Anual (Consolidado)',
+    dataPublicacao: '31/03/2026',
+    valorTotal: 14850320.45,
+    responsavel: 'Departamento Contábil e Controladoria',
+    numeroDocumento: 'BP-2025/001',
+    publicado: true
+  },
+  {
+    id: 'transp-2',
+    titulo: 'Balanço Orçamentário — 3º Trimestre de 2026',
+    descricao: 'Comparativo detalhado entre a receita prevista e arrecadada e entre a despesa fixada, empenhada, liquidada e paga.',
+    categoria: 'Balanço Orçamentário',
+    exercicio: 2026,
+    competencia: '3º Trimestre (Jul–Set)',
+    dataPublicacao: '15/10/2026',
+    valorTotal: 9640180.00,
+    responsavel: 'Tesouraria e Assessoria Contábil',
+    numeroDocumento: 'BO-2026/003',
+    publicado: true
+  },
+  {
+    id: 'transp-3',
+    titulo: 'Demonstrativo de Receitas e Despesas — Outubro/2026',
+    descricao: 'Relação mensal de arrecadação de anuidades, taxas, emolumentos e execução de despesas correntes e de capital.',
+    categoria: 'Receitas e Despesas',
+    exercicio: 2026,
+    competencia: 'Outubro/2026',
+    dataPublicacao: '05/11/2026',
+    valorTotal: 1128450.80,
+    responsavel: 'Departamento Financeiro',
+    numeroDocumento: 'DRD-2026/010',
+    publicado: true
+  }
+];
 
 export interface CouncilConfig {
   sigla: string;
@@ -203,6 +348,9 @@ export interface CouncilConfig {
   // Configurações de Acesso dos Inscritos (PF e PJ) ao Sistema / Portal
   acessosInscritoPF?: RegraAcessoInscrito;
   acessosInscritoPJ?: RegraAcessoInscrito;
+
+  // Regras dinâmicas de cores dos protocolos (Vencido, Prazo próximo, Concluído, etc.)
+  protocoloRegrasCores?: ProtocoloCorRegra[];
 }
 
 export const DEFAULT_ACESSOS_INSCRITO_PF: RegraAcessoInscrito = {
@@ -360,7 +508,8 @@ export const DEFAULT_COUNCIL_CONFIG: CouncilConfig = {
   geolocalizacaoAtiva: true,
 
   acessosInscritoPF: DEFAULT_ACESSOS_INSCRITO_PF,
-  acessosInscritoPJ: DEFAULT_ACESSOS_INSCRITO_PJ
+  acessosInscritoPJ: DEFAULT_ACESSOS_INSCRITO_PJ,
+  protocoloRegrasCores: DEFAULT_PROTOCOLO_COR_REGRAS
 };
 
 
@@ -787,7 +936,7 @@ export const INITIAL_FUNCIONARIOS: Funcionario[] = [
     cargoNome: 'Desenvolvedor Master / Arquiteto de Software',
     setorId: 'setlot-7',
     setorNome: 'Tecnologia da Informação e Engenharia de Software',
-    permissoesModulos: ['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'],
+    permissoesModulos: ['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'website', 'transparencia', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'],
     ativo: true,
     dataAdmissao: '2020-01-01',
     senhaHash: '',
@@ -810,7 +959,7 @@ export const INITIAL_FUNCIONARIOS: Funcionario[] = [
     cargoNome: 'Analista de Tecnologia da Informação',
     setorId: 'setlot-7',
     setorNome: 'Tecnologia da Informação e Suporte (TI)',
-    permissoesModulos: ['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos'],
+    permissoesModulos: ['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'website', 'transparencia', 'portal_inscrito', 'configuracoes', 'microsservicos'],
     ativo: true,
     dataAdmissao: '2020-03-01',
     senhaHash: 'admin',
@@ -1063,6 +1212,10 @@ class StorageService {
   private currentAuthUser: AuthUser | null = null;
   private regrasAssistencia: RegraAssistenciaFarmaceutica[] = INITIAL_REGRAS_ASSISTENCIA;
   private councilConfig: CouncilConfig = DEFAULT_COUNCIL_CONFIG;
+  private siteConfig: SiteConfig = INITIAL_SITE_CONFIG;
+  private siteNoticias: SiteNoticia[] = INITIAL_SITE_NOTICIAS;
+  private siteBanners: SiteBanner[] = INITIAL_SITE_BANNERS;
+  private transparenciaDocs: TransparenciaDocumento[] = INITIAL_TRANSPARENCIA_DOCS;
   private isOnline: boolean = typeof navigator !== 'undefined' ? navigator.onLine : true;
   private isSupabaseConnected: boolean = false;
   private isSupabaseSyncing: boolean = false;
@@ -1336,7 +1489,10 @@ class StorageService {
           autoPreencherEnderecoCEP: parsed.autoPreencherEnderecoCEP ?? DEFAULT_COUNCIL_CONFIG.autoPreencherEnderecoCEP,
           situacoesImpedidasRT: Array.isArray(parsed.situacoesImpedidasRT) ? parsed.situacoesImpedidasRT : DEFAULT_COUNCIL_CONFIG.situacoesImpedidasRT,
           acessosInscritoPF: parsed.acessosInscritoPF ?? DEFAULT_COUNCIL_CONFIG.acessosInscritoPF,
-          acessosInscritoPJ: parsed.acessosInscritoPJ ?? DEFAULT_COUNCIL_CONFIG.acessosInscritoPJ
+          acessosInscritoPJ: parsed.acessosInscritoPJ ?? DEFAULT_COUNCIL_CONFIG.acessosInscritoPJ,
+          protocoloRegrasCores: Array.isArray(parsed.protocoloRegrasCores) && parsed.protocoloRegrasCores.length > 0
+            ? parsed.protocoloRegrasCores
+            : DEFAULT_PROTOCOLO_COR_REGRAS
         };
       }
 
@@ -1509,6 +1665,67 @@ class StorageService {
         } catch (e) {}
       }
 
+      // Carregamento de WebSITE (Configuração, Notícias, Banners) e Portal Transparência
+      const savedSiteCfg = localStorage.getItem(STORAGE_KEYS.WEBSITE_CONFIG);
+      if (savedSiteCfg) {
+        try {
+          const parsedSiteCfg = JSON.parse(savedSiteCfg);
+          this.siteConfig = {
+            ...INITIAL_SITE_CONFIG,
+            ...parsedSiteCfg,
+            noticiasPorPagina: Number(parsedSiteCfg.noticiasPorPagina) > 0 ? Number(parsedSiteCfg.noticiasPorPagina) : INITIAL_SITE_CONFIG.noticiasPorPagina,
+            menus: Array.isArray(parsedSiteCfg.menus) ? parsedSiteCfg.menus : INITIAL_SITE_CONFIG.menus,
+            transparenciaMenus: Array.isArray(parsedSiteCfg.transparenciaMenus) && parsedSiteCfg.transparenciaMenus.length > 0
+              ? parsedSiteCfg.transparenciaMenus
+              : DEFAULT_TRANSPARENCIA_MENUS
+          };
+        } catch {
+          this.siteConfig = { ...INITIAL_SITE_CONFIG };
+        }
+      } else {
+        this.siteConfig = { ...INITIAL_SITE_CONFIG };
+        safeSetLocalStorage(STORAGE_KEYS.WEBSITE_CONFIG, this.siteConfig);
+      }
+
+      const savedSiteNoticias = localStorage.getItem(STORAGE_KEYS.WEBSITE_NOTICIAS);
+      if (savedSiteNoticias) {
+        try {
+          const parsed = JSON.parse(savedSiteNoticias);
+          this.siteNoticias = Array.isArray(parsed) ? parsed : [...INITIAL_SITE_NOTICIAS];
+        } catch {
+          this.siteNoticias = [...INITIAL_SITE_NOTICIAS];
+        }
+      } else {
+        this.siteNoticias = [...INITIAL_SITE_NOTICIAS];
+        safeSetLocalStorage(STORAGE_KEYS.WEBSITE_NOTICIAS, this.siteNoticias);
+      }
+
+      const savedSiteBanners = localStorage.getItem(STORAGE_KEYS.WEBSITE_BANNERS);
+      if (savedSiteBanners) {
+        try {
+          const parsed = JSON.parse(savedSiteBanners);
+          this.siteBanners = Array.isArray(parsed) ? parsed : [...INITIAL_SITE_BANNERS];
+        } catch {
+          this.siteBanners = [...INITIAL_SITE_BANNERS];
+        }
+      } else {
+        this.siteBanners = [...INITIAL_SITE_BANNERS];
+        safeSetLocalStorage(STORAGE_KEYS.WEBSITE_BANNERS, this.siteBanners);
+      }
+
+      const savedTransp = localStorage.getItem(STORAGE_KEYS.TRANSPARENCIA_DOCS);
+      if (savedTransp) {
+        try {
+          const parsed = JSON.parse(savedTransp);
+          this.transparenciaDocs = Array.isArray(parsed) ? parsed : [...INITIAL_TRANSPARENCIA_DOCS];
+        } catch {
+          this.transparenciaDocs = [...INITIAL_TRANSPARENCIA_DOCS];
+        }
+      } else {
+        this.transparenciaDocs = [...INITIAL_TRANSPARENCIA_DOCS];
+        safeSetLocalStorage(STORAGE_KEYS.TRANSPARENCIA_DOCS, this.transparenciaDocs);
+      }
+
       // Migração automática dos dados atuais de empresas (Situação do Vínculo e Natureza de Atividade)
       this.migrateEmpresaDataToCadastrosBasicos();
     } catch (e) {
@@ -1521,6 +1738,10 @@ class StorageService {
       this.protocolos = INITIAL_PROTOCOLOS;
       this.formularios = INITIAL_DYNAMIC_FORMS;
       this.cadastrosBasicos = INITIAL_CADASTROS_BASICOS;
+      this.siteConfig = INITIAL_SITE_CONFIG;
+      this.siteNoticias = INITIAL_SITE_NOTICIAS;
+      this.siteBanners = INITIAL_SITE_BANNERS;
+      this.transparenciaDocs = INITIAL_TRANSPARENCIA_DOCS;
       this.migrateEmpresaDataToCadastrosBasicos();
     }
   }
@@ -2291,12 +2512,106 @@ class StorageService {
             proximoNumeroAutuacao: cfgData.proximo_numero_autuacao ?? this.councilConfig.proximoNumeroAutuacao,
             geolocalizacaoAtiva: cfgData.geolocalizacao_ativa ?? this.councilConfig.geolocalizacaoAtiva,
             acessosInscritoPF: cfgData.acessos_inscrito_pf ? { ...DEFAULT_ACESSOS_INSCRITO_PF, ...cfgData.acessos_inscrito_pf } : this.councilConfig.acessosInscritoPF,
-            acessosInscritoPJ: cfgData.acessos_inscrito_pj ? { ...DEFAULT_ACESSOS_INSCRITO_PJ, ...cfgData.acessos_inscrito_pj } : this.councilConfig.acessosInscritoPJ
+            acessosInscritoPJ: cfgData.acessos_inscrito_pj ? { ...DEFAULT_ACESSOS_INSCRITO_PJ, ...cfgData.acessos_inscrito_pj } : this.councilConfig.acessosInscritoPJ,
+            protocoloRegrasCores: Array.isArray(cfgData.protocolo_regras_cores) && cfgData.protocolo_regras_cores.length > 0
+              ? cfgData.protocolo_regras_cores
+              : (this.councilConfig.protocoloRegrasCores || DEFAULT_PROTOCOLO_COR_REGRAS)
           };
           safeSetLocalStorage(STORAGE_KEYS.COUNCIL_CONFIG, this.councilConfig);
         }
       } catch (e) {
         console.warn('Erro ao carregar council_config:', e);
+      }
+
+      // 13. Fetch Website Config, Notícias, Banners & Transparência
+      try {
+        const { data: wCfg, error: wCfgErr } = await supabase.from('website_config').select('*').limit(1).maybeSingle();
+        if (!wCfgErr && wCfg) {
+          this.siteConfig = {
+            ...this.siteConfig,
+            id: wCfg.id || 'default',
+            noticiasPorPagina: Number(wCfg.noticias_por_pagina) > 0 ? Number(wCfg.noticias_por_pagina) : this.siteConfig.noticiasPorPagina,
+            logoUrl: wCfg.logo_url ?? this.siteConfig.logoUrl,
+            tituloSite: wCfg.titulo_site ?? this.siteConfig.tituloSite,
+            subtituloSite: wCfg.subtitulo_site ?? this.siteConfig.subtituloSite,
+            menus: Array.isArray(wCfg.menus) ? wCfg.menus : this.siteConfig.menus,
+            transparenciaMenus: Array.isArray(wCfg.transparencia_menus) && wCfg.transparencia_menus.length > 0
+              ? wCfg.transparencia_menus
+              : (this.siteConfig.transparenciaMenus || DEFAULT_TRANSPARENCIA_MENUS)
+          };
+          safeSetLocalStorage(STORAGE_KEYS.WEBSITE_CONFIG, this.siteConfig);
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar website_config:', e);
+      }
+
+      try {
+        const { data: wNews, error: wNewsErr } = await supabase.from('website_noticias').select('*').order('ordem', { ascending: true });
+        if (!wNewsErr && Array.isArray(wNews) && wNews.length > 0) {
+          this.siteNoticias = wNews.map((n: any) => ({
+            id: n.id,
+            titulo: n.titulo,
+            resumo: n.resumo || '',
+            conteudo: n.conteudo || '',
+            categoria: n.categoria || 'Institucional',
+            dataPublicacao: n.data_publicacao || '',
+            autor: n.autor || 'Assessoria de Comunicação',
+            imagemUrl: n.imagem_url || '',
+            destaque: Boolean(n.destaque),
+            publicado: n.publicado !== false,
+            ordem: Number(n.ordem) || 0
+          }));
+          safeSetLocalStorage(STORAGE_KEYS.WEBSITE_NOTICIAS, this.siteNoticias);
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar website_noticias:', e);
+      }
+
+      try {
+        const { data: wBanners, error: wBanErr } = await supabase.from('website_banners').select('*').order('ordem', { ascending: true });
+        if (!wBanErr && Array.isArray(wBanners) && wBanners.length > 0) {
+          this.siteBanners = wBanners.map((b: any) => ({
+            id: b.id,
+            titulo: b.titulo,
+            subtitulo: b.subtitulo || '',
+            imagemUrl: b.imagem_url || '',
+            textoBotao: b.texto_botao || '',
+            linkDestino: b.link_destino || '',
+            ordem: Number(b.ordem) || 0,
+            ativo: b.ativo !== false
+          }));
+          safeSetLocalStorage(STORAGE_KEYS.WEBSITE_BANNERS, this.siteBanners);
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar website_banners:', e);
+      }
+
+      try {
+        const { data: tDocs, error: tDocsErr } = await supabase.from('transparencia_documentos').select('*').order('exercicio', { ascending: false });
+        if (!tDocsErr && Array.isArray(tDocs) && tDocs.length > 0) {
+          this.transparenciaDocs = tDocs.map((d: any) => ({
+            id: d.id,
+            titulo: d.titulo,
+            descricao: d.descricao || '',
+            categoria: d.categoria || 'Balanço Patrimonial',
+            exercicio: Number(d.exercicio) || new Date().getFullYear(),
+            competencia: d.competencia || '',
+            dataPublicacao: d.data_publicacao || '',
+            valorTotal: d.valor_total !== null && d.valor_total !== undefined ? Number(d.valor_total) : undefined,
+            responsavel: d.responsavel || '',
+            numeroDocumento: d.numero_documento || '',
+            arquivoNome: d.arquivo_nome || undefined,
+            arquivoTipo: d.arquivo_tipo || undefined,
+            arquivoTamanho: d.arquivo_tamanho !== null && d.arquivo_tamanho !== undefined ? Number(d.arquivo_tamanho) : undefined,
+            arquivoTamanhoBytes: d.arquivo_tamanho_bytes !== null && d.arquivo_tamanho_bytes !== undefined ? Number(d.arquivo_tamanho_bytes) : undefined,
+            arquivoUrl: d.arquivo_url || undefined,
+            storagePath: d.storage_path || undefined,
+            publicado: d.publicado !== false
+          }));
+          safeSetLocalStorage(STORAGE_KEYS.TRANSPARENCIA_DOCS, this.transparenciaDocs);
+        }
+      } catch (e) {
+        console.warn('Erro ao carregar transparencia_documentos:', e);
       }
     } catch (err) {
       console.warn('Supabase fetch failed, continuing with local dataset', err);
@@ -2382,7 +2697,8 @@ class StorageService {
         proximo_numero_autuacao: cfg.proximoNumeroAutuacao ?? 1,
         geolocalizacao_ativa: cfg.geolocalizacaoAtiva ?? true,
         acessos_inscrito_pf: cfg.acessosInscritoPF || DEFAULT_ACESSOS_INSCRITO_PF,
-        acessos_inscrito_pj: cfg.acessosInscritoPJ || DEFAULT_ACESSOS_INSCRITO_PJ
+        acessos_inscrito_pj: cfg.acessosInscritoPJ || DEFAULT_ACESSOS_INSCRITO_PJ,
+        protocolo_regras_cores: cfg.protocoloRegrasCores || DEFAULT_PROTOCOLO_COR_REGRAS
       };
 
       let { error: cfgErr } = await supabase.from('council_config').upsert(fullCfgPayload);
@@ -2849,6 +3165,91 @@ class StorageService {
         await this.syncSingleFuncionarioToSupabase(f);
       }
 
+      // 12. WebSITE Config, Notícias, Banners e Portal Transparência
+      try {
+        const { error: wCfgMigErr } = await supabase.from('website_config').upsert({
+          id: 'default',
+          noticias_por_pagina: this.siteConfig.noticiasPorPagina || 6,
+          logo_url: this.siteConfig.logoUrl || '',
+          titulo_site: this.siteConfig.tituloSite || '',
+          subtitulo_site: this.siteConfig.subtituloSite || '',
+          menus: this.siteConfig.menus || [],
+          transparencia_menus: this.siteConfig.transparenciaMenus || DEFAULT_TRANSPARENCIA_MENUS
+        }, { onConflict: 'id' });
+        if (wCfgMigErr && (wCfgMigErr.code === '42703' || String(wCfgMigErr.message).includes('column') || String(wCfgMigErr.message).includes('schema cache'))) {
+          await supabase.from('website_config').upsert({
+            id: 'default',
+            noticias_por_pagina: this.siteConfig.noticiasPorPagina || 6,
+            logo_url: this.siteConfig.logoUrl || '',
+            titulo_site: this.siteConfig.tituloSite || '',
+            subtitulo_site: this.siteConfig.subtituloSite || '',
+            menus: this.siteConfig.menus || []
+          }, { onConflict: 'id' });
+        }
+
+        if (this.siteNoticias.length > 0) {
+          await supabase.from('website_noticias').upsert(
+            this.siteNoticias.map((n, idx) => ({
+              id: n.id,
+              titulo: n.titulo,
+              resumo: n.resumo || '',
+              conteudo: n.conteudo || '',
+              categoria: n.categoria || 'Institucional',
+              data_publicacao: n.dataPublicacao || '',
+              autor: n.autor || '',
+              imagem_url: n.imagemUrl || '',
+              destaque: Boolean(n.destaque),
+              publicado: n.publicado !== false,
+              ordem: n.ordem ?? idx + 1
+            })),
+            { onConflict: 'id' }
+          );
+        }
+
+        if (this.siteBanners.length > 0) {
+          await supabase.from('website_banners').upsert(
+            this.siteBanners.map((b, idx) => ({
+              id: b.id,
+              titulo: b.titulo,
+              subtitulo: b.subtitulo || '',
+              imagem_url: b.imagemUrl || '',
+              texto_botao: b.textoBotao || '',
+              link_destino: b.linkDestino || '',
+              ordem: b.ordem ?? idx + 1,
+              ativo: b.ativo !== false
+            })),
+            { onConflict: 'id' }
+          );
+        }
+
+        if (this.transparenciaDocs.length > 0) {
+          await supabase.from('transparencia_documentos').upsert(
+            this.transparenciaDocs.map(d => ({
+              id: d.id,
+              titulo: d.titulo,
+              descricao: d.descricao || '',
+              categoria: d.categoria,
+              exercicio: Number(d.exercicio) || new Date().getFullYear(),
+              competencia: d.competencia || '',
+              data_publicacao: d.dataPublicacao || '',
+              valor_total: d.valorTotal ?? null,
+              responsavel: d.responsavel || '',
+              numero_documento: d.numeroDocumento || '',
+              arquivo_nome: d.arquivoNome || null,
+              arquivo_tipo: d.arquivoTipo || null,
+              arquivo_tamanho: d.arquivoTamanho ?? null,
+              arquivo_tamanho_bytes: d.arquivoTamanhoBytes ?? null,
+              arquivo_url: d.arquivoUrl || null,
+              storage_path: d.storagePath || null,
+              publicado: d.publicado !== false
+            })),
+            { onConflict: 'id' }
+          );
+        }
+      } catch (webErr) {
+        console.warn('Aviso ao migrar tabelas WebSITE/Transparência (verifique se o SQL foi executado):', webErr);
+      }
+
       this.isSupabaseConnected = true;
       this.lastSupabaseStatus = { connected: true };
       return {
@@ -3071,7 +3472,8 @@ class StorageService {
           proximo_numero_autuacao: this.councilConfig.proximoNumeroAutuacao ?? 1,
           geolocalizacao_ativa: this.councilConfig.geolocalizacaoAtiva ?? true,
           acessos_inscrito_pf: this.councilConfig.acessosInscritoPF || DEFAULT_ACESSOS_INSCRITO_PF,
-          acessos_inscrito_pj: this.councilConfig.acessosInscritoPJ || DEFAULT_ACESSOS_INSCRITO_PJ
+          acessos_inscrito_pj: this.councilConfig.acessosInscritoPJ || DEFAULT_ACESSOS_INSCRITO_PJ,
+          protocolo_regras_cores: this.councilConfig.protocoloRegrasCores || DEFAULT_PROTOCOLO_COR_REGRAS
         };
 
         const { error } = await supabase.from('council_config').upsert(fullPayload);
@@ -4458,7 +4860,7 @@ class StorageService {
 
       let effectivePerms: string[] = [];
       if (isMasterAdmin) {
-        effectivePerms = ['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'];
+        effectivePerms = ['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'website', 'transparencia', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'];
       } else if (Array.isArray(func.permissoesModulos) && func.permissoesModulos.length > 0) {
         effectivePerms = func.permissoesModulos.map(m => String(m).toLowerCase().trim());
       } else {
@@ -7531,11 +7933,15 @@ class StorageService {
 
         let effectivePerms: string[] = [];
         if (isDeveloper) {
-          effectivePerms = ['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'];
+          effectivePerms = ['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'website', 'transparencia', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'];
         } else if (Array.isArray(func.permissoesModulos) && func.permissoesModulos.length > 0) {
           effectivePerms = func.permissoesModulos.map(m => String(m).toLowerCase().trim());
+          if (isMasterAdmin || effectivePerms.includes('configuracoes')) {
+            if (!effectivePerms.includes('website')) effectivePerms.push('website');
+            if (!effectivePerms.includes('transparencia')) effectivePerms.push('transparencia');
+          }
         } else {
-          effectivePerms = ['dashboard'];
+          effectivePerms = isMasterAdmin ? ['dashboard', 'website', 'transparencia'] : ['dashboard'];
         }
 
         const perfilFunc: AuthProfile = {
@@ -7727,11 +8133,15 @@ class StorageService {
 
         let effectivePerms: string[] = [];
         if (isDeveloper) {
-          effectivePerms = ['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'];
+          effectivePerms = ['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'website', 'transparencia', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'];
         } else if (Array.isArray(func.permissoesModulos) && func.permissoesModulos.length > 0) {
           effectivePerms = func.permissoesModulos.map(m => String(m).toLowerCase().trim());
+          if (isMasterAdmin || effectivePerms.includes('configuracoes')) {
+            if (!effectivePerms.includes('website')) effectivePerms.push('website');
+            if (!effectivePerms.includes('transparencia')) effectivePerms.push('transparencia');
+          }
         } else {
-          effectivePerms = ['dashboard'];
+          effectivePerms = isMasterAdmin ? ['dashboard', 'website', 'transparencia'] : ['dashboard'];
         }
 
         const perfilFunc: AuthProfile = {
@@ -8241,7 +8651,7 @@ class StorageService {
       this.currentAuthUser.permissoes = [
         'dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 
         'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 
-        'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'
+        'formularios', 'website', 'transparencia', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'
       ];
       if (!this.currentAuthUser.perfisDisponiveis || this.currentAuthUser.perfisDisponiveis.length === 0) {
         const available = this.getAvailableProfilesForDoc(cleanDoc);
@@ -8261,7 +8671,12 @@ class StorageService {
           return null;
         }
         if (Array.isArray(found.permissoesModulos)) {
-          this.currentAuthUser.permissoes = found.permissoesModulos.map(m => String(m).toLowerCase().trim());
+          const perms = found.permissoesModulos.map(m => String(m).toLowerCase().trim());
+          if (this.currentAuthUser.role === 'ADMIN' || perms.includes('configuracoes')) {
+            if (!perms.includes('website')) perms.push('website');
+            if (!perms.includes('transparencia')) perms.push('transparencia');
+          }
+          this.currentAuthUser.permissoes = perms;
         }
         this.currentAuthUser.nome = found.nome;
         this.currentAuthUser.cargoOuTitulo = `${found.cargoNome} (${found.setorNome})`;
@@ -8309,6 +8724,215 @@ class StorageService {
     try {
       localStorage.setItem(STORAGE_KEYS.REMEMBERED_DOC, doc);
     } catch (e) {}
+  }
+
+  // ============================================================================
+  // MÓDULO WEBSITE (CONFIGURAÇÃO, NOTÍCIAS E BANNERS) & PORTAL TRANSPARÊNCIA
+  // ============================================================================
+
+  public getSiteConfig(): SiteConfig {
+    return this.siteConfig;
+  }
+
+  public updateSiteConfig(cfg: Partial<SiteConfig>): SiteConfig {
+    this.siteConfig = {
+      ...this.siteConfig,
+      ...cfg,
+      noticiasPorPagina: Number(cfg.noticiasPorPagina ?? this.siteConfig.noticiasPorPagina) > 0
+        ? Number(cfg.noticiasPorPagina ?? this.siteConfig.noticiasPorPagina)
+        : 6,
+      menus: cfg.menus ?? this.siteConfig.menus,
+      transparenciaMenus: cfg.transparenciaMenus ?? this.siteConfig.transparenciaMenus ?? DEFAULT_TRANSPARENCIA_MENUS
+    };
+    safeSetLocalStorage(STORAGE_KEYS.WEBSITE_CONFIG, this.siteConfig);
+
+    if (this.isOnline) {
+      runBackgroundSupabase((async () => {
+        const { error } = await supabase.from('website_config').upsert({
+          id: 'default',
+          noticias_por_pagina: this.siteConfig.noticiasPorPagina,
+          logo_url: this.siteConfig.logoUrl || '',
+          titulo_site: this.siteConfig.tituloSite || '',
+          subtitulo_site: this.siteConfig.subtituloSite || '',
+          menus: this.siteConfig.menus || [],
+          transparencia_menus: this.siteConfig.transparenciaMenus || DEFAULT_TRANSPARENCIA_MENUS
+        }, { onConflict: 'id' });
+        if (error && (error.code === '42703' || String(error.message).includes('column') || String(error.message).includes('schema cache'))) {
+          await supabase.from('website_config').upsert({
+            id: 'default',
+            noticias_por_pagina: this.siteConfig.noticiasPorPagina,
+            logo_url: this.siteConfig.logoUrl || '',
+            titulo_site: this.siteConfig.tituloSite || '',
+            subtitulo_site: this.siteConfig.subtituloSite || '',
+            menus: this.siteConfig.menus || []
+          }, { onConflict: 'id' });
+        } else if (error && !String(error.message).includes('does not exist')) {
+          console.warn('Erro ao salvar website_config:', error.message);
+        }
+      })(), 'updateSiteConfig');
+    }
+
+    this.notify();
+    return this.siteConfig;
+  }
+
+  public getSiteNoticias(apenasPublicadas: boolean = false): SiteNoticia[] {
+    const sorted = [...this.siteNoticias].sort((a, b) => (a.ordem ?? 999) - (b.ordem ?? 999));
+    return apenasPublicadas ? sorted.filter(n => n.publicado !== false) : sorted;
+  }
+
+  public saveSiteNoticia(noticia: SiteNoticia): SiteNoticia {
+    const normalized: SiteNoticia = {
+      ...noticia,
+      id: noticia.id || `not-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      publicado: noticia.publicado !== false,
+      ordem: noticia.ordem ?? (this.siteNoticias.length + 1)
+    };
+    const idx = this.siteNoticias.findIndex(n => n.id === normalized.id);
+    if (idx >= 0) {
+      this.siteNoticias[idx] = normalized;
+    } else {
+      this.siteNoticias.unshift(normalized);
+    }
+    safeSetLocalStorage(STORAGE_KEYS.WEBSITE_NOTICIAS, this.siteNoticias);
+
+    if (this.isOnline) {
+      runBackgroundSupabase(
+        supabase.from('website_noticias').upsert({
+          id: normalized.id,
+          titulo: normalized.titulo,
+          resumo: normalized.resumo || '',
+          conteudo: normalized.conteudo || '',
+          categoria: normalized.categoria || 'Institucional',
+          data_publicacao: normalized.dataPublicacao || '',
+          autor: normalized.autor || 'Assessoria de Comunicação',
+          imagem_url: normalized.imagemUrl || '',
+          destaque: Boolean(normalized.destaque),
+          publicado: normalized.publicado,
+          ordem: normalized.ordem || 0
+        }, { onConflict: 'id' }),
+        'saveSiteNoticia'
+      );
+    }
+
+    this.notify();
+    return normalized;
+  }
+
+  public deleteSiteNoticia(id: string): void {
+    this.siteNoticias = this.siteNoticias.filter(n => n.id !== id);
+    safeSetLocalStorage(STORAGE_KEYS.WEBSITE_NOTICIAS, this.siteNoticias);
+    if (this.isOnline) {
+      runBackgroundSupabase(supabase.from('website_noticias').delete().eq('id', id), 'deleteSiteNoticia');
+    }
+    this.notify();
+  }
+
+  public getSiteBanners(apenasAtivos: boolean = false): SiteBanner[] {
+    const sorted = [...this.siteBanners].sort((a, b) => (a.ordem ?? 999) - (b.ordem ?? 999));
+    return apenasAtivos ? sorted.filter(b => b.ativo !== false) : sorted;
+  }
+
+  public saveSiteBanner(banner: SiteBanner): SiteBanner {
+    const normalized: SiteBanner = {
+      ...banner,
+      id: banner.id || `ban-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      ativo: banner.ativo !== false,
+      ordem: Number(banner.ordem) || (this.siteBanners.length + 1)
+    };
+    const idx = this.siteBanners.findIndex(b => b.id === normalized.id);
+    if (idx >= 0) {
+      this.siteBanners[idx] = normalized;
+    } else {
+      this.siteBanners.push(normalized);
+    }
+    safeSetLocalStorage(STORAGE_KEYS.WEBSITE_BANNERS, this.siteBanners);
+
+    if (this.isOnline) {
+      runBackgroundSupabase(
+        supabase.from('website_banners').upsert({
+          id: normalized.id,
+          titulo: normalized.titulo,
+          subtitulo: normalized.subtitulo || '',
+          imagem_url: normalized.imagemUrl || '',
+          texto_botao: normalized.textoBotao || '',
+          link_destino: normalized.linkDestino || '',
+          ordem: normalized.ordem,
+          ativo: normalized.ativo
+        }, { onConflict: 'id' }),
+        'saveSiteBanner'
+      );
+    }
+
+    this.notify();
+    return normalized;
+  }
+
+  public deleteSiteBanner(id: string): void {
+    this.siteBanners = this.siteBanners.filter(b => b.id !== id);
+    safeSetLocalStorage(STORAGE_KEYS.WEBSITE_BANNERS, this.siteBanners);
+    if (this.isOnline) {
+      runBackgroundSupabase(supabase.from('website_banners').delete().eq('id', id), 'deleteSiteBanner');
+    }
+    this.notify();
+  }
+
+  public getTransparenciaDocumentos(apenasPublicados: boolean = false): TransparenciaDocumento[] {
+    const sorted = [...this.transparenciaDocs].sort((a, b) => (b.exercicio || 0) - (a.exercicio || 0));
+    return apenasPublicados ? sorted.filter(d => d.publicado !== false) : sorted;
+  }
+
+  public saveTransparenciaDocumento(doc: TransparenciaDocumento): TransparenciaDocumento {
+    const normalized: TransparenciaDocumento = {
+      ...doc,
+      id: doc.id || `transp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      exercicio: Number(doc.exercicio) || new Date().getFullYear(),
+      publicado: doc.publicado !== false
+    };
+    const idx = this.transparenciaDocs.findIndex(d => d.id === normalized.id);
+    if (idx >= 0) {
+      this.transparenciaDocs[idx] = normalized;
+    } else {
+      this.transparenciaDocs.unshift(normalized);
+    }
+    safeSetLocalStorage(STORAGE_KEYS.TRANSPARENCIA_DOCS, this.transparenciaDocs);
+
+    if (this.isOnline) {
+      runBackgroundSupabase(
+        supabase.from('transparencia_documentos').upsert({
+          id: normalized.id,
+          titulo: normalized.titulo,
+          descricao: normalized.descricao || '',
+          categoria: normalized.categoria,
+          exercicio: normalized.exercicio,
+          competencia: normalized.competencia || '',
+          data_publicacao: normalized.dataPublicacao || '',
+          valor_total: normalized.valorTotal ?? null,
+          responsavel: normalized.responsavel || '',
+          numero_documento: normalized.numeroDocumento || '',
+          arquivo_nome: normalized.arquivoNome || null,
+          arquivo_tipo: normalized.arquivoTipo || null,
+          arquivo_tamanho: normalized.arquivoTamanho ?? null,
+          arquivo_tamanho_bytes: normalized.arquivoTamanhoBytes ?? null,
+          arquivo_url: normalized.arquivoUrl || null,
+          storage_path: normalized.storagePath || null,
+          publicado: normalized.publicado
+        }, { onConflict: 'id' }),
+        'saveTransparenciaDocumento'
+      );
+    }
+
+    this.notify();
+    return normalized;
+  }
+
+  public deleteTransparenciaDocumento(id: string): void {
+    this.transparenciaDocs = this.transparenciaDocs.filter(d => d.id !== id);
+    safeSetLocalStorage(STORAGE_KEYS.TRANSPARENCIA_DOCS, this.transparenciaDocs);
+    if (this.isOnline) {
+      runBackgroundSupabase(supabase.from('transparencia_documentos').delete().eq('id', id), 'deleteTransparenciaDocumento');
+    }
+    this.notify();
   }
 }
 
