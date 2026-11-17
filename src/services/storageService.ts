@@ -1779,8 +1779,10 @@ class StorageService {
 
       // 4.5. Fetch Funcionários
       try {
-        const { data: funcData } = await supabase.from('funcionarios').select('*');
-        if (funcData && funcData.length > 0) {
+        const { data: funcData, error: funcErr } = await supabase.from('funcionarios').select('*');
+        if (funcErr) {
+          console.warn('Erro ao carregar funcionarios do Supabase:', funcErr.message);
+        } else if (funcData && funcData.length > 0) {
           const remoteFuncs: Funcionario[] = funcData.map(f => ({
             id: f.id,
             nome: f.nome,
@@ -1810,17 +1812,26 @@ class StorageService {
             responsavelPermissaoProtocolos: f.responsavel_permissao_protocolos || 'TODOS'
           }));
 
+          const cleanDigits = (v?: string) => (v || '').replace(/\D/g, '');
           const remoteIds = new Set(remoteFuncs.map(rf => rf.id));
-          const localOnly = this.funcionarios.filter(lf => !remoteIds.has(lf.id));
+          const remoteCpfs = new Set(remoteFuncs.map(rf => cleanDigits(rf.cpf)).filter(Boolean));
+          const localOnly = this.funcionarios.filter(lf => {
+            const c = cleanDigits(lf.cpf);
+            return !remoteIds.has(lf.id) && (!c || !remoteCpfs.has(c));
+          });
 
           this.funcionarios = [...localOnly, ...remoteFuncs];
-          localStorage.setItem(STORAGE_KEYS.FUNCIONARIOS, JSON.stringify(this.funcionarios));
+          safeSetLocalStorage(STORAGE_KEYS.FUNCIONARIOS, this.funcionarios);
 
           if (localOnly.length > 0 && this.isOnline) {
-            localOnly.forEach(lf => this.saveFuncionario(lf));
+            localOnly.forEach(lf => {
+              runBackgroundSupabase(this.syncSingleFuncionarioToSupabase(lf), 'fetchFuncionariosSeedSync');
+            });
           }
         } else if (this.funcionarios && this.funcionarios.length > 0 && this.isOnline) {
-          this.funcionarios.forEach(lf => this.saveFuncionario(lf));
+          this.funcionarios.forEach(lf => {
+            runBackgroundSupabase(this.syncSingleFuncionarioToSupabase(lf), 'fetchFuncionariosInitialSeed');
+          });
         }
       } catch (e) {
         console.warn('Erro ao carregar funcionarios:', e);
@@ -2833,38 +2844,9 @@ class StorageService {
         if (aErr) console.warn('Aviso ao migrar histórico de auditoria:', aErr.message);
       }
 
-      // 11. Funcionários
-      const funcRows = this.funcionarios.map(f => ({
-        id: f.id,
-        nome: f.nome,
-        cpf: f.cpf,
-        rg: f.rg || '',
-        matricula: f.matricula || ('FUNC-' + (f.id || '').slice(-4)),
-        email: f.email || '',
-        telefone: f.telefone || '',
-        celular: f.celular || '',
-        foto_url: f.fotoUrl || null,
-        cargo_id: f.cargoId || '',
-        cargo_nome: f.cargoNome || '',
-        setor_id: f.setorId || '',
-        setor_nome: f.setorNome || '',
-        permissoes_modulos: f.permissoesModulos || [],
-        ativo: f.ativo ?? true,
-        data_admissao: f.dataAdmissao || '',
-        senha_hash: f.senhaHash || null,
-        primeiro_acesso_pendente: f.primeiroAcessoPendente ?? false,
-        zerar_senha_pendente: f.zerarSenhaPendente ?? false,
-        ultimo_acesso: f.ultimoAcesso || 'Nunca acessou',
-        observacoes: f.observacoes || null,
-        possui_inscricao_profissional: f.possuiInscricaoProfissional ?? false,
-        numero_inscricao_profissional: f.numeroInscricaoProfissional || null,
-        setor_permissao_protocolos: f.setorPermissaoProtocolos || 'APENAS_MEU',
-        setores_permitidos_protocolos: f.setoresPermitidosProtocolos || [],
-        responsavel_permissao_protocolos: f.responsavelPermissaoProtocolos || 'TODOS'
-      }));
-      if (funcRows.length > 0) {
-        const { error: funcErr } = await supabase.from('funcionarios').upsert(funcRows, { onConflict: 'id' });
-        if (funcErr) throw new Error(`Falha ao migrar Funcionários: ${funcErr.message}`);
+      // 11. Funcionários (com deduplicação por CPF e fallback de colunas/UUID)
+      for (const f of this.funcionarios) {
+        await this.syncSingleFuncionarioToSupabase(f);
       }
 
       this.isSupabaseConnected = true;
@@ -6254,7 +6236,7 @@ class StorageService {
       prazoResposta: prazoCalculado,
       status: statusInicial,
       setorAtual: setorDestino,
-      anexos: resposta.anexos && resposta.anexos.length > 0 ? resposta.anexos.map(a => a.nome) : ['Requerimento_Submetido.pdf'],
+      anexos: resposta.anexos && resposta.anexos.length > 0 ? resposta.anexos.map(a => a.nome) : [],
       anexosDetalhados: resposta.anexos || [],
       historico: [
         {
@@ -7269,43 +7251,90 @@ class StorageService {
 
     safeSetLocalStorage(STORAGE_KEYS.FUNCIONARIOS, this.funcionarios);
     if (this.isOnline) {
-      runBackgroundSupabase((async () => {
-        const { error } = await supabase.from('funcionarios').upsert({
-          id: sanitized.id,
-          nome: sanitized.nome,
-          cpf: sanitized.cpf,
-          rg: sanitized.rg || '',
-          matricula: sanitized.matricula,
-          email: sanitized.email,
-          telefone: sanitized.telefone || '',
-          celular: sanitized.celular || '',
-          foto_url: sanitized.fotoUrl || null,
-          cargo_id: sanitized.cargoId || '',
-          cargo_nome: sanitized.cargoNome || '',
-          setor_id: sanitized.setorId || '',
-          setor_nome: sanitized.setorNome || '',
-          permissoes_modulos: sanitized.permissoesModulos || [],
-          ativo: sanitized.ativo,
-          data_admissao: sanitized.dataAdmissao,
-          senha_hash: sanitized.senhaHash,
-          primeiro_acesso_pendente: sanitized.primeiroAcessoPendente,
-          zerar_senha_pendente: sanitized.zerarSenhaPendente,
-          ultimo_acesso: sanitized.ultimoAcesso,
-          observacoes: sanitized.observacoes || null,
-          possui_inscricao_profissional: sanitized.possuiInscricaoProfissional ?? false,
-          numero_inscricao_profissional: sanitized.numeroInscricaoProfissional || null,
-          setor_permissao_protocolos: sanitized.setorPermissaoProtocolos || 'APENAS_MEU',
-          setores_permitidos_protocolos: sanitized.setoresPermitidosProtocolos || [],
-          responsavel_permissao_protocolos: sanitized.responsavelPermissaoProtocolos || 'TODOS'
-        }, { onConflict: 'id' });
-        if (error) {
-          this.addSyncError('Funcionários', sanitized.nome, error.message);
-        }
-      })(), 'saveFuncionario');
+      runBackgroundSupabase(this.syncSingleFuncionarioToSupabase(sanitized), 'saveFuncionario');
     }
 
     this.notify();
     return { success: true };
+  }
+
+  private async syncSingleFuncionarioToSupabase(sanitized: Funcionario): Promise<{ success: boolean; error?: string }> {
+    try {
+      const baseFields = {
+        nome: sanitized.nome,
+        cpf: sanitized.cpf,
+        rg: sanitized.rg || '',
+        matricula: sanitized.matricula || ('FUNC-' + (sanitized.id || '').slice(-4)),
+        email: sanitized.email || '',
+        telefone: sanitized.telefone || '',
+        celular: sanitized.celular || '',
+        foto_url: sanitized.fotoUrl || null,
+        cargo_id: sanitized.cargoId || '',
+        cargo_nome: sanitized.cargoNome || '',
+        setor_id: sanitized.setorId || '',
+        setor_nome: sanitized.setorNome || '',
+        permissoes_modulos: sanitized.permissoesModulos || [],
+        ativo: sanitized.ativo ?? true,
+        data_admissao: sanitized.dataAdmissao || '',
+        senha_hash: sanitized.senhaHash || null,
+        primeiro_acesso_pendente: sanitized.primeiroAcessoPendente ?? false,
+        zerar_senha_pendente: sanitized.zerarSenhaPendente ?? false,
+        ultimo_acesso: sanitized.ultimoAcesso || 'Nunca acessou',
+        observacoes: sanitized.observacoes || null
+      };
+
+      const extendedFields = {
+        ...baseFields,
+        possui_inscricao_profissional: sanitized.possuiInscricaoProfissional ?? false,
+        numero_inscricao_profissional: sanitized.numeroInscricaoProfissional || null,
+        setor_permissao_protocolos: sanitized.setorPermissaoProtocolos || 'APENAS_MEU',
+        setores_permitidos_protocolos: sanitized.setoresPermitidosProtocolos || [],
+        responsavel_permissao_protocolos: sanitized.responsavelPermissaoProtocolos || 'TODOS'
+      };
+
+      let { error } = await supabase
+        .from('funcionarios')
+        .upsert({ id: sanitized.id, ...extendedFields }, { onConflict: 'id' });
+
+      // Fallback caso colunas estendidas ainda não existam no banco
+      if (error && (error.code === '42703' || error.message.includes('column') || error.message.includes('schema cache'))) {
+        const retryBase = await supabase
+          .from('funcionarios')
+          .upsert({ id: sanitized.id, ...baseFields }, { onConflict: 'id' });
+        error = retryBase.error;
+      }
+
+      // Fallback caso o CPF já exista no Supabase sob outro ID (ex: UUID gerado anteriormente) ou id ainda seja UUID no banco
+      if (error && (error.code === '23505' || (error.code === '22P02' && error.message.toLowerCase().includes('uuid')))) {
+        const { data: existingByCpf } = await supabase
+          .from('funcionarios')
+          .select('id')
+          .eq('cpf', sanitized.cpf)
+          .maybeSingle();
+
+        if (existingByCpf?.id) {
+          let upd = await supabase.from('funcionarios').update(extendedFields).eq('id', existingByCpf.id);
+          if (upd.error && (upd.error.code === '42703' || upd.error.message.includes('column') || upd.error.message.includes('schema cache'))) {
+            upd = await supabase.from('funcionarios').update(baseFields).eq('id', existingByCpf.id);
+          }
+          error = upd.error;
+        }
+      }
+
+      if (error) {
+        const friendlyMsg = error.code === '22P02' && error.message.toLowerCase().includes('uuid')
+          ? `Coluna "id" de funcionários no Supabase ainda é UUID. Execute o script SQL do Monitor de Erros no SQL Editor. (${error.message})`
+          : error.message;
+        this.addSyncError('Funcionários', sanitized.nome, friendlyMsg);
+        return { success: false, error: friendlyMsg };
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      const msg = err?.message || 'Erro desconhecido ao sincronizar funcionário';
+      this.addSyncError('Funcionários', sanitized.nome, msg);
+      return { success: false, error: msg };
+    }
   }
 
   public deleteFuncionario(id: string): { success: boolean; message?: string } {

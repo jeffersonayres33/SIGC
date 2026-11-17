@@ -39,6 +39,7 @@ import { toastService } from '../../services/toastService';
 import { maskCEP, fetchAddressByCEP, maskPhone } from '../../utils/documentUtils';
 import { isRecursoPFLiberado, isRecursoPJLiberado } from '../../utils/permissionUtils';
 import { DynamicFieldRenderer } from '../formularios/DynamicFieldRenderer';
+import { uploadOriginalFile, formatAttachmentSize, StoredAttachment } from '../../services/fileStorageService';
 
 interface PortalViewProps {
   viewMode?: 'PROFISSIONAL' | 'EMPRESA' | 'ANUIDADE_PF' | 'PROTOCOLO_PF' | 'REQUERIMENTO_PF' | 'FORMULARIOS_PF' | 'ANUIDADE_PJ' | 'PROTOCOLO_PJ' | 'REQUERIMENTO_PJ' | 'FORMULARIOS_PJ';
@@ -64,7 +65,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ viewMode = 'PROFISSIONAL
   // Modal para preenchimento de formulário dinâmico no portal
   const [formDinamicoAtivo, setFormDinamicoAtivo] = useState<FormularioDinamico | null>(null);
   const [respostasForm, setRespostasForm] = useState<Record<string, any>>({});
-  const [anexosForm, setAnexosForm] = useState<{ nome: string; tamanhoMb: number; tipo: string; url: string }[]>([]);
+  const [anexosForm, setAnexosForm] = useState<StoredAttachment[]>([]);
   const [buscaForm, setBuscaForm] = useState('');
   const [isAnonimoSubmit, setIsAnonimoSubmit] = useState(false);
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
@@ -1320,7 +1321,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ viewMode = 'PROFISSIONAL
                     dataEnvio: new Date().toLocaleDateString('pt-BR') + ' às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
                     respostas: respostasForm,
                     dadosCampos: respostasForm,
-                    anexos: anexosForm.map(a => ({ nome: a.nome, tamanho: Math.round(a.tamanhoMb * 1024), tipo: a.tipo, url: a.url })),
+                    anexos: anexosForm,
                     status: formDinamicoAtivo.statusProtocoloInicial || 'Em Análise'
                   };
 
@@ -1394,26 +1395,31 @@ export const PortalView: React.FC<PortalViewProps> = ({ viewMode = 'PROFISSIONAL
                       type="file"
                       multiple
                       accept={formDinamicoAtivo.tiposAnexosPermitidos?.join(',') || '.pdf,.docx,.jpg,.png'}
-                      onChange={(e) => {
+                      onChange={async (e) => {
                         const files = e.target.files;
                         if (!files || files.length === 0) return;
-                        Array.from(files).forEach(file => {
-                          const reader = new FileReader();
-                          reader.onload = () => {
-                            setAnexosForm(prev => [
-                              ...prev,
-                              {
-                                nome: file.name,
-                                tamanhoMb: Number((file.size / (1024 * 1024)).toFixed(2)),
-                                tipo: file.type || 'documento',
-                                url: reader.result as string
-                              }
-                            ]);
-                          };
-                          reader.readAsDataURL(file);
-                        });
-                        toastService.info('Anexo Adicionado', `${files.length} arquivo(s) carregado(s).`);
+                        const limiteMB = formDinamicoAtivo.tamanhoMaximoMb || 10;
+                        const fileList = Array.from(files);
                         e.target.value = '';
+
+                        let added = 0;
+                        for (const file of fileList) {
+                          const sizeMb = file.size / (1024 * 1024);
+                          if (sizeMb > limiteMB) {
+                            toastService.warning('Arquivo Excede o Limite', `"${file.name}" (${sizeMb.toFixed(2)} MB) excede ${limiteMB} MB.`);
+                            continue;
+                          }
+                          try {
+                            const stored = await uploadOriginalFile(file, 'portal');
+                            setAnexosForm(prev => [...prev, stored]);
+                            added++;
+                          } catch {
+                            toastService.error('Erro no Anexo', `Não foi possível ler o arquivo "${file.name}".`);
+                          }
+                        }
+                        if (added > 0) {
+                          toastService.info('Anexo Adicionado', `${added} arquivo(s) original(is) carregado(s) sem alterações.`);
+                        }
                       }}
                       className="w-full text-xs text-slate-600 cursor-pointer"
                     />
@@ -1422,7 +1428,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ viewMode = 'PROFISSIONAL
                       <div className="space-y-1 pt-1">
                         {anexosForm.map((anx, idx) => (
                           <div key={idx} className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-200 text-xs">
-                            <span className="truncate max-w-xs text-slate-800 font-medium">{anx.nome} ({anx.tamanhoMb} MB)</span>
+                            <span className="truncate max-w-xs text-slate-800 font-medium">{anx.nome} ({formatAttachmentSize(anx)})</span>
                             <button
                               type="button"
                               onClick={() => setAnexosForm(prev => prev.filter((_, i) => i !== idx))}

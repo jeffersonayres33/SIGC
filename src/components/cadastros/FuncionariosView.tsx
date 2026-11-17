@@ -544,8 +544,17 @@ export const FuncionariosView: React.FC<FuncionariosViewProps> = ({ onNavigateTo
       ? String(editingFunc.matricula).trim()
       : storageService.peekNextMatriculaFuncionario();
 
+    const generatedId =
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+            const r = (Math.random() * 16) | 0;
+            const v = c === 'x' ? r : (r & 0x3) | 0x8;
+            return v.toString(16);
+          });
+
     const payload: Funcionario = {
-      id: editingFunc.id || `func_${Date.now()}`,
+      id: editingFunc.id || generatedId,
       nome: editingFunc.nome.trim(),
       cpf: maskCPF(cleanCpf),
       rg: editingFunc.rg || '',

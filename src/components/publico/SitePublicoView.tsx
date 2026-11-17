@@ -27,6 +27,7 @@ import { storageService, CouncilConfig } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
 import { SIGCON_LOGO } from '../../constants/assets';
 import { DynamicFieldRenderer } from '../formularios/DynamicFieldRenderer';
+import { uploadOriginalFile, formatAttachmentSize, StoredAttachment } from '../../services/fileStorageService';
 
 interface SitePublicoViewProps {
   councilConfig?: CouncilConfig;
@@ -105,7 +106,7 @@ export const SitePublicoView: React.FC<SitePublicoViewProps> = ({
   // Estado do modal de preenchimento de formulário
   const [activeFormModal, setActiveFormModal] = useState<FormularioDinamico | null>(null);
   const [formResponses, setFormResponses] = useState<Record<string, any>>({});
-  const [anexosSelecionados, setAnexosSelecionados] = useState<{ nome: string; tamanho: number; tipo: string; url?: string }[]>([]);
+  const [anexosSelecionados, setAnexosSelecionados] = useState<StoredAttachment[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [protocoloSucesso, setProtocoloSucesso] = useState<string | null>(null);
 
@@ -116,30 +117,36 @@ export const SitePublicoView: React.FC<SitePublicoViewProps> = ({
     setProtocoloSucesso(null);
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64Url = reader.result as string;
-        const tamanhoKB = Math.round(file.size / 1024);
-        setAnexosSelecionados(prev => [
-          ...prev,
-          {
-            nome: file.name,
-            tamanho: tamanhoKB,
-            tipo: file.type || 'documento',
-            url: base64Url
-          } as any
-        ]);
-      };
-      reader.readAsDataURL(file);
-    });
-
-    toastService.info('Anexo Adicionado', `${files.length} arquivo(s) selecionado(s) com sucesso.`);
+    const limiteMB = activeFormModal?.tamanhoMaximoMb || councilConfig.tamanhoMaximoAnexoMb || 15;
+    const fileList = Array.from(files);
     e.target.value = '';
+
+    let adicionados = 0;
+    for (const file of fileList) {
+      const tamanhoMB = file.size / (1024 * 1024);
+      if (tamanhoMB > limiteMB) {
+        toastService.warning(
+          'Arquivo Excede o Limite',
+          `O arquivo "${file.name}" (${tamanhoMB.toFixed(2)} MB) excede o máximo de ${limiteMB} MB.`
+        );
+        continue;
+      }
+      try {
+        const stored = await uploadOriginalFile(file, 'site-publico');
+        setAnexosSelecionados(prev => [...prev, stored]);
+        adicionados++;
+      } catch {
+        toastService.error('Erro no Anexo', `Não foi possível processar o arquivo "${file.name}".`);
+      }
+    }
+
+    if (adicionados > 0) {
+      toastService.info('Anexo Adicionado', `${adicionados} arquivo(s) original(is) carregado(s) sem alterações.`);
+    }
   };
 
   const handleRemoveAnexo = (index: number) => {
@@ -573,7 +580,7 @@ export const SitePublicoView: React.FC<SitePublicoViewProps> = ({
                             <div key={idx} className="flex items-center justify-between p-2 bg-white border border-purple-200 rounded-xl text-xs">
                               <span className="font-semibold text-slate-800 truncate max-w-sm flex items-center gap-1.5">
                                 <FileText className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                                <span>{anexo.nome} ({anexo.tamanho} KB)</span>
+                                <span>{anexo.nome} ({formatAttachmentSize(anexo)})</span>
                               </span>
                               <button
                                 type="button"

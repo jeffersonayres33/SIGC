@@ -539,7 +539,16 @@ export interface ProtocoloProcesso {
   parecerRelator?: string;
   decisaoPlenario?: string;
   anexos: string[];
-  anexosDetalhados?: { nome: string; tamanho: number; tipo: string; url?: string }[];
+  anexosDetalhados?: {
+    nome: string;
+    tamanho: number;
+    tamanhoBytes?: number;
+    tipo: string;
+    url?: string;
+    storagePath?: string;
+    armazenamento?: 'SUPABASE_STORAGE' | 'DATA_URL';
+    dataUpload?: string;
+  }[];
   conteudoCompletoFormulario?: Record<string, any>;
   historico: {
     data: string;
@@ -633,7 +642,16 @@ export interface RespostaFormulario {
   dataEnvio: string; // ISO ou DD/MM/AAAA HH:mm
   respostas?: Record<string, any>;
   dadosCampos?: Record<string, any>;
-  anexos?: { nome: string; tamanho: number; tipo: string; url?: string; dataUpload?: string }[];
+  anexos?: {
+    nome: string;
+    tamanho: number;
+    tamanhoBytes?: number;
+    tipo: string;
+    url?: string;
+    storagePath?: string;
+    armazenamento?: 'SUPABASE_STORAGE' | 'DATA_URL';
+    dataUpload?: string;
+  }[];
   status: 'Em Análise' | 'Aprovado' | 'Indeferido' | 'Concluído' | 'Pendente' | string;
 }
 

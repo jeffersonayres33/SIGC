@@ -362,7 +362,43 @@ const SQL_SCHEMA_SNIPPET = `-- =================================================
 -- Use o botão "Copiar Script SQL Completo" acima para copiar a versão integral.
 -- ==============================================================================
 
--- Atualização crítica para Formulários Dinâmicos e Protocolos (Site Público & Portais):
+-- 0. Converte colunas legadas UUID -> TEXT (elimina "invalid input syntax for type uuid"):
+DO $$
+DECLARE
+    pol RECORD;
+    fk RECORD;
+    col RECORD;
+    target_tables text[] := ARRAY[
+        'council_config', 'cadastros_basicos', 'regras_assistencia',
+        'profissionais', 'empresas', 'lancamentos_financeiros',
+        'processos_cobranca', 'termos_fiscalizacao', 'protocolos_processos',
+        'formularios_dinamicos', 'respostas_formularios', 'historico_vinculos_profissionais',
+        'historico_auditoria', 'funcionarios', 'perfis_permissoes_usuario'
+    ];
+BEGIN
+    FOR pol IN SELECT tablename, policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = ANY(target_tables) LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I;', pol.policyname, pol.tablename);
+    END LOOP;
+    FOR fk IN SELECT tc.table_name, tc.constraint_name FROM information_schema.table_constraints tc WHERE tc.table_schema = 'public' AND tc.constraint_type = 'FOREIGN KEY' AND tc.table_name = ANY(target_tables) LOOP
+        EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT IF EXISTS %I;', fk.table_name, fk.constraint_name);
+    END LOOP;
+    FOR col IN SELECT c.table_name, c.column_name FROM information_schema.columns c WHERE c.table_schema = 'public' AND c.data_type = 'uuid' AND c.table_name = ANY(target_tables) LOOP
+        EXECUTE format('ALTER TABLE public.%I ALTER COLUMN %I DROP DEFAULT;', col.table_name, col.column_name);
+        EXECUTE format('ALTER TABLE public.%I ALTER COLUMN %I TYPE TEXT USING %I::text;', col.table_name, col.column_name, col.column_name);
+        IF col.column_name = 'id' AND col.table_name <> 'council_config' THEN
+            EXECUTE format('ALTER TABLE public.%I ALTER COLUMN id SET DEFAULT gen_random_uuid()::text;', col.table_name);
+        END IF;
+    END LOOP;
+END $$;
+
+-- Atualização crítica para Formulários Dinâmicos, Protocolos e Funcionários:
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'FUNCIONARIO';
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS possui_inscricao_profissional BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS numero_inscricao_profissional VARCHAR(50);
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS setor_permissao_protocolos VARCHAR(50) DEFAULT 'APENAS_MEU';
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS setores_permitidos_protocolos TEXT[] DEFAULT '{}';
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS responsavel_permissao_protocolos VARCHAR(50) DEFAULT 'TODOS';
+
 ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS assunto TEXT;
 ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS tipo_interessado VARCHAR(30) DEFAULT 'PUBLICO';
 ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS vinculo_id TEXT;

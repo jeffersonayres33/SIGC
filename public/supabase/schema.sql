@@ -16,6 +16,58 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ------------------------------------------------------------------------------
+-- 0. MIGRAÇÃO AUTOMÁTICA DE COLUNAS LEGADAS UUID -> TEXT (COMPATIBILIDADE TOTAL)
+-- Garante que IDs textuais (ex: 'func-admin-master', 'func_179...', 'prot-...')
+-- não falhem com "invalid input syntax for type uuid" em bancos já existentes.
+-- ------------------------------------------------------------------------------
+DO $$
+DECLARE
+    pol RECORD;
+    fk RECORD;
+    col RECORD;
+    target_tables text[] := ARRAY[
+        'council_config', 'cadastros_basicos', 'regras_assistencia',
+        'profissionais', 'empresas', 'lancamentos_financeiros',
+        'processos_cobranca', 'termos_fiscalizacao', 'protocolos_processos',
+        'formularios_dinamicos', 'respostas_formularios', 'historico_vinculos_profissionais',
+        'historico_auditoria', 'funcionarios', 'perfis_permissoes_usuario'
+    ];
+BEGIN
+    FOR pol IN
+        SELECT tablename, policyname
+        FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename = ANY(target_tables)
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I;', pol.policyname, pol.tablename);
+    END LOOP;
+
+    FOR fk IN
+        SELECT tc.table_name, tc.constraint_name
+        FROM information_schema.table_constraints tc
+        WHERE tc.table_schema = 'public'
+          AND tc.constraint_type = 'FOREIGN KEY'
+          AND tc.table_name = ANY(target_tables)
+    LOOP
+        EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT IF EXISTS %I;', fk.table_name, fk.constraint_name);
+    END LOOP;
+
+    FOR col IN
+        SELECT c.table_name, c.column_name
+        FROM information_schema.columns c
+        WHERE c.table_schema = 'public'
+          AND c.data_type = 'uuid'
+          AND c.table_name = ANY(target_tables)
+    LOOP
+        EXECUTE format('ALTER TABLE public.%I ALTER COLUMN %I DROP DEFAULT;', col.table_name, col.column_name);
+        EXECUTE format('ALTER TABLE public.%I ALTER COLUMN %I TYPE TEXT USING %I::text;', col.table_name, col.column_name, col.column_name);
+        IF col.column_name = 'id' AND col.table_name <> 'council_config' THEN
+            EXECUTE format('ALTER TABLE public.%I ALTER COLUMN id SET DEFAULT gen_random_uuid()::text;', col.table_name);
+        END IF;
+    END LOOP;
+END $$;
+
+-- ------------------------------------------------------------------------------
 -- 1. CONFIGURAÇÃO DO CONSELHO
 -- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.council_config (
@@ -880,39 +932,46 @@ ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS setor_permissao_protoco
 ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS setores_permitidos_protocolos TEXT[] DEFAULT '{}';
 ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS responsavel_permissao_protocolos VARCHAR(50) DEFAULT 'TODOS';
 
-INSERT INTO public.funcionarios (
-    id, nome, cpf, rg, matricula, email, telefone, celular, foto_url,
-    cargo_id, cargo_nome, setor_id, setor_nome,
-    permissoes_modulos, ativo, data_admissao, senha_hash,
-    primeiro_acesso_pendente, zerar_senha_pendente, ultimo_acesso, observacoes
-) VALUES (
-    '00000000-0000-4000-a000-000000000001',
-    'Jefferson Ayres (Desenvolvedor)',
-    '934.135.302-59',
-    'DEV-SYSTEM-MASTER',
-    'DEV-001',
-    'jeffersonayresjefferson@gmail.com',
-    '(92) 99999-9999',
-    '(92) 99999-9999',
-    'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=256',
-    'crg-dev',
-    'Desenvolvedor Master / Arquiteto de Software',
-    'setlot-7',
-    'Tecnologia da Informação e Engenharia de Software',
-    ARRAY['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'],
-    TRUE,
-    '2020-01-01',
-    NULL,
-    TRUE,
-    FALSE,
-    'Aguardando primeiro acesso',
-    'Desenvolvedor Master com autoridade máxima acima do Administrador.'
-)
-ON CONFLICT (cpf) DO UPDATE SET
-    nome = EXCLUDED.nome,
-    cargo_nome = EXCLUDED.cargo_nome,
-    permissoes_modulos = EXCLUDED.permissoes_modulos,
-    ativo = TRUE;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM public.funcionarios WHERE cpf = '934.135.302-59') THEN
+        UPDATE public.funcionarios SET
+            nome = 'Jefferson Ayres (Desenvolvedor)',
+            cargo_nome = 'Desenvolvedor Master / Arquiteto de Software',
+            permissoes_modulos = ARRAY['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'],
+            ativo = TRUE
+        WHERE cpf = '934.135.302-59';
+    ELSE
+        INSERT INTO public.funcionarios (
+            id, nome, cpf, rg, matricula, email, telefone, celular, foto_url,
+            cargo_id, cargo_nome, setor_id, setor_nome,
+            permissoes_modulos, ativo, data_admissao, senha_hash,
+            primeiro_acesso_pendente, zerar_senha_pendente, ultimo_acesso, observacoes
+        ) VALUES (
+            '00000000-0000-4000-a000-000000000001',
+            'Jefferson Ayres (Desenvolvedor)',
+            '934.135.302-59',
+            'DEV-SYSTEM-MASTER',
+            'DEV-001',
+            'jeffersonayresjefferson@gmail.com',
+            '(92) 99999-9999',
+            '(92) 99999-9999',
+            'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=256',
+            'crg-dev',
+            'Desenvolvedor Master / Arquiteto de Software',
+            'setlot-7',
+            'Tecnologia da Informação e Engenharia de Software',
+            ARRAY['dashboard', 'profissionais', 'empresas', 'cadastros_basicos', 'funcionarios', 'financeiro', 'cobranca_juridico', 'fiscalizacao', 'protocolos', 'relatorios', 'formularios', 'portal_inscrito', 'configuracoes', 'microsservicos', 'backup_restore', 'admin'],
+            TRUE,
+            '2020-01-01',
+            NULL,
+            TRUE,
+            FALSE,
+            'Aguardando primeiro acesso',
+            'Desenvolvedor Master com autoridade máxima acima do Administrador.'
+        );
+    END IF;
+END $$;
 
 -- ------------------------------------------------------------------------------
 -- 14. TABELA DE PERMISSÕES E PERFIS DE USUÁRIOS
@@ -989,3 +1048,21 @@ BEGIN
         END IF;
     END LOOP;
 END $$;
+
+-- ------------------------------------------------------------------------------
+-- 16. OBJECT STORAGE PARA ARQUIVOS ORIGINAIS (BUCKET `sigcon-documentos`)
+-- Preserva os arquivos exatamente como enviados sem inflar o PostgreSQL
+-- ------------------------------------------------------------------------------
+DO $$
+BEGIN
+    IF to_regclass('storage.buckets') IS NOT NULL THEN
+        INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+        VALUES ('sigcon-documentos', 'sigcon-documentos', true, 52428800, NULL)
+        ON CONFLICT (id) DO UPDATE SET public = true, file_size_limit = 52428800;
+
+        DROP POLICY IF EXISTS "Public access sigcon-documentos" ON storage.objects;
+        CREATE POLICY "Public access sigcon-documentos" ON storage.objects
+            FOR ALL USING (bucket_id = 'sigcon-documentos') WITH CHECK (bucket_id = 'sigcon-documentos');
+    END IF;
+END $$;
+

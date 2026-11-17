@@ -36,6 +36,12 @@ import { FormularioDinamico, FormFieldConfig, RespostaFormulario } from '../../t
 import { storageService } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
 import { DynamicFieldRenderer } from './DynamicFieldRenderer';
+import {
+  uploadOriginalFile,
+  downloadOriginalAttachment,
+  formatAttachmentSize,
+  StoredAttachment
+} from '../../services/fileStorageService';
 
 export const FormulariosView: React.FC = () => {
   const [formularios, setFormularios] = useState<FormularioDinamico[]>(storageService.getFormularios());
@@ -73,7 +79,7 @@ export const FormulariosView: React.FC = () => {
 
   // Preview & Simulação de Envio
   const [previewAnswers, setPreviewAnswers] = useState<Record<string, any>>({});
-  const [previewAnexos, setPreviewAnexos] = useState<{ nome: string; tamanho: number; tipo: string; url?: string }[]>([]);
+  const [previewAnexos, setPreviewAnexos] = useState<StoredAttachment[]>([]);
 
   // Filtros de Estatísticas
   const [filtroPeriodo, setFiltroPeriodo] = useState<'DIA' | 'MES' | 'ANO' | 'TODOS'>('MES');
@@ -267,19 +273,26 @@ export const FormulariosView: React.FC = () => {
     setFormToDelete(null);
   };
 
-  const handleSimularUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSimularUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const list = Array.from(files).map((f) => ({
-      nome: f.name,
-      tamanho: Number((f.size / (1024 * 1024)).toFixed(2)),
-      tipo: f.name.split('.').pop()?.toUpperCase() || 'ARQ',
-      url: '#'
-    }));
+    const fileList = Array.from(files);
+    e.target.value = '';
+    const uploaded: StoredAttachment[] = [];
+    for (const f of fileList) {
+      try {
+        const stored = await uploadOriginalFile(f, 'formularios');
+        uploaded.push(stored);
+      } catch {
+        toastService.error('Erro no Anexo', `Não foi possível ler "${f.name}".`);
+      }
+    }
 
-    setPreviewAnexos([...previewAnexos, ...list]);
-    toastService.info('Documento Anexado', `${list.length} arquivo(s) adicionado(s) para simulação de envio.`);
+    if (uploaded.length > 0) {
+      setPreviewAnexos(prev => [...prev, ...uploaded]);
+      toastService.info('Documento Anexado', `${uploaded.length} arquivo(s) original(is) carregado(s) sem alterações.`);
+    }
   };
 
   const handleSimularEnvio = async (e: React.FormEvent) => {
@@ -612,7 +625,7 @@ export const FormulariosView: React.FC = () => {
                             <div className="flex items-center space-x-2">
                               <FileText className="w-3.5 h-3.5 text-blue-600" />
                               <span className="font-medium text-slate-800">{arq.nome}</span>
-                              <span className="text-[10px] text-slate-400 font-mono">({arq.tamanho} MB)</span>
+                              <span className="text-[10px] text-slate-400 font-mono">({formatAttachmentSize(arq)})</span>
                             </div>
                             <button
                               type="button"
@@ -1288,15 +1301,27 @@ export const FormulariosView: React.FC = () => {
                   <span className="font-bold text-slate-900 block mb-2">Arquivos Anexados ({selectedRespostaModal.anexos.length}):</span>
                   <div className="space-y-1.5">
                     {selectedRespostaModal.anexos.map((arq, idx) => (
-                      <div key={idx} className="p-2.5 bg-amber-50/70 border border-amber-200 rounded-xl flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <FileText className="w-4 h-4 text-amber-700" />
-                          <span className="font-bold text-slate-800">{arq.nome}</span>
-                          <span className="text-[10px] text-slate-400">({arq.tamanho || (arq as any).tamanhoMb || 1} MB)</span>
+                      <div key={idx} className="p-2.5 bg-amber-50/70 border border-amber-200 rounded-xl flex items-center justify-between gap-2">
+                        <div className="flex items-center space-x-2 truncate">
+                          <FileText className="w-4 h-4 text-amber-700 shrink-0" />
+                          <span className="font-bold text-slate-800 truncate">{arq.nome}</span>
+                          <span className="text-[10px] text-slate-400 shrink-0">({formatAttachmentSize(arq as any)})</span>
                         </div>
-                        <span className="text-[10px] text-amber-800 font-bold bg-white px-2 py-0.5 rounded border border-amber-200">
-                          Autenticado
-                        </span>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const res = await downloadOriginalAttachment(arq);
+                            if (res.ok) {
+                              toastService.success('Download Concluído', `Arquivo original "${arq.nome}" baixado sem alterações.`);
+                            } else {
+                              toastService.warning('Arquivo Indisponível', res.reason || 'Sem conteúdo binário armazenado.');
+                            }
+                          }}
+                          className="flex items-center space-x-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-[10px] transition-colors cursor-pointer shrink-0"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>Baixar Original</span>
+                        </button>
                       </div>
                     ))}
                   </div>

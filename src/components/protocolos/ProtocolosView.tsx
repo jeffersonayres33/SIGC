@@ -39,13 +39,20 @@ import {
   ArrowUp,
   ArrowDown
 } from 'lucide-react';
-import jsPDF from 'jspdf';
 import { ProtocoloProcesso, ItemCadastroBasico, Profissional, Empresa, Funcionario } from '../../types';
 import { storageService } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
 import { maskCPF, maskCNPJ, sanitizeToUpper } from '../../utils/documentUtils';
 import { exportToCSV, exportToPDF } from '../../services/exportService';
 import { isMasterDeveloper } from '../../utils/permissionUtils';
+import {
+  uploadOriginalFile,
+  downloadOriginalAttachment,
+  formatAttachmentSize,
+  normalizeDataUrlHeader,
+  isValidDownloadableUrl,
+  StoredAttachment
+} from '../../services/fileStorageService';
 
 export function formatEnderecoOuJson(texto: string | undefined): string {
   if (!texto) return '';
@@ -97,12 +104,13 @@ export const ProtocolosView: React.FC = () => {
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState<string | null>(null);
 
   // Anexos do Novo Protocolo & Modal de Visualização de Anexos
-  const [novoProtAnexos, setNovoProtAnexos] = useState<{ nome: string; tamanho: number; tipo: string; url: string }[]>([]);
+  const [novoProtAnexos, setNovoProtAnexos] = useState<StoredAttachment[]>([]);
   const [modalPreviewAnexo, setModalPreviewAnexo] = useState<{
     nome: string;
     url?: string;
     tipo?: string;
     tamanho?: number;
+    tamanhoBytes?: number;
   } | null>(null);
   const [protocoloToDelete, setProtocoloToDelete] = useState<ProtocoloProcesso | null>(null);
 
@@ -218,178 +226,79 @@ export const ProtocolosView: React.FC = () => {
     responsavel: ''
   });
 
-  const handleNovoProtFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNovoProtFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     const limiteMB = storageService.getCouncilConfig().tamanhoMaximoAnexoMb || 10;
-    let adicionados = 0;
+    const fileList = Array.from(files);
+    e.target.value = '';
 
-    Array.from(files).forEach((file) => {
-      const tamanhoMB = parseFloat((file.size / (1024 * 1024)).toFixed(2)) || 0.1;
+    let adicionados = 0;
+    for (const file of fileList) {
+      const tamanhoMB = parseFloat((file.size / (1024 * 1024)).toFixed(2)) || 0.01;
       if (tamanhoMB > limiteMB) {
         toastService.warning(
           'Arquivo Excede o Limite',
           `O arquivo "${file.name}" (${tamanhoMB} MB) excede o limite máximo permitido de ${limiteMB} MB configurado em Painel > Configurações > Geral.`
         );
-        return;
+        continue;
       }
 
-      const reader = new FileReader();
-      reader.onload = () => {
-        const base64Url = reader.result as string;
-        setNovoProtAnexos((prev) => [
-          ...prev,
-          {
-            nome: file.name,
-            tamanho: tamanhoMB,
-            tipo: file.type || 'application/octet-stream',
-            url: base64Url
-          }
-        ]);
-      };
-      reader.readAsDataURL(file);
-      adicionados++;
-    });
+      try {
+        const stored = await uploadOriginalFile(file, 'protocolos');
+        setNovoProtAnexos((prev) => [...prev, stored]);
+        adicionados++;
+      } catch (err) {
+        console.error('Erro ao carregar arquivo:', err);
+        toastService.error('Erro no Anexo', `Não foi possível ler o arquivo "${file.name}".`);
+      }
+    }
 
     if (adicionados > 0) {
-      toastService.info('Anexo Adicionado', `${adicionados} documento(s) anexado(s) ao novo protocolo.`);
+      toastService.info('Anexo Adicionado', `${adicionados} documento(s) original(is) anexado(s) sem alterações.`);
     }
-    e.target.value = '';
   };
 
-  const generateCertificadoPdf = (arq: { nome: string; url?: string; tipo?: string }, processo: ProtocoloProcesso | null) => {
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
-    
-    // Header
-    doc.setFillColor(15, 23, 42); // slate-900
-    doc.rect(0, 0, 595, 65, 'F');
-    doc.setFillColor(217, 119, 6); // amber-600
-    doc.rect(0, 65, 595, 4, 'F');
+  const resolveAttachmentWithSource = (arq: { nome: string; url?: string; tipo?: string; tamanho?: number; tamanhoBytes?: number }) => {
+    const candidateUrl = normalizeDataUrlHeader(arq.url);
+    if (isValidDownloadableUrl(candidateUrl)) {
+      return { ...arq, url: candidateUrl };
+    }
 
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(13);
-    doc.setFont('helvetica', 'bold');
-    doc.text('SIGCON CLOUD - CERTIDÃO ELETRÔNICA DE DOCUMENTO', 30, 32);
+    // Tenta localizar pelos anexos detalhados do processo ou da resposta do formulário vinculada
+    const fromDet = selectedProcesso?.anexosDetalhados?.find((a) => a.nome === arq.nome && isValidDownloadableUrl(a.url));
+    if (fromDet) {
+      return { ...arq, ...fromDet, url: normalizeDataUrlHeader(fromDet.url) };
+    }
 
-    doc.setFontSize(8.5);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(203, 213, 225);
-    doc.text(`Sistema Integrado de Gestão do Conselho | Autenticação ICP-Brasil`, 30, 48);
+    if (selectedProcesso?.numeroProtocolo) {
+      const resp = storageService.getRespostasFormularios().find((r) => r.protocoloGerado === selectedProcesso.numeroProtocolo);
+      const fromResp = resp?.anexos?.find((a) => a.nome === arq.nome && isValidDownloadableUrl(a.url));
+      if (fromResp) {
+        return { ...arq, ...fromResp, url: normalizeDataUrlHeader(fromResp.url) };
+      }
+    }
 
-    // Document Title Box
-    doc.setTextColor(15, 23, 42);
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    const safeName = arq.nome.toUpperCase().replace(/[^\w\s\.-]/gi, '');
-    doc.text(`DOCUMENTO AUTUADO: ${safeName}`, 30, 105);
-
-    doc.setFontSize(9.5);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(71, 85, 105);
-    doc.text(`Certificamos que o documento abaixo integra formalmente os autos do processo eletrônico:`, 30, 125);
-
-    // Table Box
-    doc.setFillColor(248, 250, 252);
-    doc.rect(30, 145, 535, 140, 'F');
-    doc.setDrawColor(226, 232, 240);
-    doc.rect(30, 145, 535, 140, 'S');
-
-    doc.setFontSize(9.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 41, 59);
-
-    doc.text(`NÚMERO DO PROTOCOLO:`, 45, 175);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`${processo?.numeroProtocolo || 'PROT-2026/OFFICIAL'}`, 220, 175);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text(`INTERESSADO / REQUERENTE:`, 45, 200);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`${processo?.interessado || 'REQUERENTE REGISTRADO'}`, 220, 200);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text(`DOCUMENTO DO REQUERENTE:`, 45, 225);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`${processo?.documentoInteressado || 'AUTENTICADO'}`, 220, 225);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text(`TIPO DE REQUERIMENTO:`, 45, 250);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`${processo?.tipo || 'Processo Administrativo'}`, 220, 250);
-
-    doc.setFont('helvetica', 'bold');
-    doc.text(`NOME DO ARQUIVO ANEXADO:`, 45, 272);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`${arq.nome}`, 220, 272);
-
-    // Stamp Box
-    doc.setFillColor(236, 253, 245);
-    doc.rect(30, 310, 535, 55, 'F');
-    doc.setDrawColor(167, 243, 208);
-    doc.rect(30, 310, 535, 55, 'S');
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(6, 95, 70);
-    doc.text(`ASSINATURA E AUTENTICIDADE ELETRÔNICA CONFIRMADAS`, 45, 332);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text(`Documento emitido e assinado digitalmente em conformidade com a MP 2.200-2/2001 e normas do SIGCON Cloud.`, 45, 350);
-
-    return doc;
+    return { ...arq, url: candidateUrl || '' };
   };
 
-  const handleDownloadAnexo = (arq: { nome: string; url?: string; tipo?: string }) => {
-    if (arq.url && arq.url.startsWith('data:')) {
-      const a = document.createElement('a');
-      a.href = arq.url;
-      a.download = arq.nome;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      toastService.success('Download Concluído', `Arquivo ${arq.nome} baixado com sucesso.`);
-      return;
+  const handleDownloadAnexo = async (arq: { nome: string; url?: string; tipo?: string; tamanho?: number; tamanhoBytes?: number }) => {
+    const resolved = resolveAttachmentWithSource(arq);
+    const result = await downloadOriginalAttachment(resolved);
+    if (result.ok) {
+      toastService.success('Download Concluído', `Arquivo original "${resolved.nome}" baixado sem alterações.`);
+    } else {
+      toastService.warning(
+        'Arquivo Original Indisponível',
+        result.reason || `Não há conteúdo binário armazenado para "${resolved.nome}".`
+      );
     }
-
-    // Se o arquivo é PDF ou não tem URL data: gera um arquivo PDF oficial com jsPDF para não corromper no leitor PDF
-    if (arq.nome.toLowerCase().endsWith('.pdf') || !arq.nome.includes('.')) {
-      const doc = generateCertificadoPdf(arq, selectedProcesso);
-      const pdfFileName = arq.nome.toLowerCase().endsWith('.pdf') ? arq.nome : `${arq.nome}.pdf`;
-      doc.save(pdfFileName);
-      toastService.success('Download Concluído', `Documento PDF ${pdfFileName} gerado e baixado com sucesso.`);
-      return;
-    }
-
-    // Caso seja outro formato sem data URL direta (ex: txt, doc), gera um arquivo texto
-    const content = `SIGCON Cloud - Documento Digital Autenticado\n` +
-      `============================================================\n` +
-      `Protocolo: ${selectedProcesso?.numeroProtocolo || 'N/A'}\n` +
-      `Interessado: ${selectedProcesso?.interessado || 'N/A'}\n` +
-      `Documento: ${selectedProcesso?.documentoInteressado || 'N/A'}\n` +
-      `Nome do Arquivo: ${arq.nome}\n` +
-      `Data de Emissão: ${new Date().toLocaleString('pt-BR')}\n` +
-      `Certificação: ASSINATURA ELETRÔNICA ICP-BRASIL / SIGCON VINCULADO\n` +
-      `============================================================\n`;
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = arq.nome;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toastService.success('Download Concluído', `Arquivo ${arq.nome} gerado e baixado com sucesso.`);
   };
 
-  const handleVisualizarAnexo = (arq: { nome: string; url?: string; tipo?: string; tamanho?: number }) => {
-    const item = { ...arq };
-    if (!item.url && (item.nome.toLowerCase().endsWith('.pdf') || !item.nome.includes('.'))) {
-      const doc = generateCertificadoPdf(item, selectedProcesso);
-      item.url = doc.output('datauristring');
-    }
-    setModalPreviewAnexo(item);
+  const handleVisualizarAnexo = (arq: { nome: string; url?: string; tipo?: string; tamanho?: number; tamanhoBytes?: number }) => {
+    const resolved = resolveAttachmentWithSource(arq);
+    setModalPreviewAnexo(resolved);
   };
 
   const handleOpenNewModal = () => {
@@ -671,7 +580,7 @@ export const ProtocolosView: React.FC = () => {
       status: (novoProt.status || cadastrosStatus[0]?.nome || 'Em Análise') as any,
       setorAtual: novoProt.setorAtual || cadastrosSetores[0]?.nome || 'Secretaria Geral',
       conselheiroRelator: novoProt.conselheiroRelator ? novoProt.conselheiroRelator.trim().toUpperCase() : undefined,
-      anexos: novoProtAnexos.length > 0 ? novoProtAnexos.map(a => a.nome) : ['Requerimento_Autuacao.pdf'],
+      anexos: novoProtAnexos.length > 0 ? novoProtAnexos.map(a => a.nome) : [],
       anexosDetalhados: novoProtAnexos.length > 0 ? novoProtAnexos : undefined,
       historico: [
         {
@@ -683,7 +592,7 @@ export const ProtocolosView: React.FC = () => {
       ]
     };
 
-    const novo = sanitizeToUpper(rawProt, ['id', 'anexos', 'contatoEmail']);
+    const novo = sanitizeToUpper(rawProt, ['id', 'anexos', 'anexosDetalhados', 'url', 'contatoEmail', 'conteudoCompletoFormulario']);
     storageService.saveProtocolo(novo);
     setIsNewModal(false);
 
@@ -1345,7 +1254,7 @@ export const ProtocolosView: React.FC = () => {
                           <FileText className="w-3.5 h-3.5 text-amber-700 shrink-0" />
                           <div className="truncate">
                             <span className="font-bold text-slate-800 block truncate">{arq.nome}</span>
-                            <span className="text-[10px] text-slate-400 font-mono">{arq.tamanho} MB • Autenticado</span>
+                            <span className="text-[10px] text-slate-400 font-mono">{formatAttachmentSize(arq)} • Arquivo Original</span>
                           </div>
                         </div>
                         <div className="flex items-center space-x-1.5 shrink-0">
@@ -1939,7 +1848,7 @@ export const ProtocolosView: React.FC = () => {
                         <div className="flex items-center space-x-2 truncate">
                           <FileText className="w-3.5 h-3.5 text-amber-700 shrink-0" />
                           <span className="font-bold text-slate-800 truncate">{arq.nome}</span>
-                          <span className="text-[10px] text-slate-400 font-mono">({arq.tamanho} MB)</span>
+                          <span className="text-[10px] text-slate-400 font-mono">({formatAttachmentSize(arq)})</span>
                         </div>
                         <button
                           type="button"
@@ -2604,44 +2513,78 @@ export const ProtocolosView: React.FC = () => {
             </div>
 
             <div className="p-5 overflow-y-auto flex-1 flex flex-col items-center justify-center bg-slate-100 min-h-[350px]">
-              {modalPreviewAnexo.url && modalPreviewAnexo.url.startsWith('data:image/') ? (
-                <img 
-                  src={modalPreviewAnexo.url} 
-                  alt={modalPreviewAnexo.nome} 
-                  className="max-w-full max-h-[65vh] object-contain rounded-xl shadow-md" 
-                />
-              ) : modalPreviewAnexo.url && modalPreviewAnexo.url.startsWith('data:application/pdf') ? (
-                <iframe 
-                  src={modalPreviewAnexo.url} 
-                  title={modalPreviewAnexo.nome} 
-                  className="w-full h-[65vh] rounded-xl border border-slate-300 shadow-xs" 
-                />
-              ) : (
-                <div className="p-8 bg-white border border-slate-200 rounded-2xl max-w-lg w-full text-center space-y-4 shadow-sm">
-                  <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center mx-auto">
-                    <FileText className="w-8 h-8" />
-                  </div>
-                  <div>
-                    <h4 className="font-extrabold text-slate-900 text-sm uppercase">{modalPreviewAnexo.nome}</h4>
-                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                      Documento oficial autuado no processo. Clique no botão abaixo para baixar o arquivo completo e visualizar no seu leitor de documentos.
+              {(() => {
+                const previewUrl = normalizeDataUrlHeader(modalPreviewAnexo.url);
+                const hasBinary = isValidDownloadableUrl(previewUrl);
+                const lowerNome = (modalPreviewAnexo.nome || '').toLowerCase();
+                const lowerTipo = (modalPreviewAnexo.tipo || '').toLowerCase();
+                const isImage = hasBinary && (
+                  previewUrl.startsWith('data:image/') ||
+                  lowerTipo.startsWith('image/') ||
+                  /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(lowerNome)
+                );
+                const isPdf = hasBinary && (
+                  previewUrl.startsWith('data:application/pdf') ||
+                  lowerTipo === 'application/pdf' ||
+                  /\.pdf(\?.*)?$/i.test(lowerNome)
+                );
+
+                if (isImage) {
+                  return (
+                    <img
+                      src={previewUrl}
+                      alt={modalPreviewAnexo.nome}
+                      className="max-w-full max-h-[65vh] object-contain rounded-xl shadow-md"
+                    />
+                  );
+                }
+
+                if (isPdf) {
+                  return (
+                    <iframe
+                      src={previewUrl}
+                      title={modalPreviewAnexo.nome}
+                      className="w-full h-[65vh] rounded-xl border border-slate-300 shadow-xs bg-white"
+                    />
+                  );
+                }
+
+                if (hasBinary) {
+                  return (
+                    <div className="p-8 bg-white border border-slate-200 rounded-2xl max-w-lg w-full text-center space-y-4 shadow-sm">
+                      <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 border border-blue-100 flex items-center justify-center mx-auto">
+                        <FileText className="w-8 h-8" />
+                      </div>
+                      <div>
+                        <h4 className="font-extrabold text-slate-900 text-sm">{modalPreviewAnexo.nome}</h4>
+                        <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                          Pré-visualização embutida indisponível para este formato de arquivo. Baixe o arquivo original intacto para abri-lo no aplicativo apropriado.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadAnexo(modalPreviewAnexo)}
+                        className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs uppercase shadow-sm flex items-center justify-center space-x-2 cursor-pointer"
+                      >
+                        <Download className="w-4 h-4" />
+                        <span>Baixar Arquivo Original</span>
+                      </button>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="p-8 bg-white border border-amber-200 rounded-2xl max-w-lg w-full text-center space-y-3 shadow-sm">
+                    <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200 flex items-center justify-center mx-auto">
+                      <AlertTriangle className="w-7 h-7" />
+                    </div>
+                    <h4 className="font-extrabold text-slate-900 text-sm">{modalPreviewAnexo.nome}</h4>
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      Este registro legado possui apenas o nome do arquivo sem o conteúdo binário armazenado. Novos arquivos anexados são preservados integralmente sem alterações.
                     </p>
                   </div>
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl font-mono text-[11px] text-slate-700 text-left space-y-1">
-                    <div><strong>Protocolo Nº:</strong> {selectedProcesso?.numeroProtocolo || 'AUTOS DIGITAIS'}</div>
-                    <div><strong>Interessado:</strong> {selectedProcesso?.interessado || 'REQUERENTE'}</div>
-                    <div><strong>Autenticação:</strong> ICP-BRASIL / SIGCON CLOUD</div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleDownloadAnexo(modalPreviewAnexo)}
-                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs uppercase shadow-sm flex items-center justify-center space-x-2 cursor-pointer"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Baixar Arquivo Completo</span>
-                  </button>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </div>
         </div>

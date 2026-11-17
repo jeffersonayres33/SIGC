@@ -12,7 +12,7 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- 1. Criação ou adaptação da tabela de Funcionários e Colaboradores
 CREATE TABLE IF NOT EXISTS public.funcionarios (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     nome VARCHAR(250) NOT NULL,
     cpf VARCHAR(14) NOT NULL UNIQUE,
     rg VARCHAR(50),
@@ -36,6 +36,19 @@ CREATE TABLE IF NOT EXISTS public.funcionarios (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Converte id UUID legado para TEXT para compatibilidade com IDs textuais do sistema
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'funcionarios' AND column_name = 'id' AND data_type = 'uuid'
+    ) THEN
+        ALTER TABLE public.funcionarios ALTER COLUMN id DROP DEFAULT;
+        ALTER TABLE public.funcionarios ALTER COLUMN id TYPE TEXT USING id::text;
+        ALTER TABLE public.funcionarios ALTER COLUMN id SET DEFAULT gen_random_uuid()::text;
+    END IF;
+END $$;
 
 -- Garante que todas as colunas necessárias existam caso a tabela já tenha sido criada anteriormente
 ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS foto_url TEXT;

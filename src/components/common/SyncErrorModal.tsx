@@ -25,105 +25,141 @@ export const SyncErrorModal: React.FC<SyncErrorModalProps> = ({ isOpen, onClose,
 
   if (!isOpen) return null;
 
-  const sqlScript = `-- SCRIPT DE CORREÇÃO AUTOMÁTICA DE COLUNAS DO BANCO DE DADOS (SUPABASE)
--- Execute este script no SQL Editor do seu projeto Supabase para resolver erros de campos ausentes!
+  const sqlScript = `-- SCRIPT DE CORREÇÃO AUTOMÁTICA DO BANCO DE DADOS (SUPABASE) - 100% IDEMPOTENTE
+-- Execute este script no SQL Editor do seu projeto Supabase para corrigir:
+--  • Erros "invalid input syntax for type uuid" (converte colunas UUID legadas para TEXT)
+--  • Colunas ausentes em Funcionários, Protocolos, Formulários, Respostas, Profissionais e Empresas
+--  • Permissões RLS e restrições legadas de Auditoria
 
--- 1. Colunas adicionais de Profissionais (PF) se não existirem:
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS inscricao_anterior VARCHAR(50);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS inscricao_definitiva_anterior VARCHAR(50);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS dt_inicio_insc_provisoria VARCHAR(20);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS dt_venc_insc_provisoria VARCHAR(20);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS data_solicitacao_baixa VARCHAR(20);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS data_reabilitacao VARCHAR(20);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS data_conversao_definitiva VARCHAR(20);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS transferido_outro_regional BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS nr_inscricao_regional_origem VARCHAR(50);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS anuid_ref_ano_insc_em_dia BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS uf_regional_origem VARCHAR(2);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS dt_vencto_militar VARCHAR(20);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS data_mandato_seguranca VARCHAR(20);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS orgao_mandato_seguranca VARCHAR(150);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS observacao_mandato TEXT;
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS forma_envio_boleto_parcelamento VARCHAR(100);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS grupo_sanguineo VARCHAR(5);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS fator_rh VARCHAR(5);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS doador_orgaos_tecidos BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS participou_curso_qualifarma VARCHAR(100);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS rg_data_expedicao VARCHAR(20);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS rg_data_vencimento VARCHAR(20);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS titulo_eleitoral VARCHAR(50);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS titulo_zona VARCHAR(20);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS titulo_secao VARCHAR(20);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS titulo_uf_exp VARCHAR(2);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS reservista VARCHAR(50);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS cart_trabalho VARCHAR(50);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS cart_trabalho_serie VARCHAR(30);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS cart_trabalho_uf_exp VARCHAR(2);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS cart_trabalho_data_exp VARCHAR(20);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS nome_social VARCHAR(200);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS anuidade_reduzida BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS isento_anuidade BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS e_votante BOOLEAN DEFAULT TRUE;
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS e_militar BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS estado_civil VARCHAR(50);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS bloqueado BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS motivo_bloqueio VARCHAR(150);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS data_bloqueio VARCHAR(20);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS data_desbloqueio_prevista VARCHAR(20);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS usuario_bloqueio VARCHAR(150);
-ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS observacoes_bloqueio TEXT;
+-- 0. CONVERSÃO AUTOMÁTICA DE COLUNAS LEGADAS UUID -> TEXT EM TODAS AS TABELAS:
+DO $$
+DECLARE
+    pol RECORD;
+    fk RECORD;
+    col RECORD;
+    target_tables text[] := ARRAY[
+        'council_config', 'cadastros_basicos', 'regras_assistencia',
+        'profissionais', 'empresas', 'lancamentos_financeiros',
+        'processos_cobranca', 'termos_fiscalizacao', 'protocolos_processos',
+        'formularios_dinamicos', 'respostas_formularios', 'historico_vinculos_profissionais',
+        'historico_auditoria', 'funcionarios', 'perfis_permissoes_usuario'
+    ];
+BEGIN
+    FOR pol IN
+        SELECT tablename, policyname FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = ANY(target_tables)
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I;', pol.policyname, pol.tablename);
+    END LOOP;
 
--- 2. Colunas adicionais de Empresas (PJ) se não existirem:
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS inscricao_anterior VARCHAR(50);
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS inscricao_definitiva_anterior VARCHAR(50);
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS dt_inicio_insc_provisoria VARCHAR(20);
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS dt_venc_insc_provisoria VARCHAR(20);
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS data_conversao_definitiva VARCHAR(20);
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS bloqueado BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS motivo_bloqueio VARCHAR(150);
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS data_bloqueio VARCHAR(20);
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS data_desbloqueio_prevista VARCHAR(20);
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS usuario_bloqueio VARCHAR(150);
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS observacoes_bloqueio TEXT;
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS categoria_empresa VARCHAR(100);
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS isento_anuidade BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS anuidade_reduzida BOOLEAN DEFAULT FALSE;
+    FOR fk IN
+        SELECT tc.table_name, tc.constraint_name FROM information_schema.table_constraints tc
+        WHERE tc.table_schema = 'public' AND tc.constraint_type = 'FOREIGN KEY' AND tc.table_name = ANY(target_tables)
+    LOOP
+        EXECUTE format('ALTER TABLE public.%I DROP CONSTRAINT IF EXISTS %I;', fk.table_name, fk.constraint_name);
+    END LOOP;
+
+    FOR col IN
+        SELECT c.table_name, c.column_name FROM information_schema.columns c
+        WHERE c.table_schema = 'public' AND c.data_type = 'uuid' AND c.table_name = ANY(target_tables)
+    LOOP
+        EXECUTE format('ALTER TABLE public.%I ALTER COLUMN %I DROP DEFAULT;', col.table_name, col.column_name);
+        EXECUTE format('ALTER TABLE public.%I ALTER COLUMN %I TYPE TEXT USING %I::text;', col.table_name, col.column_name, col.column_name);
+        IF col.column_name = 'id' AND col.table_name <> 'council_config' THEN
+            EXECUTE format('ALTER TABLE public.%I ALTER COLUMN id SET DEFAULT gen_random_uuid()::text;', col.table_name);
+        END IF;
+    END LOOP;
+END $$;
+
+-- 1. Funcionários (Setores, Responsáveis e Permissões):
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'FUNCIONARIO';
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS possui_inscricao_profissional BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS numero_inscricao_profissional VARCHAR(50);
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS setor_permissao_protocolos VARCHAR(50) DEFAULT 'APENAS_MEU';
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS setores_permitidos_protocolos TEXT[] DEFAULT '{}';
+ALTER TABLE public.funcionarios ADD COLUMN IF NOT EXISTS responsavel_permissao_protocolos VARCHAR(50) DEFAULT 'TODOS';
+
+-- 2. Protocolos, Formulários Dinâmicos e Respostas:
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Em Análise';
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS assunto TEXT;
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS tipo_interessado VARCHAR(30) DEFAULT 'PUBLICO';
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS vinculo_id TEXT;
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS vinculo_inscricao VARCHAR(50);
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS vinculo_detalhes TEXT;
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS contato_email VARCHAR(150);
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS contato_telefone VARCHAR(50);
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS anexos_detalhados JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.protocolos_processos ADD COLUMN IF NOT EXISTS conteudo_completo_formulario JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE public.protocolos_processos ALTER COLUMN documento_interessado TYPE VARCHAR(100);
+ALTER TABLE public.protocolos_processos ALTER COLUMN prazo_resposta TYPE VARCHAR(50);
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'protocolos_processos' AND column_name = 'anexos' AND data_type = 'ARRAY'
+    ) THEN
+        ALTER TABLE public.protocolos_processos ALTER COLUMN anexos DROP DEFAULT;
+        ALTER TABLE public.protocolos_processos ALTER COLUMN anexos TYPE JSONB USING to_jsonb(anexos);
+        ALTER TABLE public.protocolos_processos ALTER COLUMN anexos SET DEFAULT '[]'::jsonb;
+    END IF;
+END $$;
+
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS publicar_profissional BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS publicar_empresa BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS publicar_site BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS permite_anexos BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS tipos_anexos_permitidos JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS tamanho_maximo_mb INTEGER DEFAULT 15;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS instrucoes_anexo TEXT;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS setor_tramitacao_id TEXT;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS setor_tramitacao_nome VARCHAR(100);
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS status_protocolo_inicial VARCHAR(50);
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS prazo_dias_conclusao INTEGER DEFAULT 15;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS permite_anonimo BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS vincular_empresas_profissional BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ADD COLUMN IF NOT EXISTS vincular_profissionais_empresa BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.formularios_dinamicos ALTER COLUMN versao TYPE VARCHAR(20) USING versao::text;
+
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Em Análise';
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS canal_origem VARCHAR(50) DEFAULT 'PROFISSIONAL';
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS autor_email VARCHAR(150);
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS autor_telefone VARCHAR(50);
+ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS anexos JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.respostas_formularios ALTER COLUMN autor_documento TYPE VARCHAR(100);
+
+-- 3. Colunas adicionais de Profissionais (PF) e Empresas (PJ):
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS recadastrado BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS data_recadastramento VARCHAR(20);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS dt_inicio_insc VARCHAR(20);
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS e_colaborador_crf BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.profissionais ADD COLUMN IF NOT EXISTS matricula_colaborador VARCHAR(50);
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS recadastrado BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS data_recadastramento VARCHAR(20);
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS isento_taxa_certificado BOOLEAN DEFAULT FALSE;
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS horario_plantao VARCHAR(50);
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS horas_tolerancia VARCHAR(20);
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS horarios_funcionamento JSONB DEFAULT '[]'::jsonb;
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS horarios_assistencia JSONB DEFAULT '[]'::jsonb;
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS carga_horaria_funcionamento_semanal INTEGER DEFAULT 0;
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS carga_horaria_assistencia_semanal INTEGER DEFAULT 0;
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS assistencia_plena BOOLEAN DEFAULT TRUE;
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS justificativa_condicao TEXT;
-ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS regra_assistencia_aplicada VARCHAR(150);
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS dt_inicio_insc VARCHAR(20);
+ALTER TABLE public.empresas ALTER COLUMN carga_horaria_funcionamento_semanal TYPE NUMERIC(10,2) USING carga_horaria_funcionamento_semanal::numeric;
+ALTER TABLE public.empresas ALTER COLUMN carga_horaria_assistencia_semanal TYPE NUMERIC(10,2) USING carga_horaria_assistencia_semanal::numeric;
 
--- 3. Tabela de Histórico de Auditoria & Alterações se não existir:
-CREATE TABLE IF NOT EXISTS public.historico_auditoria (
-    id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-    target_id TEXT NOT NULL,
-    target_tipo VARCHAR(50) NOT NULL,
-    usuario VARCHAR(150) NOT NULL,
-    data_formatada VARCHAR(50) NOT NULL,
-    campo VARCHAR(150) NOT NULL,
-    valor_anterior TEXT,
-    valor_novo TEXT,
-    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-ALTER TABLE public.historico_auditoria ENABLE ROW LEVEL SECURITY;
-DO $$ 
+-- 4. RLS nas tabelas existentes:
+DO $$
+DECLARE
+    tbl text;
+    tables text[] := ARRAY[
+        'council_config', 'cadastros_basicos', 'regras_assistencia',
+        'profissionais', 'empresas', 'lancamentos_financeiros',
+        'processos_cobranca', 'termos_fiscalizacao', 'protocolos_processos',
+        'formularios_dinamicos', 'respostas_formularios', 'historico_vinculos_profissionais',
+        'historico_auditoria', 'funcionarios', 'perfis_permissoes_usuario'
+    ];
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM pg_policies 
-        WHERE tablename = 'historico_auditoria' AND policyname = 'Public Access for historico_auditoria'
-    ) THEN
-        CREATE POLICY "Public Access for historico_auditoria" ON public.historico_auditoria
-            FOR ALL USING (true) WITH CHECK (true);
-    END IF;
+    FOREACH tbl IN ARRAY tables
+    LOOP
+        IF to_regclass(format('public.%I', tbl)) IS NOT NULL THEN
+            EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY;', tbl);
+            EXECUTE format('DROP POLICY IF EXISTS "Public access %I" ON public.%I;', tbl, tbl);
+            EXECUTE format('CREATE POLICY "Public access %I" ON public.%I FOR ALL USING (true) WITH CHECK (true);', tbl, tbl);
+        END IF;
+    END LOOP;
 END $$;`;
 
   const handleCopySql = () => {
@@ -169,7 +205,7 @@ END $$;`;
             <div>
               <span className="font-bold uppercase block">Causa Provável de Erros de Sincronização</span>
               <p className="mt-0.5 text-amber-800">
-                Se os erros no monitor mencionarem colunas ausentes (e.g., <code className="font-mono bg-amber-100 px-1 py-0.5 rounded">column "..." of relation "profissionais" does not exist</code>), isso significa que a sua estrutura de tabelas no Supabase está desatualizada. Copie o script SQL abaixo e execute-o no editor de SQL do Supabase para corrigir.
+                Se os erros no monitor mencionarem colunas ausentes (<code className="font-mono bg-amber-100 px-1 py-0.5 rounded">column "..." does not exist</code>) ou incompatibilidade de UUID (<code className="font-mono bg-amber-100 px-1 py-0.5 rounded">invalid input syntax for type uuid</code>), sua estrutura de tabelas no Supabase está desatualizada. Copie o script SQL abaixo e execute-o no SQL Editor do Supabase para corrigir.
               </p>
             </div>
           </div>

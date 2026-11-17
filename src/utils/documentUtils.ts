@@ -254,8 +254,20 @@ export function sanitizeToUpper<T extends Record<string, any>>(
   ignoreKeys: string[] = [
     'id', 
     'fotoUrl', 
+    'url',
+    'anexos',
+    'anexosDetalhados',
+    'respostas',
+    'dadosCampos',
+    'conteudoCompletoFormulario',
+    'fotosComprovantes',
+    'fotoEvidencias',
     'assinaturaFiscal', 
     'assinaturaNotificado',
+    'assinaturaPresidenteUrl',
+    'assinaturaVicePresidenteUrl',
+    'assinaturaTesoureiroUrl',
+    'assinaturaSecretarioGeralUrl',
     'modulosPermitidos',
     'permissoesModulos',
     'modulos',
@@ -264,7 +276,8 @@ export function sanitizeToUpper<T extends Record<string, any>>(
     'setorId',
     'email',
     'emailPessoal',
-    'emailComercial'
+    'emailComercial',
+    'contatoEmail'
   ]
 ): T {
   const result: any = Array.isArray(obj) ? [] : {};
