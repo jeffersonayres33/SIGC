@@ -89,7 +89,8 @@ export const DEFAULT_PROTOCOLO_COR_REGRAS: ProtocoloCorRegra[] = [
     escopo: 'TODOS',
     condicao: 'STATUS_IGUAL',
     statusAlvo: 'Concluído',
-    cor: 'cinza'
+    cor: 'cinza',
+    mostrarLegendaDias: true
   },
   {
     id: 'regra-prazo-vencido',
@@ -98,7 +99,8 @@ export const DEFAULT_PROTOCOLO_COR_REGRAS: ProtocoloCorRegra[] = [
     ordem: 2,
     escopo: 'TODOS',
     condicao: 'VENCIDO',
-    cor: 'vermelho'
+    cor: 'vermelho',
+    mostrarLegendaDias: true
   },
   {
     id: 'regra-prazo-proximo',
@@ -109,7 +111,8 @@ export const DEFAULT_PROTOCOLO_COR_REGRAS: ProtocoloCorRegra[] = [
     condicao: 'PRAZO_RESTANTE',
     operador: 'MENOR_IGUAL',
     percentualLimite: 30,
-    cor: 'amarelo'
+    cor: 'amarelo',
+    mostrarLegendaDias: true
   }
 ];
 

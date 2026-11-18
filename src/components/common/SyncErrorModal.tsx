@@ -140,6 +140,7 @@ ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS dt_inicio_insc VARCHAR(20);
 ALTER TABLE public.empresas ALTER COLUMN carga_horaria_funcionamento_semanal TYPE NUMERIC(10,2) USING carga_horaria_funcionamento_semanal::numeric;
 ALTER TABLE public.empresas ALTER COLUMN carga_horaria_assistencia_semanal TYPE NUMERIC(10,2) USING carga_horaria_assistencia_semanal::numeric;
 ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_regras_cores JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_mostrar_legenda_dias BOOLEAN DEFAULT TRUE;
 
 -- 4. Módulo WebSITE & Portal Transparência:
 CREATE TABLE IF NOT EXISTS public.website_config (

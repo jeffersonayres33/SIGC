@@ -102,6 +102,11 @@ export const ProtocolosView: React.FC = () => {
     field: 'numeroProtocolo' | 'interessado' | 'tipo' | 'setorAtual' | 'conselheiroRelator' | 'status';
     direction: 'asc' | 'desc';
   } | null>(null);
+  const [legendSortConfig, setLegendSortConfig] = useState<{
+    ruleId: string;
+    ruleName: string;
+    direction: 'asc' | 'desc';
+  } | null>(null);
   
   // Modais de Controle
   const [isNewModal, setIsNewModal] = useState(false);
@@ -780,6 +785,7 @@ export const ProtocolosView: React.FC = () => {
   type SortField = 'numeroProtocolo' | 'interessado' | 'tipo' | 'setorAtual' | 'conselheiroRelator' | 'status';
 
   const handleSort = (field: SortField) => {
+    setLegendSortConfig(null);
     setSortConfig(prev => {
       if (prev && prev.field === field) {
         if (prev.direction === 'asc') return { field, direction: 'desc' };
@@ -789,7 +795,56 @@ export const ProtocolosView: React.FC = () => {
     });
   };
 
+  const handleLegendSort = (regra: ProtocoloCorRegra) => {
+    setSortConfig(null);
+    setLegendSortConfig(prev => {
+      if (prev && prev.ruleId === regra.id) {
+        if (prev.direction === 'asc') {
+          return { ruleId: regra.id, ruleName: regra.nome, direction: 'desc' };
+        }
+        return null;
+      }
+      return { ruleId: regra.id, ruleName: regra.nome, direction: 'asc' };
+    });
+  };
+
+  const evaluatedProcessosMap = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof evaluateProtocoloColorRule>>();
+    filteredProcessos.forEach(proc => {
+      map.set(proc.id, evaluateProtocoloColorRule(proc, regrasCores));
+    });
+    return map;
+  }, [filteredProcessos, regrasCores]);
+
   const sortedProcessos = useMemo(() => {
+    if (legendSortConfig) {
+      const { ruleId, direction } = legendSortConfig;
+      return [...filteredProcessos].sort((a, b) => {
+        const evalA = evaluatedProcessosMap.get(a.id);
+        const evalB = evaluatedProcessosMap.get(b.id);
+        const matchA = evalA?.matchedRule?.id === ruleId ? 0 : 1;
+        const matchB = evalB?.matchedRule?.id === ruleId ? 0 : 1;
+
+        if (matchA !== matchB) return matchA - matchB;
+
+        const daysA = evalA?.metrics.remainingDays ?? Number.MAX_SAFE_INTEGER;
+        const daysB = evalB?.metrics.remainingDays ?? Number.MAX_SAFE_INTEGER;
+
+        if (matchA === 0) {
+          if (daysA !== daysB) {
+            return direction === 'asc' ? daysA - daysB : daysB - daysA;
+          }
+          const numCmp = (a.numeroProtocolo || '').localeCompare(b.numeroProtocolo || '', 'pt-BR', { numeric: true });
+          return direction === 'asc' ? numCmp : -numCmp;
+        }
+
+        const ordemA = evalA?.matchedRule?.ordem ?? 999;
+        const ordemB = evalB?.matchedRule?.ordem ?? 999;
+        if (ordemA !== ordemB) return ordemA - ordemB;
+        return daysA - daysB;
+      });
+    }
+
     if (!sortConfig) return filteredProcessos;
     const { field, direction } = sortConfig;
     return [...filteredProcessos].sort((a, b) => {
@@ -798,7 +853,7 @@ export const ProtocolosView: React.FC = () => {
       const cmp = valA.localeCompare(valB, 'pt-BR', { numeric: true });
       return direction === 'asc' ? cmp : -cmp;
     });
-  }, [filteredProcessos, sortConfig]);
+  }, [filteredProcessos, sortConfig, legendSortConfig, evaluatedProcessosMap]);
 
   const renderSortHeader = (field: SortField, label: string, alignCenter = false) => {
     const isActive = sortConfig?.field === field;
@@ -1094,21 +1149,52 @@ export const ProtocolosView: React.FC = () => {
             .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0))
             .map((regra) => {
               const st = PROTOCOLO_COLOR_PALETTE[regra.cor] || PROTOCOLO_COLOR_PALETTE.cinza;
-              const matchCount = sortedProcessos.filter(
-                p => evaluateProtocoloColorRule(p, regrasCores).matchedRule?.id === regra.id
+              const matchCount = filteredProcessos.filter(
+                p => evaluatedProcessosMap.get(p.id)?.matchedRule?.id === regra.id
               ).length;
+              const isActive = legendSortConfig?.ruleId === regra.id;
               return (
-                <span
+                <button
                   key={regra.id}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold ${st.legendClass}`}
-                  title={`Regra #${regra.ordem}: ${regra.nome}`}
+                  type="button"
+                  onClick={() => handleLegendSort(regra)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold transition-all cursor-pointer ${st.legendClass} ${
+                    isActive
+                      ? 'ring-2 ring-blue-600 ring-offset-1 shadow-xs'
+                      : 'hover:opacity-90 hover:shadow-2xs'
+                  }`}
+                  title={
+                    isActive
+                      ? `Ordenando por "${regra.nome}" (${legendSortConfig.direction === 'asc' ? 'mais urgentes primeiro' : 'ordem inversa'}). Clique novamente para alternar ou limpar.`
+                      : `Clique para ordenar priorizando "${regra.nome}" no topo`
+                  }
                 >
-                  <span className={`w-2 h-2 rounded-full ${st.dotClass}`} />
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${st.dotClass}`} />
                   <span>{regra.nome}</span>
                   <span className="font-mono opacity-80">({matchCount})</span>
-                </span>
+                  {isActive ? (
+                    legendSortConfig.direction === 'asc' ? (
+                      <ArrowUp className="w-3 h-3 shrink-0" />
+                    ) : (
+                      <ArrowDown className="w-3 h-3 shrink-0" />
+                    )
+                  ) : (
+                    <ArrowUpDown className="w-3 h-3 opacity-45 shrink-0" />
+                  )}
+                </button>
               );
             })}
+          {legendSortConfig && (
+            <button
+              type="button"
+              onClick={() => setLegendSortConfig(null)}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-[10px] font-bold uppercase cursor-pointer transition-colors"
+              title="Remover ordenação por legenda"
+            >
+              <X className="w-3 h-3" />
+              <span>Limpar ordenação</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1138,7 +1224,7 @@ export const ProtocolosView: React.FC = () => {
                 </tr>
               ) : (
                 sortedProcessos.map((proc) => {
-                  const colorEval = evaluateProtocoloColorRule(proc, regrasCores);
+                  const colorEval = evaluatedProcessosMap.get(proc.id) || evaluateProtocoloColorRule(proc, regrasCores);
                   const rowColorClass = colorEval.style ? colorEval.style.rowClass : 'hover:bg-blue-50/40';
                   return (
                   <tr key={proc.id} className={`transition-colors ${rowColorClass}`}>
@@ -1184,7 +1270,7 @@ export const ProtocolosView: React.FC = () => {
                       <span className="font-semibold text-slate-800 uppercase">{proc.tipo}</span>
                       <div className="text-[10px] text-slate-500 flex flex-wrap items-center gap-1.5 mt-0.5">
                         <span>Aberto em: {proc.dataAbertura}</span>
-                        {colorEval.metrics.prazoLabel && (
+                        {(!colorEval.matchedRule || colorEval.matchedRule.mostrarLegendaDias !== false) && colorEval.metrics.prazoLabel && (
                           <span
                             className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-bold ${
                               colorEval.style ? colorEval.style.badgeClass : 'bg-slate-100 text-slate-600 border-slate-200'

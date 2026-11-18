@@ -884,6 +884,7 @@ export interface ProtocoloCorRegra {
   percentualLimite?: number;
   statusAlvo?: string;
   cor: ProtocoloCorOpcao;
+  mostrarLegendaDias?: boolean;
 }
 
 export interface TransparenciaDocumento {

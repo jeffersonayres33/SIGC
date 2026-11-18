@@ -180,6 +180,7 @@ ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS geolocalizacao_ativa 
 ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS acessos_inscrito_pf JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS acessos_inscrito_pj JSONB DEFAULT '{}'::jsonb;
 ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_regras_cores JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_mostrar_legenda_dias BOOLEAN DEFAULT TRUE;
 
 -- ------------------------------------------------------------------------------
 -- 2. CADASTROS BÁSICOS

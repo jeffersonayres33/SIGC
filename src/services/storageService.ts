@@ -351,6 +351,7 @@ export interface CouncilConfig {
 
   // Regras dinâmicas de cores dos protocolos (Vencido, Prazo próximo, Concluído, etc.)
   protocoloRegrasCores?: ProtocoloCorRegra[];
+  protocoloMostrarLegendaDias?: boolean;
 }
 
 export const DEFAULT_ACESSOS_INSCRITO_PF: RegraAcessoInscrito = {
@@ -1492,7 +1493,8 @@ class StorageService {
           acessosInscritoPJ: parsed.acessosInscritoPJ ?? DEFAULT_COUNCIL_CONFIG.acessosInscritoPJ,
           protocoloRegrasCores: Array.isArray(parsed.protocoloRegrasCores) && parsed.protocoloRegrasCores.length > 0
             ? parsed.protocoloRegrasCores
-            : DEFAULT_PROTOCOLO_COR_REGRAS
+            : DEFAULT_PROTOCOLO_COR_REGRAS,
+          protocoloMostrarLegendaDias: parsed.protocoloMostrarLegendaDias ?? true
         };
       }
 
@@ -2515,7 +2517,8 @@ class StorageService {
             acessosInscritoPJ: cfgData.acessos_inscrito_pj ? { ...DEFAULT_ACESSOS_INSCRITO_PJ, ...cfgData.acessos_inscrito_pj } : this.councilConfig.acessosInscritoPJ,
             protocoloRegrasCores: Array.isArray(cfgData.protocolo_regras_cores) && cfgData.protocolo_regras_cores.length > 0
               ? cfgData.protocolo_regras_cores
-              : (this.councilConfig.protocoloRegrasCores || DEFAULT_PROTOCOLO_COR_REGRAS)
+              : (this.councilConfig.protocoloRegrasCores || DEFAULT_PROTOCOLO_COR_REGRAS),
+            protocoloMostrarLegendaDias: cfgData.protocolo_mostrar_legenda_dias ?? this.councilConfig.protocoloMostrarLegendaDias ?? true
           };
           safeSetLocalStorage(STORAGE_KEYS.COUNCIL_CONFIG, this.councilConfig);
         }
@@ -2698,7 +2701,8 @@ class StorageService {
         geolocalizacao_ativa: cfg.geolocalizacaoAtiva ?? true,
         acessos_inscrito_pf: cfg.acessosInscritoPF || DEFAULT_ACESSOS_INSCRITO_PF,
         acessos_inscrito_pj: cfg.acessosInscritoPJ || DEFAULT_ACESSOS_INSCRITO_PJ,
-        protocolo_regras_cores: cfg.protocoloRegrasCores || DEFAULT_PROTOCOLO_COR_REGRAS
+        protocolo_regras_cores: cfg.protocoloRegrasCores || DEFAULT_PROTOCOLO_COR_REGRAS,
+        protocolo_mostrar_legenda_dias: cfg.protocoloMostrarLegendaDias ?? true
       };
 
       let { error: cfgErr } = await supabase.from('council_config').upsert(fullCfgPayload);
@@ -3473,7 +3477,8 @@ class StorageService {
           geolocalizacao_ativa: this.councilConfig.geolocalizacaoAtiva ?? true,
           acessos_inscrito_pf: this.councilConfig.acessosInscritoPF || DEFAULT_ACESSOS_INSCRITO_PF,
           acessos_inscrito_pj: this.councilConfig.acessosInscritoPJ || DEFAULT_ACESSOS_INSCRITO_PJ,
-          protocolo_regras_cores: this.councilConfig.protocoloRegrasCores || DEFAULT_PROTOCOLO_COR_REGRAS
+          protocolo_regras_cores: this.councilConfig.protocoloRegrasCores || DEFAULT_PROTOCOLO_COR_REGRAS,
+          protocolo_mostrar_legenda_dias: this.councilConfig.protocoloMostrarLegendaDias ?? true
         };
 
         const { error } = await supabase.from('council_config').upsert(fullPayload);
