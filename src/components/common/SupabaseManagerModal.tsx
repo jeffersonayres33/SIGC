@@ -440,6 +440,8 @@ ALTER TABLE public.respostas_formularios ADD COLUMN IF NOT EXISTS anexos JSONB D
 ALTER TABLE public.respostas_formularios ALTER COLUMN autor_documento TYPE VARCHAR(100);
 ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_regras_cores JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.council_config ADD COLUMN IF NOT EXISTS protocolo_mostrar_legenda_dias BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.cadastros_basicos ADD COLUMN IF NOT EXISTS zona_obrigatoria BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS zona VARCHAR(100);
 
 -- Novas Tabelas: Módulo WebSITE e Portal Transparência:
 CREATE TABLE IF NOT EXISTS public.website_config (

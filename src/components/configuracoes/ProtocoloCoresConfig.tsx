@@ -594,41 +594,41 @@ export const ProtocoloCoresConfig: React.FC = () => {
         </p>
       </div>
 
-      {/* Modal de Nova Regra de Cores / Editar Regra de Cores */}
+      {/* Modal de Nova Regra de Cores / Editar Regra de Cores (Totalmente Responsivo) */}
       {ruleModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-6">
-            {/* Header do Modal */}
-            <div className="px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-              <div className="flex items-center space-x-3">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto max-h-[96vh] flex flex-col">
+            {/* Header do Modal (Fixo) */}
+            <div className="px-4 sm:px-6 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
+              <div className="flex items-center space-x-3 min-w-0">
                 <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 text-blue-600 flex items-center justify-center shrink-0">
                   {ruleModal.mode === 'create' ? <Plus className="w-5 h-5" /> : <Edit3 className="w-5 h-5" />}
                 </div>
-                <div>
-                  <h3 className="text-base font-extrabold text-slate-900">
+                <div className="min-w-0">
+                  <h3 className="text-sm sm:text-base font-extrabold text-slate-900 truncate">
                     {ruleModal.mode === 'create' ? 'Nova Regra de Cores' : 'Editar Regra de Cores'}
                   </h3>
-                  <p className="text-xs text-slate-500">
+                  <p className="text-[11px] sm:text-xs text-slate-500 truncate">
                     {ruleModal.mode === 'create'
-                      ? 'Configure os critérios de vencimento, prazo ou status, a cor de destaque e se exibe a legenda de dias.'
-                      : 'Altere os parâmetros desta regra de cor dinâmica e salve para aplicar imediatamente.'}
+                      ? 'Configure os critérios e cor de destaque.'
+                      : 'Altere os parâmetros desta regra de cor.'}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setRuleModal(null)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 transition-colors cursor-pointer shrink-0"
                 title="Fechar modal"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Formulário do Modal */}
-            <form onSubmit={handleSaveModalRegra} className="p-6 space-y-5 text-xs">
-              {/* Nome e Ativo e Legenda de Dias Individual */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+            {/* Formulário do Modal (Rolável) */}
+            <form onSubmit={handleSaveModalRegra} className="p-4 sm:p-6 space-y-4 text-xs overflow-y-auto flex-1">
+              {/* Nome e Ativo */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 items-end">
                 <div className="sm:col-span-2">
                   <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1.5">
                     Nome da Regra / Legenda *
@@ -664,19 +664,19 @@ export const ProtocoloCoresConfig: React.FC = () => {
               </div>
 
               {/* Checkbox / Toggle individual para Legenda de Dias */}
-              <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl flex items-center justify-between">
+              <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-0.5">
-                  <span className="font-extrabold text-slate-900 block">
+                  <span className="font-extrabold text-slate-900 block text-xs">
                     Mostrar legenda com a quantidade de dias restantes / vencidos nesta regra
                   </span>
                   <span className="text-[11px] text-slate-500 block">
-                    Quando ativado, os processos atingidos por esta regra exibirão o selo com contagem de dias.
+                    Quando ativado, exibe selo com contagem de dias.
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={() => updateModalRegra({ mostrarLegendaDias: !(ruleModal.regra.mostrarLegendaDias !== false) })}
-                  className={`px-3 py-2 rounded-xl font-bold text-xs border flex items-center gap-1.5 cursor-pointer transition-colors shrink-0 ${
+                  className={`px-3.5 py-2 rounded-xl font-bold text-xs border flex items-center justify-center gap-1.5 cursor-pointer transition-colors shrink-0 ${
                     ruleModal.regra.mostrarLegendaDias !== false
                       ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                       : 'bg-slate-200 text-slate-700 border-slate-300'
@@ -688,7 +688,7 @@ export const ProtocoloCoresConfig: React.FC = () => {
               </div>
 
               {/* Escopo */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
                   <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1.5">
                     Escopo de Aplicação
@@ -760,7 +760,7 @@ export const ProtocoloCoresConfig: React.FC = () => {
               </div>
 
               {/* Condição */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
                 <div className={ruleModal.regra.condicao === 'VENCIDO' ? 'sm:col-span-3' : ''}>
                   <label className="block text-[11px] font-bold uppercase text-slate-600 mb-1.5">
                     Condição de Disparo
@@ -865,8 +865,8 @@ export const ProtocoloCoresConfig: React.FC = () => {
                 <span>{buildRuleSummary(ruleModal.regra)}</span>
               </div>
 
-              {/* Botões do Modal */}
-              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
+              {/* Botões do Modal (Fixos no rodapé do form) */}
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100 shrink-0">
                 <button
                   type="button"
                   onClick={() => setRuleModal(null)}

@@ -194,6 +194,7 @@ CREATE TABLE IF NOT EXISTS public.cadastros_basicos (
     ativo BOOLEAN DEFAULT TRUE,
     ordem NUMERIC(10,2) DEFAULT 0,
     selecionar_empresa_vinculada BOOLEAN DEFAULT FALSE,
+    zona_obrigatoria BOOLEAN DEFAULT FALSE,
     cargo_id VARCHAR(50),
     cargo_nome VARCHAR(150),
     setor_id VARCHAR(50),
@@ -204,6 +205,7 @@ CREATE TABLE IF NOT EXISTS public.cadastros_basicos (
 );
 
 ALTER TABLE public.cadastros_basicos ADD COLUMN IF NOT EXISTS selecionar_empresa_vinculada BOOLEAN DEFAULT FALSE;
+ALTER TABLE public.cadastros_basicos ADD COLUMN IF NOT EXISTS zona_obrigatoria BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.cadastros_basicos ADD COLUMN IF NOT EXISTS cargo_id VARCHAR(50);
 ALTER TABLE public.cadastros_basicos ADD COLUMN IF NOT EXISTS cargo_nome VARCHAR(150);
 ALTER TABLE public.cadastros_basicos ADD COLUMN IF NOT EXISTS setor_id VARCHAR(50);
@@ -406,6 +408,7 @@ CREATE TABLE IF NOT EXISTS public.empresas (
     cidade VARCHAR(100),
     uf VARCHAR(2) DEFAULT 'AM',
     cep VARCHAR(10),
+    zona VARCHAR(100),
     rota VARCHAR(100),
     area VARCHAR(100),
     telefone VARCHAR(50),
@@ -440,6 +443,7 @@ ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS status_financeiro VARCHAR(5
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS recadastrado BOOLEAN DEFAULT FALSE;
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS data_recadastramento VARCHAR(20);
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS dt_inicio_insc VARCHAR(20);
+ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS zona VARCHAR(100);
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS carga_horaria_funcionamento_semanal NUMERIC(10,2) DEFAULT 0.00;
 ALTER TABLE public.empresas ADD COLUMN IF NOT EXISTS carga_horaria_assistencia_semanal NUMERIC(10,2) DEFAULT 0.00;
 ALTER TABLE public.empresas ALTER COLUMN carga_horaria_funcionamento_semanal TYPE NUMERIC(10,2) USING carga_horaria_funcionamento_semanal::numeric;
@@ -657,6 +661,8 @@ ALTER TABLE public.termos_fiscalizacao ADD COLUMN IF NOT EXISTS hash_validacao_d
 ALTER TABLE public.termos_fiscalizacao ADD COLUMN IF NOT EXISTS fotos_comprovantes JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.termos_fiscalizacao ADD COLUMN IF NOT EXISTS foto_evidencias JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE public.termos_fiscalizacao ADD COLUMN IF NOT EXISTS sincronizado BOOLEAN DEFAULT TRUE;
+ALTER TABLE public.termos_fiscalizacao ADD COLUMN IF NOT EXISTS data_edicao VARCHAR(50);
+ALTER TABLE public.termos_fiscalizacao ADD COLUMN IF NOT EXISTS editado_por VARCHAR(255);
 
 CREATE INDEX IF NOT EXISTS idx_termos_numero ON public.termos_fiscalizacao(numero_termo);
 CREATE INDEX IF NOT EXISTS idx_termos_status ON public.termos_fiscalizacao(status);

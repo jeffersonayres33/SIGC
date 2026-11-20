@@ -1802,6 +1802,7 @@ class StorageService {
               ativo: c.ativo,
               ordem: c.ordem,
               selecionarEmpresaVinculada: Boolean(c.selecionar_empresa_vinculada ?? c.selecionarempresavinculada ?? c.selecionarEmpresaVinculada ?? false),
+              zonaObrigatoria: Boolean(c.zona_obrigatoria ?? c.zonaobrigatoria ?? c.zonaObrigatoria ?? false),
               cargoId: c.cargo_id || localMatch?.cargoId,
               cargoNome: c.cargo_nome || localMatch?.cargoNome,
               setorId: c.setor_id || localMatch?.setorId,
@@ -1970,6 +1971,7 @@ class StorageService {
             cidade: e.cidade || '',
             uf: e.uf || 'AM',
             cep: e.cep || '',
+            zona: e.zona || undefined,
             rota: e.rota || undefined,
             area: e.area || undefined,
             telefone: e.telefone || '',
@@ -2151,6 +2153,8 @@ class StorageService {
             dataFiscalizacao: t.data_fiscalizacao || undefined,
             horaFiscalizacao: t.hora_fiscalizacao || undefined,
             dataHora: t.data_hora || undefined,
+            dataEdicao: t.data_edicao || undefined,
+            editadoPor: t.editado_por || undefined,
             fiscalId: t.fiscal_id || undefined,
             fiscalNome: t.fiscal_nome || undefined,
             fiscalMatricula: t.fiscal_matricula || t.matricula_fiscal || undefined,
@@ -2758,6 +2762,7 @@ class StorageService {
         ativo: c.ativo,
         ordem: c.ordem || 0,
         selecionar_empresa_vinculada: Boolean(c.selecionarEmpresaVinculada),
+        zona_obrigatoria: Boolean(c.zonaObrigatoria),
         cargo_id: c.cargoId || null,
         cargo_nome: c.cargoNome || null,
         setor_id: c.setorId || null,
@@ -2928,6 +2933,7 @@ class StorageService {
         cidade: e.cidade || '',
         uf: e.uf || 'AM',
         cep: e.cep || '',
+        zona: e.zona || null,
         rota: e.rota || null,
         area: e.area || null,
         telefone: e.telefone || '',
@@ -3938,6 +3944,7 @@ class StorageService {
           ativo: sanitized.ativo,
           ordem: sanitized.ordem || 0,
           selecionar_empresa_vinculada: Boolean(sanitized.selecionarEmpresaVinculada),
+          zona_obrigatoria: Boolean(sanitized.zonaObrigatoria),
           cargo_id: sanitized.cargoId || null,
           cargo_nome: sanitized.cargoNome || null,
           setor_id: sanitized.setorId || null,
@@ -4035,6 +4042,12 @@ class StorageService {
       const eCount = this.empresas.filter(e => (e.cidade || '').toUpperCase() === itemName).length;
       count += eCount;
       if (count > 0) return { canDelete: false, count, reason: `Existem ${count} empresas cadastradas no município de ${item.nome}.` };
+    }
+
+    if (item.categoria === 'ZONA_EMPRESA') {
+      const eCount = this.empresas.filter(e => (e.zona || '').toUpperCase() === itemName).length;
+      count += eCount;
+      if (count > 0) return { canDelete: false, count, reason: `Existem ${count} empresas vinculadas à zona ${item.nome}.` };
     }
 
     if (item.categoria === 'ASSUNTO_REQUERIMENTO_PF' || item.categoria === 'ASSUNTO_REQUERIMENTO_PJ') {
@@ -5555,7 +5568,7 @@ class StorageService {
       'tipoEstabelecimento', 'categoria', 'categoriaEmpresa', 'naturezaAtividade', 
       'tipoEmpresa', 'condicao', 'capitalSocial', 'horarioPlantao', 'horasTolerancia', 
       'numeroCRT', 'validadeCRT', 'numeroProcesso', 'bloqueado', 'motivoBloqueio',
-      'endereco', 'bairro', 'cidade', 'uf', 'cep', 'telefone', 'email',
+      'endereco', 'complemento', 'bairro', 'cidade', 'uf', 'cep', 'zona', 'telefone', 'email',
       'assistenciaPlena', 'isentoAnuidade', 'anuidadeReduzida', 'recadastrado', 'isentoTaxaCertificado'
     ];
     this.compareAndLogChanges(sanitized.id, 'EMPRESA', oldEmp, sanitized, empFields);
@@ -5644,6 +5657,7 @@ class StorageService {
             cidade: sanitized.cidade || '',
             uf: sanitized.uf || 'AM',
             cep: sanitized.cep || '',
+            zona: sanitized.zona || null,
             rota: sanitized.rota || null,
             area: sanitized.area || null,
             telefone: sanitized.telefone || '',
@@ -5718,6 +5732,7 @@ class StorageService {
                 cidade: sanitized.cidade || '',
                 uf: sanitized.uf || 'AM',
                 cep: sanitized.cep || '',
+                zona: sanitized.zona || null,
                 rota: sanitized.rota || null,
                 area: sanitized.area || null,
                 telefone: sanitized.telefone || '',
@@ -6022,6 +6037,8 @@ class StorageService {
           data_fiscalizacao: termo.dataFiscalizacao || null,
           hora_fiscalizacao: termo.horaFiscalizacao || null,
           data_hora: termo.dataHora || null,
+          data_edicao: termo.dataEdicao || null,
+          editado_por: termo.editadoPor || null,
           fiscal_id: termo.fiscalId || null,
           fiscal_nome: termo.fiscalNome || null,
           fiscal_matricula: termo.fiscalMatricula || null,
@@ -6137,8 +6154,10 @@ class StorageService {
 
   public deleteTermoFiscalizacao(id: string) {
     this.termosFiscalizacao = this.termosFiscalizacao.filter(t => t.id !== id);
+    this.offlineQueue = this.offlineQueue.filter(t => t.id !== id);
     try {
       localStorage.setItem(STORAGE_KEYS.TERMOS_FISCALIZACAO, JSON.stringify(this.termosFiscalizacao));
+      localStorage.setItem(STORAGE_KEYS.OFFLINE_QUEUE, JSON.stringify(this.offlineQueue));
       if (this.isOnline) {
         runBackgroundSupabase(
           supabase.from('termos_fiscalizacao').delete().eq('id', id)
@@ -7003,11 +7022,41 @@ class StorageService {
     fieldsToCompare.forEach(field => {
       const valOld = oldObj[field];
       const valNew = newObj[field];
-      
+
+      // Tratamento especializado para booleanos (evita falso diff de undefined vs false)
+      if (typeof valOld === 'boolean' || typeof valNew === 'boolean') {
+        const bOld = Boolean(valOld);
+        const bNew = Boolean(valNew);
+        if (bOld !== bNew) {
+          const friendlyField = this.getFriendlyFieldName(field);
+          this.registrarAuditoria(targetId, targetTipo, usuario, friendlyField, bOld ? 'SIM' : 'NÃO', bNew ? 'SIM' : 'NÃO');
+        }
+        return;
+      }
+
+      // Tratamento especializado para campos numéricos (evita falso diff de undefined/"" vs 0)
+      if (typeof valOld === 'number' || typeof valNew === 'number') {
+        const isOldEmptyOrNum = valOld === undefined || valOld === null || valOld === '' || !isNaN(Number(valOld));
+        const isNewEmptyOrNum = valNew === undefined || valNew === null || valNew === '' || !isNaN(Number(valNew));
+        if (isOldEmptyOrNum && isNewEmptyOrNum) {
+          const nOld = valOld === undefined || valOld === null || valOld === '' ? 0 : Number(valOld);
+          const nNew = valNew === undefined || valNew === null || valNew === '' ? 0 : Number(valNew);
+          if (nOld !== nNew) {
+            const friendlyField = this.getFriendlyFieldName(field);
+            this.registrarAuditoria(targetId, targetTipo, usuario, friendlyField, String(nOld), String(nNew));
+          }
+          return;
+        }
+      }
+
       const strOld = valOld !== undefined && valOld !== null ? String(valOld).trim() : '';
       const strNew = valNew !== undefined && valNew !== null ? String(valNew).trim() : '';
-      
-      if (strOld !== strNew) {
+
+      const isEmailField = field.toLowerCase().includes('email');
+      const normOld = isEmailField ? strOld.toLowerCase() : strOld.toUpperCase();
+      const normNew = isEmailField ? strNew.toLowerCase() : strNew.toUpperCase();
+
+      if (normOld !== normNew) {
         const friendlyField = this.getFriendlyFieldName(field);
         this.registrarAuditoria(targetId, targetTipo, usuario, friendlyField, strOld, strNew);
       }
@@ -7016,8 +7065,20 @@ class StorageService {
 
   private getActiveUser(): string {
     try {
-      const activeRole = localStorage.getItem('siscon_active_role') || 'SISTEMA';
-      return activeRole;
+      const authUser = this.getCurrentAuthUser();
+      if (authUser?.nome && authUser.nome.trim()) {
+        return authUser.nome.trim().toUpperCase();
+      }
+      const savedAuth = localStorage.getItem(STORAGE_KEYS.AUTH_SESSION);
+      if (savedAuth) {
+        const parsed = JSON.parse(savedAuth);
+        if (parsed?.nome && String(parsed.nome).trim()) {
+          return String(parsed.nome).trim().toUpperCase();
+        }
+      }
+      const activeRole = localStorage.getItem('siscon_active_role');
+      if (activeRole && activeRole.trim()) return activeRole.trim().toUpperCase();
+      return 'SISTEMA';
     } catch (e) {
       return 'SISTEMA';
     }
@@ -7037,11 +7098,13 @@ class StorageService {
       celular: 'Celular',
       emailPessoal: 'E-mail Pessoal',
       emailComercial: 'E-mail Comercial',
+      email: 'E-mail',
       endereco: 'Endereço',
       bairro: 'Bairro',
       cidade: 'Cidade',
       uf: 'U.F.',
       cep: 'CEP',
+      zona: 'Zona',
       complemento: 'Complemento',
       statusFinanceiro: 'Status Financeiro',
       carteiraProfissional: 'Carteira Profissional',
@@ -7069,7 +7132,12 @@ class StorageService {
       horasTolerancia: 'Horas de Tolerância',
       numeroCRT: 'Número do CRT',
       validadeCRT: 'Validade do CRT',
-      numeroProcesso: 'Número do Processo'
+      numeroProcesso: 'Número do Processo',
+      assistenciaPlena: 'Assistência Plena',
+      isentoAnuidade: 'Isento de Anuidade',
+      anuidadeReduzida: 'Anuidade Reduzida',
+      recadastrado: 'Recadastrado',
+      isentoTaxaCertificado: 'Isento Taxa Certificado'
     };
     return map[field] || field;
   }
@@ -7780,7 +7848,7 @@ class StorageService {
       prof.primeiroAcessoPendente = true;
       prof.senhaHash = '';
       this.saveProfissional(prof);
-      this.registrarAuditoria(prof.id, 'PROFISSIONAL', 'ADMIN', 'Acesso / Senha', 'Definida', 'Senha Zerada pelo Administrador (Troca obrigatória no próximo login)');
+      this.registrarAuditoria(prof.id, 'PROFISSIONAL', this.getActiveUser(), 'Acesso / Senha', 'Definida', 'Senha Zerada pelo Administrador (Troca obrigatória no próximo login)');
       this.notify();
       return true;
     } else if (tipo === 'EMPRESA') {
@@ -7790,7 +7858,7 @@ class StorageService {
       emp.primeiroAcessoPendente = true;
       emp.senhaHash = '';
       this.saveEmpresa(emp);
-      this.registrarAuditoria(emp.id, 'EMPRESA', 'ADMIN', 'Acesso / Senha', 'Definida', 'Senha Zerada pelo Administrador (Troca obrigatória no próximo login)');
+      this.registrarAuditoria(emp.id, 'EMPRESA', this.getActiveUser(), 'Acesso / Senha', 'Definida', 'Senha Zerada pelo Administrador (Troca obrigatória no próximo login)');
       this.notify();
       return true;
     }
@@ -7839,7 +7907,7 @@ class StorageService {
         this.saveFuncionario(func);
       }
 
-      this.registrarAuditoria(prof.id, 'PROFISSIONAL', 'ADMIN', 'Acesso / Senha', 'Pendente/Zerada', 'Nova Senha Cadastrada com Sucesso');
+      this.registrarAuditoria(prof.id, 'PROFISSIONAL', this.getActiveUser(), 'Acesso / Senha', 'Pendente/Zerada', 'Nova Senha Cadastrada com Sucesso');
       this.notify();
       return true;
     } else if (tipo === 'EMPRESA') {
@@ -7850,7 +7918,7 @@ class StorageService {
       emp.zerarSenhaPendente = false;
       emp.ultimoAcesso = nowStr;
       this.saveEmpresa(emp);
-      this.registrarAuditoria(emp.id, 'EMPRESA', 'ADMIN', 'Acesso / Senha', 'Pendente/Zerada', 'Nova Senha Cadastrada com Sucesso');
+      this.registrarAuditoria(emp.id, 'EMPRESA', this.getActiveUser(), 'Acesso / Senha', 'Pendente/Zerada', 'Nova Senha Cadastrada com Sucesso');
       this.notify();
       return true;
     }

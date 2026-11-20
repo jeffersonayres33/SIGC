@@ -85,6 +85,7 @@ export type CategoriaCadastroBasico =
   | 'SETOR_LOTACAO'
   | 'GRUPO_ACESSO_FUNCIONARIO'
   | 'CATEGORIA_FORMULARIO_DINAMICO'
+  | 'ZONA_EMPRESA'
   | 'ADMIN_PARAMETRO';
 
 export interface ItemCadastroBasico {
@@ -101,6 +102,7 @@ export interface ItemCadastroBasico {
   setorId?: string;
   setorNome?: string;
   selecionarEmpresaVinculada?: boolean;
+  zonaObrigatoria?: boolean;
 }
 
 export type TipoExigenciaAssistencia = 'ASSISTENCIA_PLENA' | 'HORAS_DIARIAS' | 'HORAS_SEMANAIS' | 'SEM_HORA_DEFINIDA';
@@ -297,6 +299,7 @@ export interface Empresa {
   cidade: string;
   uf: string;
   cep: string;
+  zona?: string;
   rota?: string;
   area?: string;
   telefone: string;
@@ -402,6 +405,8 @@ export interface TermoFiscalizacao {
   dataFiscalizacao?: string;
   horaFiscalizacao?: string;
   dataHora?: string;
+  dataEdicao?: string;
+  editadoPor?: string;
   fiscalId?: string;
   fiscalNome?: string;
   fiscalMatricula?: string;

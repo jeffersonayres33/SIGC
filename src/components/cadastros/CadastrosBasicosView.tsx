@@ -172,6 +172,15 @@ const SUBGROUPS_EMPRESAS: SubGroupConfig[] = [
     badgeColor: 'bg-teal-50 text-teal-700 border-teal-200'
   },
   {
+    key: 'ZONA_EMPRESA',
+    label: 'Zonas',
+    icon: MapPin,
+    singular: 'Zona',
+    description: 'Zonas geográficas ou regiões administrativas para endereçamento de empresas e estabelecimentos (ex: Zona Norte, Zona Sul).',
+    linkInfo: 'Vinculado ao campo Endereço > Zona no Cadastro de Empresas (PJ) quando o município exigir zona obrigatória.',
+    badgeColor: 'bg-sky-50 text-sky-700 border-sky-200'
+  },
+  {
     key: 'ASSUNTO_REQUERIMENTO_PJ',
     label: 'Assuntos de Peticionamento (PJ)',
     icon: FileText,
@@ -431,7 +440,9 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
     i.categoria === 'SITUACAO_VINCULO' ||
     i.categoria === 'SITUACAO_EMPRESA' ||
     i.categoria === 'MOTIVO_SITUACAO_EMPRESA' ||
-    i.categoria === 'MUNICIPIO'
+    i.categoria === 'MUNICIPIO' ||
+    i.categoria === 'ZONA_EMPRESA' ||
+    i.categoria === 'ASSUNTO_REQUERIMENTO_PJ'
   ).length;
 
   const countProtocolos = allItems.filter(i => 
@@ -469,7 +480,8 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
       setorId: defaultCat === 'GRUPO_ACESSO_FUNCIONARIO' ? defaultSetor?.id : undefined,
       setorNome: defaultCat === 'GRUPO_ACESSO_FUNCIONARIO' ? defaultSetor?.nome : undefined,
       modulosPermitidos: defaultCat === 'GRUPO_ACESSO_FUNCIONARIO' ? ['dashboard', 'fiscalizacao', 'protocolos', 'empresas'] : undefined,
-      selecionarEmpresaVinculada: false
+      selecionarEmpresaVinculada: false,
+      zonaObrigatoria: false
     });
     setIsModalOpen(true);
   };
@@ -478,6 +490,7 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
     setEditingItem({ 
       ...item,
       selecionarEmpresaVinculada: Boolean(item.selecionarEmpresaVinculada),
+      zonaObrigatoria: Boolean(item.zonaObrigatoria),
       modulosPermitidos: item.modulosPermitidos 
         ? item.modulosPermitidos.map(m => String(m).toLowerCase().trim()) 
         : undefined
@@ -520,7 +533,8 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
       cargoNome: editingItem.cargoNome || undefined,
       setorId: editingItem.setorId || undefined,
       setorNome: editingItem.setorNome || undefined,
-      selecionarEmpresaVinculada: Boolean(editingItem.selecionarEmpresaVinculada)
+      selecionarEmpresaVinculada: Boolean(editingItem.selecionarEmpresaVinculada),
+      zonaObrigatoria: Boolean(editingItem.zonaObrigatoria)
     };
 
     const finalItem = sanitizeToUpper(rawItem, ['id', 'cargoId', 'setorId', 'modulosPermitidos']);
@@ -871,6 +885,14 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
                             </span>
                           </div>
                         )}
+                        {item.categoria === 'MUNICIPIO' && item.zonaObrigatoria && (
+                          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-teal-50 text-teal-800 border border-teal-200 font-bold">
+                              <MapPin className="w-3 h-3 text-teal-600" />
+                              <span>ZONA OBRIGATÓRIA</span>
+                            </span>
+                          </div>
+                        )}
                       </td>
                       <td className="py-3.5 px-4">
                         <div className="text-slate-600 uppercase max-w-md line-clamp-2">
@@ -1213,6 +1235,29 @@ export const CadastrosBasicosView: React.FC<CadastrosBasicosViewProps> = ({
                         </span>
                         <p className="text-[11px] text-emerald-800">
                           Quando esta opção estiver ativada, o profissional que protocolar um requerimento eletrônico com este assunto pelo Portal do Inscrito poderá selecionar qual empresa (ou mais de uma) vinculada ao seu registro fará o peticionamento.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+                )}
+
+                {/* Opção para Municípios da Jurisdição: Zona Obrigatória */}
+                {(editingItem.categoria === 'MUNICIPIO' || selectedCategory === 'MUNICIPIO') && (
+                  <div className="p-4 bg-teal-50/80 border border-teal-200 rounded-2xl space-y-2">
+                    <label className="flex items-start space-x-3 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(editingItem.zonaObrigatoria)}
+                        onChange={(e) => setEditingItem({ ...editingItem, zonaObrigatoria: e.target.checked })}
+                        className="w-4 h-4 mt-0.5 rounded text-teal-600 focus:ring-teal-500 border-teal-300 cursor-pointer"
+                      />
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-teal-950 uppercase flex items-center gap-1.5">
+                          <MapPin className="w-4 h-4 text-teal-600" />
+                          <span>Zona Obrigatória</span>
+                        </span>
+                        <p className="text-[11px] text-teal-800">
+                          Quando marcado, o campo "Zona" em Cadastro de Empresas &gt; Endereço ficará habilitado e será obrigatório para este município. Caso contrário, permanecerá inativado.
                         </p>
                       </div>
                     </label>

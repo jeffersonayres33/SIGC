@@ -299,8 +299,21 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
   const cadastrosTiposEmpresa = storageService.getCadastrosBasicos('TIPO_EMPRESA').filter(i => i.ativo);
   const cadastrosSituacoesEmpresa = storageService.getCadastrosBasicos('SITUACAO_EMPRESA').filter(i => i.ativo);
   const cadastrosMunicipios = storageService.getCadastrosBasicos('MUNICIPIO').filter(i => i.ativo);
+  const cadastrosZonas = storageService.getCadastrosBasicos('ZONA_EMPRESA').filter(i => i.ativo);
   const cadastrosNaturezaAtividade = storageService.getCadastrosBasicos('NATUREZA_ATIVIDADE').filter(i => i.ativo);
   const cadastrosMotivosSituacaoEmpresa = storageService.getCadastrosBasicos('MOTIVO_SITUACAO_EMPRESA').filter(i => i.ativo);
+
+  const normalizeCidadeName = (val?: string) =>
+    (val || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+
+  const isZonaObrigatoriaParaCidade = (cidadeNome?: string): boolean => {
+    const target = normalizeCidadeName(cidadeNome);
+    if (!target) return false;
+    const matched = cadastrosMunicipios.find(m => normalizeCidadeName(m.nome) === target);
+    return Boolean(matched?.zonaObrigatoria);
+  };
+
+  const isZonaObrigatoriaAtual = isZonaObrigatoriaParaCidade(editingEmpresa?.cidade);
 
   const empresas = storageService.getEmpresas({
     search: searchTerm,
@@ -347,6 +360,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
       'CEP': e.cep,
       'ENDEREÇO': e.endereco,
       'BAIRRO': e.bairro,
+      'ZONA': e.zona || '-',
       'CIDADE': e.cidade,
       'UF': e.uf,
       'RTS ATIVOS': e.responsaveisTecnicos?.map(rt => `${rt.profissionalNome} (${rt.cargo} - ${rt.cargaHorariaSemanal}h)`).join(' | ') || 'NENHUM',
@@ -426,11 +440,10 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
       cep: '',
       endereco: '',
       bairro: '',
+      zona: '',
       horariosFuncionamento: [...DEFAULT_HORARIOS_FUNCIONAMENTO],
       horariosAssistencia: [...DEFAULT_HORARIOS_ASSISTENCIA],
-      socios: [
-        { nome: 'ADMINISTRADOR PRINCIPAL', cpf: '000.000.000-00', rg: '123456 SSP/AM', participacaoPct: 100, tipo: 'Administrador' }
-      ],
+      socios: [],
       responsaveisTecnicos: []
     });
     setModalTab('dados_pj');
@@ -473,6 +486,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
       cep: '',
       endereco: '',
       bairro: '',
+      zona: '',
       horariosFuncionamento: [...DEFAULT_HORARIOS_FUNCIONAMENTO],
       horariosAssistencia: [...DEFAULT_HORARIOS_ASSISTENCIA],
       socios: [],
@@ -516,13 +530,17 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
     try {
       const res = await fetchAddressByCEP(cepToSearch);
       if (res && !res.erro) {
-        setEditingEmpresa(prev => ({
-          ...prev,
-          endereco: res.logradouro ? `${res.logradouro}${res.complemento ? ` - ${res.complemento}` : ''}` : prev?.endereco,
-          bairro: res.bairro || prev?.bairro,
-          cidade: res.localidade ? res.localidade.toUpperCase() : prev?.cidade,
-          uf: res.uf || prev?.uf
-        }));
+        setEditingEmpresa(prev => {
+          const novaCidade = res.localidade ? res.localidade.toUpperCase() : prev?.cidade;
+          return {
+            ...prev,
+            endereco: res.logradouro ? `${res.logradouro}${res.complemento ? ` - ${res.complemento}` : ''}` : prev?.endereco,
+            bairro: res.bairro || prev?.bairro,
+            cidade: novaCidade,
+            uf: res.uf || prev?.uf,
+            zona: isZonaObrigatoriaParaCidade(novaCidade) ? (prev?.zona || '') : ''
+          };
+        });
         toastService.info('Endereço Preenchido', `${res.logradouro}, ${res.bairro} - ${res.localidade}/${res.uf}`);
       } else {
         toastService.warning('CEP Não Encontrado', 'Verifique o CEP informado nos Correios.');
@@ -558,13 +576,52 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
 
   const handleSaveEmpresa = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingEmpresa?.razaoSocial || !editingEmpresa?.cnpj) {
+    if (!editingEmpresa?.razaoSocial?.trim() || !editingEmpresa?.cnpj?.trim()) {
+      setModalTab('dados_pj');
       toastService.warning('Campos Obrigatórios', 'Preencha a Razão Social e CNPJ da empresa.');
       return;
     }
 
     if (councilConfig.validarCNPJ && !isCnpjValid) {
+      setModalTab('dados_pj');
       toastService.warning('CNPJ Inválido', 'Por favor, insira um CNPJ válido antes de salvar (ou desative a validação de CNPJ em Configurações).');
+      return;
+    }
+
+    const emailTrimmed = (editingEmpresa.email || '').trim();
+    if (!emailTrimmed) {
+      setModalTab('endereco');
+      toastService.warning('E-mail Obrigatório', 'Informe o E-mail Corporativo da empresa antes de salvar.');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrimmed)) {
+      setModalTab('endereco');
+      toastService.warning('E-mail Inválido', 'Informe um endereço de e-mail corporativo válido.');
+      return;
+    }
+
+    const cepTrimmed = (editingEmpresa.cep || '').trim();
+    if (!cepTrimmed || cepTrimmed.replace(/\D/g, '').length !== 8) {
+      setModalTab('endereco');
+      toastService.warning('CEP Obrigatório', 'Informe um CEP válido com 8 dígitos no endereço da empresa.');
+      return;
+    }
+
+    const bairroTrimmed = (editingEmpresa.bairro || '').trim();
+    if (!bairroTrimmed) {
+      setModalTab('endereco');
+      toastService.warning('Bairro Obrigatório', 'Informe o Bairro no endereço da empresa.');
+      return;
+    }
+
+    const exigeZona = isZonaObrigatoriaParaCidade(editingEmpresa.cidade);
+    const zonaTrimmed = (editingEmpresa.zona || '').trim();
+    if (exigeZona && !zonaTrimmed) {
+      setModalTab('endereco');
+      toastService.warning(
+        'Zona Obrigatória',
+        `O município ${editingEmpresa.cidade} exige a seleção de uma Zona em Endereço > Zona.`
+      );
       return;
     }
 
@@ -628,13 +685,14 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
       justificativaCondicao: avaliacao.justificativa,
       capitalSocial: Number(editingEmpresa.capitalSocial) || 100000,
       telefone: editingEmpresa.telefone || '(92) 3000-0000',
-      email: editingEmpresa.email || 'EMPRESA@EXEMPLO.COM.BR',
-      endereco: editingEmpresa.endereco || 'AV. BRASIL, 500',
+      email: emailTrimmed,
+      endereco: editingEmpresa.endereco || '',
       complemento: editingEmpresa.complemento || '',
-      bairro: editingEmpresa.bairro || 'CENTRO',
+      bairro: bairroTrimmed,
       cidade: editingEmpresa.cidade || 'MANAUS',
       uf: editingEmpresa.uf || 'AM',
-      cep: editingEmpresa.cep || '69000-000',
+      cep: cepTrimmed,
+      zona: exigeZona ? zonaTrimmed.toUpperCase() : '',
       horariosFuncionamento: editingEmpresa.horariosFuncionamento || [...DEFAULT_HORARIOS_FUNCIONAMENTO],
       horariosAssistencia: editingEmpresa.horariosAssistencia || [...DEFAULT_HORARIOS_ASSISTENCIA],
       socios: editingEmpresa.socios || [],
@@ -1429,6 +1487,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                 <div><span className="text-slate-400">NATUREZA DA ATIVIDADE:</span> <span className="text-slate-800 font-semibold">{selectedEmpresa.naturezaAtividade || 'NÃO INFORMADA'}</span></div>
                 <div><span className="text-slate-400">CAPITAL SOCIAL:</span> <span className="text-slate-800 font-mono">R$ {Number(selectedEmpresa.capitalSocial).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span></div>
                 <div><span className="text-slate-400">ENDEREÇO:</span> <span className="text-slate-800">{selectedEmpresa.endereco}, {selectedEmpresa.bairro} - {selectedEmpresa.cidade}/{selectedEmpresa.uf} (CEP: {selectedEmpresa.cep})</span></div>
+                {selectedEmpresa.zona && <div><span className="text-slate-400">ZONA:</span> <span className="text-slate-800 font-semibold">{selectedEmpresa.zona}</span></div>}
                 {selectedEmpresa.complemento && <div><span className="text-slate-400">COMPLEMENTO:</span> <span className="text-slate-800">{selectedEmpresa.complemento}</span></div>}
               </div>
 
@@ -2823,7 +2882,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                     </div>
 
                     <div>
-                      <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">E-mail Corporativo</label>
+                      <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">E-mail Corporativo *</label>
                       <input
                         type="email"
                         value={editingEmpresa.email || ''}
@@ -2851,7 +2910,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
 
                     {/* CEP Field */}
                     <div className="space-y-1">
-                      <label className="block text-slate-700 font-bold uppercase text-[10px]">CEP:</label>
+                      <label className="block text-slate-700 font-bold uppercase text-[10px]">CEP *</label>
                       <div className="flex items-center gap-2 max-w-sm">
                         <input
                           type="text"
@@ -2901,7 +2960,7 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                     {/* Bairro, Cidade, UF */}
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
                       <div className="sm:col-span-5">
-                        <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Bairro:</label>
+                        <label className="block text-slate-700 font-bold mb-1 uppercase text-[10px]">Bairro *</label>
                         <input
                           type="text"
                           value={editingEmpresa.bairro || ''}
@@ -2916,7 +2975,15 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                           type="text"
                           list="municipios-empresa-list"
                           value={editingEmpresa.cidade || ''}
-                          onChange={(e) => setEditingEmpresa(prev => ({ ...prev, cidade: e.target.value.toUpperCase() }))}
+                          onChange={(e) => {
+                            const novaCidade = e.target.value.toUpperCase();
+                            const exige = isZonaObrigatoriaParaCidade(novaCidade);
+                            setEditingEmpresa(prev => ({
+                              ...prev,
+                              cidade: novaCidade,
+                              zona: exige ? (prev?.zona || '') : ''
+                            }));
+                          }}
                           placeholder="MANAUS"
                           className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 uppercase font-bold"
                         />
@@ -2924,10 +2991,6 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                           {cadastrosMunicipios.map(m => (
                             <option key={m.id} value={m.nome}>{m.nome}</option>
                           ))}
-                          <option value="MANAUS" />
-                          <option value="MANACAPURU" />
-                          <option value="ITACOATIARA" />
-                          <option value="PARINTINS" />
                         </datalist>
                       </div>
                       <div className="sm:col-span-2">
@@ -2941,6 +3004,44 @@ export const EmpresasView: React.FC<EmpresasViewProps> = ({ onOpenCrtModal, onOp
                           className="w-full px-2 py-2 bg-white border border-slate-300 rounded-xl text-slate-900 font-mono font-bold text-center uppercase"
                         />
                       </div>
+                    </div>
+
+                    {/* Zona (Vinculada a Cadastros Básicos > Empresas > Zonas e condicionada ao Município) */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-slate-700 font-bold uppercase text-[10px]">
+                          Zona {isZonaObrigatoriaAtual ? '*' : '(Inativo)'}
+                        </label>
+                        <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-md ${
+                          isZonaObrigatoriaAtual
+                            ? 'bg-teal-50 text-teal-800 border border-teal-200'
+                            : 'bg-slate-100 text-slate-500 border border-slate-200'
+                        }`}>
+                          {isZonaObrigatoriaAtual ? 'Obrigatória para este município' : 'Inativa — Município não exige zona'}
+                        </span>
+                      </div>
+                      <select
+                        disabled={!isZonaObrigatoriaAtual}
+                        value={isZonaObrigatoriaAtual ? (editingEmpresa.zona || '') : ''}
+                        onChange={(e) => setEditingEmpresa(prev => ({ ...prev, zona: e.target.value.toUpperCase() }))}
+                        className={`w-full px-3 py-2 border rounded-xl uppercase font-semibold text-xs transition-colors ${
+                          isZonaObrigatoriaAtual
+                            ? 'bg-white border-slate-300 text-slate-900 cursor-pointer'
+                            : 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                        }`}
+                      >
+                        <option value="">
+                          {isZonaObrigatoriaAtual
+                            ? (cadastrosZonas.length > 0 ? 'SELECIONE A ZONA *' : 'NENHUMA ZONA CADASTRADA EM CADASTROS BÁSICOS')
+                            : 'CAMPO INATIVO — MUNICÍPIO SEM ZONA OBRIGATÓRIA'}
+                        </option>
+                        {cadastrosZonas.map(z => (
+                          <option key={z.id} value={z.nome.toUpperCase()}>{z.nome.toUpperCase()}</option>
+                        ))}
+                        {isZonaObrigatoriaAtual && editingEmpresa.zona && !cadastrosZonas.some(z => z.nome.toUpperCase() === editingEmpresa.zona?.toUpperCase()) && (
+                          <option value={editingEmpresa.zona.toUpperCase()}>{editingEmpresa.zona.toUpperCase()} (Atual)</option>
+                        )}
+                      </select>
                     </div>
                   </div>
                 </div>

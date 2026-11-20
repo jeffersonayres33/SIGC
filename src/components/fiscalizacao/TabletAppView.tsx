@@ -46,13 +46,15 @@ import {
   BatteryCharging,
   Maximize2,
   ChevronUp,
-  LogOut
+  LogOut,
+  Edit3
 } from 'lucide-react';
 import { TermoFiscalizacao, Empresa, Profissional } from '../../types';
 import { storageService } from '../../services/storageService';
 import { toastService } from '../../services/toastService';
 import { printTermoFiscalizacao } from '../../utils/printTermoFiscalizacao';
 import { ModalEnviarTermoEmail } from './ModalEnviarTermoEmail';
+import { ModalEditarTermoFiscalizacao } from './ModalEditarTermoFiscalizacao';
 import { SIGCON_LOGO } from '../../constants/assets';
 
 interface TabletAppViewProps {
@@ -121,6 +123,13 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
   const [isGettingGps, setIsGettingGps] = useState(false);
 
   // Estabelecimentos Data & Filters
+  const [storageTick, setStorageTick] = useState(0);
+  useEffect(() => {
+    return storageService.subscribe(() => {
+      setStorageTick(t => t + 1);
+    });
+  }, []);
+
   const allEmpresas = storageService.getEmpresas();
   const allTermos = storageService.getTermosFiscalizacao();
   const [searchTerm, setSearchTerm] = useState('');
@@ -130,19 +139,29 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
   const [filtroOrdenacao, setFiltroOrdenacao] = useState<'codigo' | 'razao' | 'fantasia' | 'bairro' | 'endereco'>('fantasia');
   const [filtroSituacao, setFiltroSituacao] = useState<'todos' | 'regular' | 'irregular'>('todos');
   const [filtroCondicao, setFiltroCondicao] = useState<'todos' | 'ativo' | 'baixado' | 'suspenso'>('todos');
-  const [filtroNatureza, setFiltroNatureza] = useState<'todos' | 'drogaria' | 'manipulacao' | 'hospitalar' | 'distribuidora'>('todos');
-  const [filtroRota, setFiltroRota] = useState<string>('Canutama');
-  const [filtroCidade, setFiltroCidade] = useState<string>('Canutama');
+  const [filtroTipoEmpresa, setFiltroTipoEmpresa] = useState<string>('todos');
+  const [filtroNaturezaAtividade, setFiltroNaturezaAtividade] = useState<string>('todos');
+  const [filtroSituacaoEmpresa, setFiltroSituacaoEmpresa] = useState<string>('todos');
+  const [filtroZona, setFiltroZona] = useState<string>('todos');
+  const [filtroCidade, setFiltroCidade] = useState<string>('todos');
   const [filtroBairro, setFiltroBairro] = useState<string>('');
   const [filtroEndereco, setFiltroEndereco] = useState<string>('');
   const [filtroFantasia, setFiltroFantasia] = useState<string>('');
   const [filtroFiscalizadas, setFiltroFiscalizadas] = useState<'todos' | 'sim' | 'nao'>('todos');
+  const [filtroFiscDataInicio, setFiltroFiscDataInicio] = useState<string>('');
+  const [filtroFiscDataFim, setFiltroFiscDataFim] = useState<string>('');
+  const [filtroInspecaoAno, setFiltroInspecaoAno] = useState<string>('');
+  const [filtroInspecaoCondicao, setFiltroInspecaoCondicao] = useState<'eq' | 'gte' | 'lte'>('lte');
+  const [filtroInspecaoQtd, setFiltroInspecaoQtd] = useState<string>('');
 
-  // Histórico de Termos Filters
+  // Histórico de Termos Filters & Actions
   const [filtroHistoricoPeriodo, setFiltroHistoricoPeriodo] = useState<'todos' | '1_ano' | '2_anos' | '3_anos' | 'personalizado'>('todos');
   const [filtroDataInicio, setFiltroDataInicio] = useState<string>('');
   const [filtroDataFim, setFiltroDataFim] = useState<string>('');
   const [filtroHistoricoTipo, setFiltroHistoricoTipo] = useState<'todos' | 'intimada' | 'notificada' | 'autuada' | 'regular'>('todos');
+  const [ordemHistoricoData, setOrdemHistoricoData] = useState<'desc' | 'asc'>('desc');
+  const [termoParaEditarHistorico, setTermoParaEditarHistorico] = useState<TermoFiscalizacao | null>(null);
+  const [termoParaExcluirHistorico, setTermoParaExcluirHistorico] = useState<TermoFiscalizacao | null>(null);
 
   // Form State for Novo Termo (Screens 3, 4, 6, 7, 8, 9)
   const [encontrava, setEncontrava] = useState<'Aberta' | 'Fechada'>('Aberta');
@@ -591,6 +610,89 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
     }
   }, [rtSituacao, encontrava]);
 
+  const normFilterText = (val?: string) =>
+    (val || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+      .toUpperCase();
+
+  const getTermoYmd = (termo: TermoFiscalizacao): string | null => {
+    const raw = (termo.dataFiscalizacao || termo.dataHora || '').trim();
+    if (!raw) return null;
+    const brMatch = raw.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+    if (brMatch) {
+      return `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}`;
+    }
+    const isoMatch = raw.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) {
+      return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    }
+    return null;
+  };
+
+  const getEmpresaTermos = (emp: Empresa) => {
+    const empCnpjDigits = (emp.cnpj || '').replace(/\D/g, '');
+    return allTermos.filter(t => {
+      if (t.empresaId === emp.id) return true;
+      if (!empCnpjDigits) return false;
+      const tCnpj = (t.cnpj || '').replace(/\D/g, '');
+      const tEmpCnpj = (t.empresaCnpj || '').replace(/\D/g, '');
+      return tCnpj === empCnpjDigits || tEmpCnpj === empCnpjDigits;
+    });
+  };
+
+  const cadastrosZonas = cadastrosBasicos
+    .filter(i => i.categoria === 'ZONA_EMPRESA' && i.ativo)
+    .sort((a, b) => a.nome.localeCompare(b.nome));
+  const cadastrosTiposEmpresa = cadastrosBasicos
+    .filter(i => i.categoria === 'TIPO_EMPRESA' && i.ativo)
+    .sort((a, b) => a.nome.localeCompare(b.nome));
+  const cadastrosNaturezasAtividade = cadastrosBasicos
+    .filter(i => i.categoria === 'NATUREZA_ATIVIDADE' && i.ativo)
+    .sort((a, b) => a.nome.localeCompare(b.nome));
+  const cadastrosSituacoesEmpresa = cadastrosBasicos
+    .filter(i => i.categoria === 'SITUACAO_EMPRESA' && i.ativo)
+    .sort((a, b) => a.nome.localeCompare(b.nome));
+
+  const anosInspecaoDisponiveis = (() => {
+    const currentYear = new Date().getFullYear();
+    const yearSet = new Set<number>();
+    for (let y = currentYear + 1; y >= currentYear - 5; y--) {
+      yearSet.add(y);
+    }
+    yearSet.add(2026);
+    allTermos.forEach(t => {
+      const ymd = getTermoYmd(t);
+      if (ymd) {
+        const y = Number(ymd.slice(0, 4));
+        if (!Number.isNaN(y) && y > 1990) yearSet.add(y);
+      }
+    });
+    return Array.from(yearSet).sort((a, b) => b - a);
+  })();
+
+  const handleResetFiltrosEstabelecimentos = () => {
+    setSearchTerm('');
+    setFiltroOrdenacao('fantasia');
+    setFiltroSituacao('todos');
+    setFiltroCondicao('todos');
+    setFiltroTipoEmpresa('todos');
+    setFiltroNaturezaAtividade('todos');
+    setFiltroSituacaoEmpresa('todos');
+    setFiltroZona('todos');
+    setFiltroCidade('todos');
+    setFiltroBairro('');
+    setFiltroEndereco('');
+    setFiltroFantasia('');
+    setFiltroFiscalizadas('todos');
+    setFiltroFiscDataInicio('');
+    setFiltroFiscDataFim('');
+    setFiltroInspecaoAno('');
+    setFiltroInspecaoCondicao('lte');
+    setFiltroInspecaoQtd('');
+  };
+
   // Filter establishments
   const filteredEmpresas = allEmpresas.filter(emp => {
     // Search query
@@ -606,14 +708,14 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
       if (!matchQuery) return false;
     }
 
-    // Rota
-    if (filtroRota !== 'todos' && filtroRota) {
-      if (filtroRota === 'Canutama' && emp.cidade !== 'Canutama') return false;
+    // Zona (Cadastros Básicos > Empresas > Zona)
+    if (filtroZona !== 'todos' && filtroZona) {
+      if (normFilterText(emp.zona) !== normFilterText(filtroZona)) return false;
     }
 
     // Cidade
     if (filtroCidade !== 'todos' && filtroCidade) {
-      if (emp.cidade && emp.cidade.toLowerCase() !== filtroCidade.toLowerCase()) return false;
+      if (!emp.cidade || normFilterText(emp.cidade) !== normFilterText(filtroCidade)) return false;
     }
 
     // Bairro
@@ -621,30 +723,72 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
       if (!emp.bairro || !emp.bairro.toLowerCase().includes(filtroBairro.toLowerCase())) return false;
     }
 
+    // Endereço
+    if (filtroEndereco) {
+      if (!emp.endereco || !emp.endereco.toLowerCase().includes(filtroEndereco.toLowerCase())) return false;
+    }
+
     // Fantasia
     if (filtroFantasia) {
       if (!emp.nomeFantasia.toLowerCase().includes(filtroFantasia.toLowerCase())) return false;
     }
 
-    // Situação
+    // Regularidade (Condição)
     if (filtroSituacao === 'regular' && emp.condicao !== 'Regular') return false;
     if (filtroSituacao === 'irregular' && emp.condicao === 'Regular') return false;
 
-    // Condição
+    // Condição auxiliar
     if (filtroCondicao !== 'todos') {
       if (emp.condicao?.toLowerCase() !== filtroCondicao) return false;
     }
 
-    // Natureza
-    if (filtroNatureza !== 'todos') {
-      if (!emp.tipoEstabelecimento?.toLowerCase().includes(filtroNatureza)) return false;
+    // Tipo de Empresa (Cadastros Básicos > Empresas)
+    if (filtroTipoEmpresa !== 'todos') {
+      if (normFilterText(emp.tipoEstabelecimento) !== normFilterText(filtroTipoEmpresa)) return false;
     }
 
-    // Fiscalizadas
+    // Natureza de Atividade (Cadastros Básicos > Empresas)
+    if (filtroNaturezaAtividade !== 'todos') {
+      if (normFilterText(emp.naturezaAtividade) !== normFilterText(filtroNaturezaAtividade)) return false;
+    }
+
+    // Situação da Empresa (Cadastros Básicos > Empresas)
+    if (filtroSituacaoEmpresa !== 'todos') {
+      if (normFilterText(emp.situacao) !== normFilterText(filtroSituacaoEmpresa)) return false;
+    }
+
+    const termosEmpresa =
+      filtroFiscalizadas !== 'todos' || (filtroInspecaoAno !== '' && filtroInspecaoQtd.trim() !== '')
+        ? getEmpresaTermos(emp)
+        : [];
+
+    // Fiscalizadas dentro do período selecionado
     if (filtroFiscalizadas !== 'todos') {
-      const hasTermos = allTermos.some(t => t.empresaId === emp.id);
-      if (filtroFiscalizadas === 'sim' && !hasTermos) return false;
-      if (filtroFiscalizadas === 'nao' && hasTermos) return false;
+      const hasTermosNoPeriodo = termosEmpresa.some(t => {
+        if (!filtroFiscDataInicio && !filtroFiscDataFim) return true;
+        const ymd = getTermoYmd(t);
+        if (!ymd) return false;
+        if (filtroFiscDataInicio && ymd < filtroFiscDataInicio) return false;
+        if (filtroFiscDataFim && ymd > filtroFiscDataFim) return false;
+        return true;
+      });
+      if (filtroFiscalizadas === 'sim' && !hasTermosNoPeriodo) return false;
+      if (filtroFiscalizadas === 'nao' && hasTermosNoPeriodo) return false;
+    }
+
+    // Filtro por Ano + Condição + Quantidade de Inspeções
+    if (filtroInspecaoAno !== '' && filtroInspecaoQtd.trim() !== '') {
+      const targetYear = Number(filtroInspecaoAno);
+      const targetQtd = Number(filtroInspecaoQtd);
+      if (!Number.isNaN(targetYear) && !Number.isNaN(targetQtd)) {
+        const qtdNoAno = termosEmpresa.filter(t => {
+          const ymd = getTermoYmd(t);
+          return ymd ? Number(ymd.slice(0, 4)) === targetYear : false;
+        }).length;
+        if (filtroInspecaoCondicao === 'eq' && qtdNoAno !== targetQtd) return false;
+        if (filtroInspecaoCondicao === 'gte' && qtdNoAno < targetQtd) return false;
+        if (filtroInspecaoCondicao === 'lte' && qtdNoAno > targetQtd) return false;
+      }
     }
 
     return true;
@@ -830,7 +974,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
       endereco: selectedEmpresa.endereco || 'Centro Comercial de Canutama',
       bairro: selectedEmpresa.bairro || 'Centro',
       cidade: selectedEmpresa.cidade || 'Canutama',
-      rota: filtroRota,
+      rota: selectedEmpresa.zona || (filtroZona !== 'todos' ? filtroZona : selectedEmpresa.cidade || 'Geral'),
 
       fiscalId: authUser?.id || funcionarioFiscal?.id || 'fisc-01',
       fiscalNome: fiscalNome,
@@ -942,10 +1086,44 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
     setCurrentScreen('historico_termos');
   };
 
-  // Helper: Get Termos for Selected Empresa
-  const termosDaEmpresa = selectedEmpresa 
-    ? allTermos.filter(t => t.empresaId === selectedEmpresa.id || t.cnpj === selectedEmpresa.cnpj)
+  const getTermoTimestamp = (t: TermoFiscalizacao): number => {
+    const raw = (t.dataHora || t.dataFiscalizacao || '').trim();
+    if (!raw) return 0;
+    const brMatch = raw.match(/(\d{2})\/(\d{2})\/(\d{4})(?:[\sT]+(\d{2}):(\d{2}))?/);
+    if (brMatch) {
+      return new Date(
+        Number(brMatch[3]),
+        Number(brMatch[2]) - 1,
+        Number(brMatch[1]),
+        Number(brMatch[4] || 0),
+        Number(brMatch[5] || 0)
+      ).getTime();
+    }
+    const isoMatch = raw.match(/(\d{4})-(\d{2})-(\d{2})(?:[\sT]+(\d{2}):(\d{2}))?/);
+    if (isoMatch) {
+      return new Date(
+        Number(isoMatch[1]),
+        Number(isoMatch[2]) - 1,
+        Number(isoMatch[3]),
+        Number(isoMatch[4] || 0),
+        Number(isoMatch[5] || 0)
+      ).getTime();
+    }
+    return 0;
+  };
+
+  // Helper: Get Termos for Selected Empresa sorted newest-first
+  const termosDaEmpresa = selectedEmpresa
+    ? [...getEmpresaTermos(selectedEmpresa)].sort((a, b) => {
+        const diff = getTermoTimestamp(b) - getTermoTimestamp(a);
+        if (diff !== 0) return diff;
+        const aIdTs = Number((a.id || '').replace(/\D/g, '')) || 0;
+        const bIdTs = Number((b.id || '').replace(/\D/g, '')) || 0;
+        return bIdTs - aIdTs;
+      })
     : [];
+
+  const ultimoTermoId = termosDaEmpresa.length > 0 ? termosDaEmpresa[0].id : null;
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans select-none">
@@ -962,7 +1140,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
             </div>
             <span className="font-bold text-slate-200 font-mono tracking-wider shrink-0 text-xs">{council.sigla}</span>
             <span className="hidden lg:inline text-slate-500">•</span>
-            <span className="hidden lg:inline text-slate-400 truncate text-xs">Rota: <strong className="text-emerald-400">{filtroRota}</strong></span>
+            <span className="hidden lg:inline text-slate-400 truncate text-xs">Zona: <strong className="text-emerald-400">{filtroZona === 'todos' ? 'Todas' : filtroZona}</strong></span>
           </div>
 
           {/* Sair da Fiscalização (Shown here on mobile so it is ALWAYS visible and never cut off) */}
@@ -1176,7 +1354,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
             <div className="mt-6 bg-white border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
               <div className="flex items-center space-x-2">
                 <MapPin className="w-4 h-4 text-rose-500" />
-                <span>Rota Ativa: <strong className="text-slate-900 font-bold">{filtroRota} (Polo Purus)</strong></span>
+                <span>Zona Ativa: <strong className="text-slate-900 font-bold">{filtroZona === 'todos' ? 'Todas as Zonas' : filtroZona}</strong></span>
                 <span className="text-slate-400">•</span>
                 <span>{filteredEmpresas.length} estabelecimentos carregados</span>
               </div>
@@ -1210,7 +1388,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                       Estabelecimentos
                     </h2>
                     <p className="text-xs text-slate-500">
-                      {filtroRota} • {filteredEmpresas.length} cadastros encontrados
+                      {filtroZona === 'todos' ? 'Todas as Zonas' : `Zona: ${filtroZona}`} • {filteredEmpresas.length} cadastros encontrados
                     </p>
                   </div>
                 </div>
@@ -1263,37 +1441,26 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                     </span>
                     <button
                       type="button"
-                      onClick={() => {
-                        setFiltroOrdenacao('fantasia');
-                        setFiltroSituacao('todos');
-                        setFiltroCondicao('todos');
-                        setFiltroNatureza('todos');
-                        setFiltroRota('todos');
-                        setFiltroCidade('todos');
-                        setFiltroBairro('');
-                        setFiltroEndereco('');
-                        setFiltroFiscalizadas('todos');
-                      }}
-                      className="text-xs text-rose-600 font-bold hover:underline"
+                      onClick={handleResetFiltrosEstabelecimentos}
+                      className="text-xs text-rose-600 font-bold hover:underline cursor-pointer"
                     >
                       Limpar Todos
                     </button>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {/* Rota (Cadastros Básicos / Empresas) */}
+                    {/* Zona (Cadastros Básicos > Empresas > Zona) */}
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">Rota:</label>
+                      <label className="block font-bold text-slate-700 mb-1">Zona:</label>
                       <select
-                        value={filtroRota}
-                        onChange={(e) => setFiltroRota(e.target.value)}
+                        value={filtroZona}
+                        onChange={(e) => setFiltroZona(e.target.value)}
                         className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
                       >
-                        <option value="Canutama">Canutama (Polo Purus)</option>
-                        <option value="Manaus - Centro">Manaus - Centro</option>
-                        <option value="Manaus - Zona Leste">Manaus - Zona Leste</option>
-                        <option value="INTERIOR">Interior Geral</option>
-                        <option value="todos">Todas as Rotas</option>
+                        <option value="todos">Todas as Zonas</option>
+                        {cadastrosZonas.map(z => (
+                          <option key={z.id} value={z.nome}>{z.nome}</option>
+                        ))}
                       </select>
                     </div>
 
@@ -1320,18 +1487,16 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                       </select>
                     </div>
 
-                    {/* Situação Cadastral (SITUACAO_EMPRESA) */}
+                    {/* Bairro */}
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">Situação:</label>
-                      <select
-                        value={filtroSituacao}
-                        onChange={(e) => setFiltroSituacao(e.target.value as any)}
-                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
-                      >
-                        <option value="todos">Todos</option>
-                        <option value="regular">Regular</option>
-                        <option value="irregular">Irregular</option>
-                      </select>
+                      <label className="block font-bold text-slate-700 mb-1">Bairro:</label>
+                      <input
+                        type="text"
+                        value={filtroBairro}
+                        onChange={(e) => setFiltroBairro(e.target.value)}
+                        placeholder="Ex: Centro, São Francisco..."
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800"
+                      />
                     </div>
 
                     {/* Ordenação */}
@@ -1350,46 +1515,168 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                       </select>
                     </div>
 
-                    {/* Bairro */}
+                    {/* Tipo de Empresa (Cadastros Básicos > Empresas > TIPO_EMPRESA) */}
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">Bairro:</label>
-                      <input
-                        type="text"
-                        value={filtroBairro}
-                        onChange={(e) => setFiltroBairro(e.target.value)}
-                        placeholder="Ex: Centro, São Francisco..."
-                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-slate-800"
-                      />
+                      <label className="block font-bold text-slate-700 mb-1">Tipo de Empresa:</label>
+                      <select
+                        value={filtroTipoEmpresa}
+                        onChange={(e) => setFiltroTipoEmpresa(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                      >
+                        <option value="todos">Todos os Tipos</option>
+                        {cadastrosTiposEmpresa.map(t => (
+                          <option key={t.id} value={t.nome}>{t.nome}</option>
+                        ))}
+                      </select>
                     </div>
 
-                    {/* Fiscalizadas */}
+                    {/* Natureza de Atividade (Cadastros Básicos > Empresas > NATUREZA_ATIVIDADE) */}
                     <div>
-                      <label className="block font-bold text-slate-700 mb-1">Fiscalizadas Hoje:</label>
+                      <label className="block font-bold text-slate-700 mb-1">Natureza de Atividade:</label>
                       <select
-                        value={filtroFiscalizadas}
-                        onChange={(e) => setFiltroFiscalizadas(e.target.value as any)}
+                        value={filtroNaturezaAtividade}
+                        onChange={(e) => setFiltroNaturezaAtividade(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                      >
+                        <option value="todos">Todas as Naturezas</option>
+                        {cadastrosNaturezasAtividade.map(n => (
+                          <option key={n.id} value={n.nome}>{n.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Situações da Empresa (Cadastros Básicos > Empresas > SITUACAO_EMPRESA) */}
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Situação da Empresa:</label>
+                      <select
+                        value={filtroSituacaoEmpresa}
+                        onChange={(e) => setFiltroSituacaoEmpresa(e.target.value)}
+                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
+                      >
+                        <option value="todos">Todas as Situações</option>
+                        {cadastrosSituacoesEmpresa.map(s => (
+                          <option key={s.id} value={s.nome}>{s.nome}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Regularidade Sanitária */}
+                    <div>
+                      <label className="block font-bold text-slate-700 mb-1">Condição / Regularidade:</label>
+                      <select
+                        value={filtroSituacao}
+                        onChange={(e) => setFiltroSituacao(e.target.value as any)}
                         className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
                       >
                         <option value="todos">Todos</option>
-                        <option value="sim">Apenas Fiscalizadas</option>
-                        <option value="nao">Não Fiscalizadas</option>
+                        <option value="regular">Regular</option>
+                        <option value="irregular">Irregular</option>
                       </select>
                     </div>
+                  </div>
 
-                    {/* Natureza / Atividade */}
-                    <div className="sm:col-span-2">
-                      <label className="block font-bold text-slate-700 mb-1">Tipo de Estabelecimento / Atividade:</label>
-                      <select
-                        value={filtroNatureza}
-                        onChange={(e) => setFiltroNatureza(e.target.value as any)}
-                        className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-lg font-medium text-slate-800"
-                      >
-                        <option value="todos">Todos os Tipos de Estabelecimento</option>
-                        <option value="drogaria">Drogarias</option>
-                        <option value="manipulacao">Farmácias com Manipulação</option>
-                        <option value="hospitalar">Farmácias Hospitalares / Clínicas</option>
-                        <option value="distribuidora">Distribuidoras / Transportadoras</option>
-                      </select>
+                  {/* Segunda Linha: Fiscalização por Período + Condição por Ano/Quantidade de Inspeções */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 pt-1">
+                    {/* Fiscalizados por Período */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="font-bold text-slate-700">Fiscalização por Período:</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const todayIso = new Date().toISOString().split('T')[0];
+                            setFiltroFiscDataInicio(todayIso);
+                            setFiltroFiscDataFim(todayIso);
+                            if (filtroFiscalizadas === 'todos') {
+                              setFiltroFiscalizadas('sim');
+                            }
+                          }}
+                          className="text-[11px] font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                        >
+                          Usar data de hoje
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <select
+                          value={filtroFiscalizadas}
+                          onChange={(e) => setFiltroFiscalizadas(e.target.value as any)}
+                          className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg font-medium text-slate-800"
+                        >
+                          <option value="todos">Todos</option>
+                          <option value="sim">Apenas fiscalizados (no período)</option>
+                          <option value="nao">Não fiscalizados (no período)</option>
+                        </select>
+                        <div className="flex items-center space-x-1.5">
+                          <span className="text-[11px] font-semibold text-slate-500 shrink-0">De:</span>
+                          <input
+                            type="date"
+                            value={filtroFiscDataInicio}
+                            onChange={(e) => setFiltroFiscDataInicio(e.target.value)}
+                            className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800"
+                          />
+                        </div>
+                        <div className="flex items-center space-x-1.5">
+                          <span className="text-[11px] font-semibold text-slate-500 shrink-0">Até:</span>
+                          <input
+                            type="date"
+                            value={filtroFiscDataFim}
+                            onChange={(e) => setFiltroFiscDataFim(e.target.value)}
+                            className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Filtro por Ano + Condição + Quantidade de Inspeções */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-2">
+                      <label className="block font-bold text-slate-700">
+                        Quantidade de Inspeções no Ano:
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div>
+                          <select
+                            value={filtroInspecaoAno}
+                            onChange={(e) => {
+                              const nextYear = e.target.value;
+                              setFiltroInspecaoAno(nextYear);
+                              if (nextYear && filtroInspecaoQtd.trim() === '') {
+                                setFiltroInspecaoQtd('0');
+                              }
+                            }}
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg font-medium text-slate-800"
+                            aria-label="Ano das inspeções"
+                          >
+                            <option value="">Ano (Não filtrar)</option>
+                            {anosInspecaoDisponiveis.map(ano => (
+                              <option key={ano} value={String(ano)}>{ano}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <select
+                            value={filtroInspecaoCondicao}
+                            onChange={(e) => setFiltroInspecaoCondicao(e.target.value as 'eq' | 'gte' | 'lte')}
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg font-medium text-slate-800"
+                            aria-label="Condição da quantidade de inspeções"
+                          >
+                            <option value="eq">Igual a (=)</option>
+                            <option value="gte">Maior ou igual a (≥)</option>
+                            <option value="lte">Menor ou igual a (≤)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            value={filtroInspecaoQtd}
+                            onChange={(e) => setFiltroInspecaoQtd(e.target.value)}
+                            placeholder="Qtd. inspeções (ex: 0)"
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-slate-800"
+                            aria-label="Quantidade de inspeções"
+                          />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1403,16 +1690,11 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   <Building className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                   <h3 className="text-sm font-bold text-slate-700">Nenhum estabelecimento encontrado</h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    Ajuste os filtros de busca ou verifique se a rota selecionada está correta.
+                    Ajuste os filtros de busca ou verifique os parâmetros selecionados.
                   </p>
                   <button
-                    onClick={() => {
-                      setSearchTerm('');
-                      setFiltroRota('todos');
-                      setFiltroCidade('todos');
-                      setFiltroBairro('');
-                    }}
-                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700"
+                    onClick={handleResetFiltrosEstabelecimentos}
+                    className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 cursor-pointer"
                   >
                     Limpar Filtros de Busca
                   </button>
@@ -1491,8 +1773,25 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
 
                           <div className="text-[11px] text-slate-500 mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                             <span className="flex items-center break-words"><MapPin className="w-3 h-3 mr-0.5 text-slate-400 shrink-0" /> {emp.endereco || 'Centro'}, {emp.bairro || 'Centro'} - {emp.cidade}</span>
+                            {emp.zona && (
+                              <>
+                                <span className="text-slate-300 hidden sm:inline">•</span>
+                                <span className="text-blue-700 font-semibold">Zona: {emp.zona}</span>
+                              </>
+                            )}
                             <span className="text-slate-300 hidden sm:inline">•</span>
                             <span className="break-words">RT: <strong className="text-slate-700">{emp.responsavelTecnico || 'Não averbado'}</strong></span>
+                            {filtroInspecaoAno !== '' && (
+                              <>
+                                <span className="text-slate-300 hidden sm:inline">•</span>
+                                <span className="text-slate-700 font-semibold">
+                                  Inspeções em {filtroInspecaoAno}: {termosEmpresa.filter(t => {
+                                    const ymd = getTermoYmd(t);
+                                    return ymd ? Number(ymd.slice(0, 4)) === Number(filtroInspecaoAno) : false;
+                                  }).length}
+                                </span>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -2783,6 +3082,14 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
             }
 
             return true;
+          }).sort((a, b) => {
+            const diff = getTermoTimestamp(a) - getTermoTimestamp(b);
+            if (diff !== 0) {
+              return ordemHistoricoData === 'asc' ? diff : -diff;
+            }
+            const aIdTs = Number((a.id || '').replace(/\D/g, '')) || 0;
+            const bIdTs = Number((b.id || '').replace(/\D/g, '')) || 0;
+            return ordemHistoricoData === 'asc' ? aIdTs - bIdTs : bIdTs - aIdTs;
           });
 
           return (
@@ -2891,23 +3198,41 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Filtro Ocorrência: intimada, notificada, autuada, todos */}
-                  <div className="flex items-center space-x-2">
-                    <span className="font-bold text-slate-700 flex items-center space-x-1">
-                      <Filter className="w-3.5 h-3.5 text-blue-600" />
-                      <span>Ocorrência:</span>
-                    </span>
-                    <select
-                      value={filtroHistoricoTipo}
-                      onChange={(e) => setFiltroHistoricoTipo(e.target.value as any)}
-                      className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:bg-white text-xs cursor-pointer"
-                    >
-                      <option value="todos">Todas as Inspeções</option>
-                      <option value="intimada">Apenas Intimada</option>
-                      <option value="notificada">Apenas Notificada</option>
-                      <option value="autuada">Apenas Autuada (Auto de Infração)</option>
-                      <option value="regular">Apenas Conforme / Regular</option>
-                    </select>
+                  {/* Filtro Ocorrência & Ordenação por Data */}
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-bold text-slate-700 flex items-center space-x-1">
+                        <Filter className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Ocorrência:</span>
+                      </span>
+                      <select
+                        value={filtroHistoricoTipo}
+                        onChange={(e) => setFiltroHistoricoTipo(e.target.value as any)}
+                        className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:bg-white text-xs cursor-pointer"
+                      >
+                        <option value="todos">Todas as Inspeções</option>
+                        <option value="intimada">Apenas Intimada</option>
+                        <option value="notificada">Apenas Notificada</option>
+                        <option value="autuada">Apenas Autuada (Auto de Infração)</option>
+                        <option value="regular">Apenas Conforme / Regular</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <span className="font-bold text-slate-700 flex items-center space-x-1">
+                        <Clock className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Ordenar por Data:</span>
+                      </span>
+                      <select
+                        value={ordemHistoricoData}
+                        onChange={(e) => setOrdemHistoricoData(e.target.value as 'desc' | 'asc')}
+                        className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:bg-white text-xs cursor-pointer"
+                        aria-label="Ordenar histórico por data"
+                      >
+                        <option value="desc">Mais recentes primeiro</option>
+                        <option value="asc">Mais antigos primeiro</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
@@ -2970,91 +3295,134 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                     <p className="text-xs text-slate-400 mt-1">Ajuste o período, data inicial, data final ou o tipo de ocorrência.</p>
                   </div>
                 ) : (
-                  termosFiltrados.map(termo => (
-                    <div
-                      key={termo.id}
-                      onClick={() => setSelectedTermoParaVisualizar(termo)}
-                      className="bg-white hover:bg-blue-50/40 border border-slate-200 hover:border-blue-400 rounded-2xl p-4 sm:p-5 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 group"
-                    >
-                      <div className="flex items-start space-x-3.5 min-w-0 flex-1">
-                        <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                          <FileText className="w-5 h-5" />
+                  termosFiltrados.map(termo => {
+                    const isUltimoTermo = termo.id === ultimoTermoId;
+                    return (
+                      <div
+                        key={termo.id}
+                        onClick={() => setSelectedTermoParaVisualizar(termo)}
+                        className={`bg-white hover:bg-blue-50/40 border rounded-2xl p-4 sm:p-5 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 group ${
+                          isUltimoTermo ? 'border-blue-300 ring-1 ring-blue-100' : 'border-slate-200 hover:border-blue-400'
+                        }`}
+                      >
+                        <div className="flex items-start space-x-3.5 min-w-0 flex-1">
+                          <div className="w-11 h-11 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                            <FileText className="w-5 h-5" />
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono font-black text-sm text-blue-700">
+                                {termo.numeroTermo}
+                              </span>
+                              <span className="text-slate-300">•</span>
+                              <span className="text-xs text-slate-500 font-mono flex items-center space-x-1">
+                                <Calendar className="w-3 h-3 text-slate-400" />
+                                <span>{termo.dataHora}</span>
+                              </span>
+                              {isUltimoTermo && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-800 border border-blue-200">
+                                  Último Termo Gerado
+                                </span>
+                              )}
+                              {termo.dataEdicao && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                  Editado em: {termo.dataEdicao}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="mt-1 text-xs text-slate-700 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                              <strong className="text-slate-900">{termo.empresaNome}</strong>
+                              <span className="text-slate-300 hidden sm:inline">•</span>
+                              <span className="font-mono text-slate-500">CNPJ: {termo.cnpj}</span>
+                              <span className="text-slate-300 hidden sm:inline">•</span>
+                              <span className="text-slate-600">Fiscal: <strong>{termo.fiscalNome}</strong></span>
+                            </div>
+
+                            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                              {termo.autoInfracaoGerado ? (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                                  Auto de Infração: {termo.numeroAutoInfracao}
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                  Sem Auto de Infração
+                                </span>
+                              )}
+
+                              {termo.notificacaoAtiva && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                  Notificação: {termo.numeroNotificacao || 'Ativa'}
+                                </span>
+                              )}
+
+                              {termo.intimacaoAtiva && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                                  Intimação: {termo.numeroIntimacao || 'Ativa'}
+                                </span>
+                              )}
+
+                              {termo.encontrava === 'Fechada' && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                                  Empresa Fechada
+                                </span>
+                              )}
+
+                              {council.geolocalizacaoAtiva !== false && termo.latitude != null && (
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-slate-50 text-slate-600 border border-slate-200 flex items-center space-x-1">
+                                  <MapPin className="w-2.5 h-2.5 text-slate-400" />
+                                  <span>{termo.latitude.toFixed(4)}, {termo.longitude?.toFixed(4)}</span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
 
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-mono font-black text-sm text-blue-700">
-                              {termo.numeroTermo}
-                            </span>
-                            <span className="text-slate-300">•</span>
-                            <span className="text-xs text-slate-500 font-mono flex items-center space-x-1">
-                              <Calendar className="w-3 h-3 text-slate-400" />
-                              <span>{termo.dataHora}</span>
-                            </span>
-                          </div>
-
-                          <div className="mt-1 text-xs text-slate-700 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                            <strong className="text-slate-900">{termo.empresaNome}</strong>
-                            <span className="text-slate-300 hidden sm:inline">•</span>
-                            <span className="font-mono text-slate-500">CNPJ: {termo.cnpj}</span>
-                            <span className="text-slate-300 hidden sm:inline">•</span>
-                            <span className="text-slate-600">Fiscal: <strong>{termo.fiscalNome}</strong></span>
-                          </div>
-
-                          <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                            {termo.autoInfracaoGerado ? (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                                Auto de Infração: {termo.numeroAutoInfracao}
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                Sem Auto de Infração
-                              </span>
-                            )}
-
-                            {termo.notificacaoAtiva && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                                Notificação: {termo.numeroNotificacao || 'Ativa'}
-                              </span>
-                            )}
-
-                            {termo.intimacaoAtiva && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                                Intimação: {termo.numeroIntimacao || 'Ativa'}
-                              </span>
-                            )}
-
-                            {termo.encontrava === 'Fechada' && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
-                                Empresa Fechada
-                              </span>
-                            )}
-
-                            {council.geolocalizacaoAtiva !== false && termo.latitude != null && (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-slate-50 text-slate-600 border border-slate-200 flex items-center space-x-1">
-                                <MapPin className="w-2.5 h-2.5 text-slate-400" />
-                                <span>{termo.latitude.toFixed(4)}, {termo.longitude?.toFixed(4)}</span>
-                              </span>
-                            )}
-                          </div>
+                        <div className="flex flex-wrap items-center gap-2 self-end sm:self-center shrink-0">
+                          {isUltimoTermo && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setTermoParaEditarHistorico(termo);
+                                }}
+                                className="px-3 py-2 bg-amber-50 hover:bg-amber-500 text-amber-800 hover:text-white border border-amber-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer shadow-2xs"
+                                title="Editar o último termo de inspeção gerado"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                                <span>Editar</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setTermoParaExcluirHistorico(termo);
+                                }}
+                                className="px-3 py-2 bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer shadow-2xs"
+                                title="Excluir o último termo de inspeção gerado"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                <span>Excluir</span>
+                              </button>
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedTermoParaVisualizar(termo);
+                            }}
+                            className="px-3.5 py-2 bg-slate-100 hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer shadow-2xs"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Ver Detalhes</span>
+                          </button>
                         </div>
                       </div>
-
-                      <div className="flex items-center space-x-2 self-end sm:self-center shrink-0">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedTermoParaVisualizar(termo);
-                          }}
-                          className="px-3.5 py-2 bg-slate-100 hover:bg-blue-600 text-slate-700 hover:text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all cursor-pointer shadow-2xs"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Ver Detalhes</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
 
@@ -3102,6 +3470,17 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
 
                     {/* Modal Body (Scrollable) */}
                     <div className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
+                      {selectedTermoParaVisualizar.dataEdicao && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-amber-900 flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-bold flex items-center space-x-1.5">
+                            <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Editado em: {selectedTermoParaVisualizar.dataEdicao}</span>
+                          </span>
+                          {selectedTermoParaVisualizar.editadoPor && (
+                            <span className="text-[11px] font-semibold">Por: {selectedTermoParaVisualizar.editadoPor}</span>
+                          )}
+                        </div>
+                      )}
                       {/* Meta Information Grid */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 text-slate-700">
                         <div>
@@ -3282,7 +3661,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
 
                     {/* Modal Footer Actions */}
                     <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 shrink-0">
-                      <div className="flex items-center space-x-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         {/* Imprimir Termo */}
                         <button
                           type="button"
@@ -3307,6 +3686,29 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                           <Mail className="w-4 h-4" />
                           <span>Gerar PDF & Enviar por E-mail</span>
                         </button>
+
+                        {selectedTermoParaVisualizar.id === ultimoTermoId && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setTermoParaEditarHistorico(selectedTermoParaVisualizar)}
+                              className="px-3.5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold flex items-center justify-center space-x-1.5 shadow-sm transition-colors cursor-pointer text-xs"
+                              title="Editar o último termo gerado"
+                            >
+                              <Edit3 className="w-4 h-4" />
+                              <span>Editar</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setTermoParaExcluirHistorico(selectedTermoParaVisualizar)}
+                              className="px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold flex items-center justify-center space-x-1.5 shadow-sm transition-colors cursor-pointer text-xs"
+                              title="Excluir o último termo gerado"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              <span>Excluir</span>
+                            </button>
+                          </>
+                        )}
                       </div>
 
                       <button
@@ -3364,16 +3766,16 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Filtrar por Zona / Rota:</label>
+                  <label className="block font-bold text-slate-700 mb-1">Filtrar por Zona:</label>
                   <select 
-                    value={filtroRota}
-                    onChange={(e) => setFiltroRota(e.target.value)}
+                    value={filtroZona}
+                    onChange={(e) => setFiltroZona(e.target.value)}
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800"
                   >
-                    <option value="Canutama">Canutama (Polo Purus)</option>
-                    <option value="Manaus - Centro">Manaus - Centro</option>
-                    <option value="Manaus - Zona Leste">Manaus - Zona Leste</option>
-                    <option value="todos">Todas as Rotas</option>
+                    <option value="todos">Todas as Zonas</option>
+                    {cadastrosZonas.map(z => (
+                      <option key={z.id} value={z.nome}>{z.nome}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -3383,7 +3785,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                   onClick={() => {
                     toastService.success(
                       'Lote Baixado com Sucesso',
-                      `Foram baixados ${filteredEmpresas.length} estabelecimentos para o SQLite/IndexedDB do tablet para operação offline na rota ${filtroRota}.`
+                      `Foram baixados ${filteredEmpresas.length} estabelecimentos para o SQLite/IndexedDB do tablet para operação offline (${filtroZona === 'todos' ? 'Todas as Zonas' : `Zona ${filtroZona}`}).`
                     );
                   }}
                   className="flex-1 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-black flex items-center justify-center space-x-2 shadow-sm transition-colors cursor-pointer"
@@ -3413,7 +3815,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                     <tr>
                       <th className="py-2 px-3">Inscrição</th>
                       <th className="py-2 px-3">Nome Fantasia</th>
-                      <th className="py-2 px-3">Município / Rota</th>
+                      <th className="py-2 px-3">Município / Zona</th>
                       <th className="py-2 px-3 text-right">Status Offline</th>
                     </tr>
                   </thead>
@@ -3422,7 +3824,7 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
                       <tr key={e.id}>
                         <td className="py-2 px-3 font-bold text-blue-700">{e.inscricao}</td>
                         <td className="py-2 px-3 font-sans font-semibold text-slate-900">{e.nomeFantasia}</td>
-                        <td className="py-2 px-3 font-sans text-slate-500">{e.cidade} / {filtroRota}</td>
+                        <td className="py-2 px-3 font-sans text-slate-500">{e.cidade}{e.zona ? ` / ${e.zona}` : ''}</td>
                         <td className="py-2 px-3 text-right font-sans">
                           <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700">
                             Disponível Offline
@@ -3511,6 +3913,68 @@ export const TabletAppView: React.FC<TabletAppViewProps> = ({
         )}
 
       </div>
+
+      {/* Modal de Edição do Último Termo (com Data da Edição) */}
+      <ModalEditarTermoFiscalizacao
+        termo={termoParaEditarHistorico}
+        onClose={() => setTermoParaEditarHistorico(null)}
+        onSaved={(updated) => {
+          if (selectedTermoParaVisualizar?.id === updated.id) {
+            setSelectedTermoParaVisualizar(updated);
+          }
+        }}
+      />
+
+      {/* Modal de Confirmação de Exclusão do Último Termo */}
+      {termoParaExcluirHistorico && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => setTermoParaExcluirHistorico(null)}
+        >
+          <div
+            className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-5 space-y-3 text-xs">
+              <div className="w-11 h-11 rounded-xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-black text-slate-900">
+                Confirmar Exclusão do Termo
+              </h3>
+              <p className="text-slate-600 leading-relaxed">
+                Tem certeza que deseja excluir o Termo nº <strong className="font-mono text-slate-900">{termoParaExcluirHistorico.numeroTermo}</strong> ({termoParaExcluirHistorico.empresaNome})? Esta ação não poderá ser desfeita.
+              </p>
+            </div>
+            <div className="px-5 py-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end space-x-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setTermoParaExcluirHistorico(null)}
+                className="px-4 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl font-bold cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  storageService.deleteTermoFiscalizacao(termoParaExcluirHistorico.id);
+                  if (selectedTermoParaVisualizar?.id === termoParaExcluirHistorico.id) {
+                    setSelectedTermoParaVisualizar(null);
+                  }
+                  toastService.success(
+                    'Termo Excluído',
+                    `Termo ${termoParaExcluirHistorico.numeroTermo} excluído com sucesso.`
+                  );
+                  setTermoParaExcluirHistorico(null);
+                }}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold cursor-pointer"
+              >
+                Confirmar Exclusão
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de Download em PDF e Envio por E-mail */}
       <ModalEnviarTermoEmail

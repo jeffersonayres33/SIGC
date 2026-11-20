@@ -7,8 +7,6 @@ import {
   Tablet, 
   Hash, 
   AlertCircle,
-  MapPin,
-  MapPinOff,
   CheckCircle2,
   Sparkles
 } from 'lucide-react';
@@ -25,22 +23,6 @@ export const FiscalizacaoEletronicaConfig: React.FC = () => {
     });
     return () => unsub();
   }, []);
-
-  const isGeoAtiva = config.geolocalizacaoAtiva !== false;
-
-  const handleToggleGeolocalizacao = () => {
-    const novoStatus = !isGeoAtiva;
-    setConfig(prev => ({
-      ...prev,
-      geolocalizacaoAtiva: novoStatus
-    }));
-    setHasChanges(true);
-    if (novoStatus) {
-      toastService.info('Geolocalização Ativada', 'Coordenadas GPS serão capturadas e exibidas na aplicação.');
-    } else {
-      toastService.warning('Geolocalização Desativada', 'Coordenadas GPS ficarão invisíveis e receberão null no banco de dados.');
-    }
-  };
 
   const handleTextoChange = (val: string) => {
     setConfig(prev => ({ ...prev, textoPadraoNotificacao: val }));
@@ -145,21 +127,6 @@ export const FiscalizacaoEletronicaConfig: React.FC = () => {
             <span>Salvar Alterações</span>
           </button>
         </div>
-      </div>
-
-      {/* Nota de Geolocalização Movida para DEV */}
-      <div className="bg-purple-50/60 border border-purple-200 rounded-2xl p-4 shadow-xs flex items-center justify-between text-xs text-purple-900">
-        <div className="flex items-center space-x-3">
-          <div className="p-2 rounded-xl bg-purple-100 text-purple-700">
-            <MapPin className="w-5 h-5" />
-          </div>
-          <div>
-            <span className="font-bold">Geolocalização GPS dos Fiscais:</span> Parâmetro gerenciado no painel exclusivo <code className="bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-mono font-bold">Dev &gt; Configuração</code>.
-          </div>
-        </div>
-        <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold ${isGeoAtiva ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
-          {isGeoAtiva ? 'GPS ATIVO' : 'GPS DESATIVADO'}
-        </span>
       </div>
 
       <div className="grid grid-cols-1 gap-6">
